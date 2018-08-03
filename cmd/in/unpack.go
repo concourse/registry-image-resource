@@ -58,7 +58,7 @@ func extractLayer(dest string, layer v1.Layer, written, removed map[string]struc
 	bar := pb.New64(size).SetUnits(pb.U_BYTES)
 	bar.Output = os.Stderr
 	bar.Prefix(digest.Hex[0:12])
-	bar.SetWidth(98)
+	bar.SetWidth(80)
 
 	bar.Start()
 	defer bar.Finish()

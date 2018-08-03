@@ -62,7 +62,7 @@ func main() {
 		return
 	}
 
-	logrus.Infof("fetching %s", ref)
+	logrus.Infof("fetching %s:%s (%s)", req.Source.Repository, req.Source.Tag, req.Version.Digest)
 
 	image, err := remote.Image(n)
 	if err != nil {
