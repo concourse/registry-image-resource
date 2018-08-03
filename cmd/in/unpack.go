@@ -10,6 +10,7 @@ import (
 
 	"github.com/concourse/go-archive/tarfs"
 	"github.com/google/go-containerregistry/pkg/v1"
+	"github.com/sirupsen/logrus"
 	pb "gopkg.in/cheggaaa/pb.v1"
 )
 
@@ -23,6 +24,8 @@ func unpackImage(dest string, img v1.Image) error {
 
 	written := map[string]struct{}{}
 	removed := map[string]struct{}{}
+
+	chown := os.Getuid() == 0
 
 	// iterate over layers in reverse order; no need to write things files that
 	// are modified by later layers anyway
@@ -90,7 +93,13 @@ func unpackImage(dest string, img v1.Image) error {
 
 			written[path] = struct{}{}
 
-			if err := tarfs.ExtractEntry(hdr, dest, tr, true); err != nil {
+			if hdr.Typeflag == tar.TypeBlock || hdr.Typeflag == tar.TypeChar {
+				// devices can't be created in a user namespace
+				logrus.Infof("skipping device %s", hdr.Name)
+				continue
+			}
+
+			if err := tarfs.ExtractEntry(hdr, dest, tr, chown); err != nil {
 				return err
 			}
 		}
