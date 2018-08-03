@@ -45,6 +45,12 @@ func main() {
 		return
 	}
 
+	if len(os.Args) < 2 {
+		logrus.Errorf("destination path not specified")
+		os.Exit(1)
+		return
+	}
+
 	dest := os.Args[1]
 
 	ref := req.Source.Repository + ":" + req.Source.Tag
