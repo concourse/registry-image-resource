@@ -1,10 +1,11 @@
-FROM golang:alpine as builder
-COPY . /go/src/github.com/concourse/registry-image-resource
+FROM golang:1.11-rc as builder
+COPY . /src
+WORKDIR /src
 ENV CGO_ENABLED 0
-RUN go build -o /assets/in github.com/concourse/registry-image-resource/cmd/in
-RUN go build -o /assets/out github.com/concourse/registry-image-resource/cmd/out
-RUN go build -o /assets/check github.com/concourse/registry-image-resource/cmd/check
-WORKDIR /go/src/github.com/concourse/registry-image-resource
+RUN go get -d ./...
+RUN go build -o /assets/in ./cmd/in
+RUN go build -o /assets/out ./cmd/out
+RUN go build -o /assets/check ./cmd/check
 RUN set -e; for pkg in $(go list ./...); do \
 		go test -o "/tests/$(basename $pkg).test" -c $pkg; \
 	done
