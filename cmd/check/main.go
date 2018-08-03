@@ -19,6 +19,9 @@ type CheckResponse []resource.Version
 
 func main() {
 	logrus.SetOutput(os.Stderr)
+	logrus.SetFormatter(&logrus.TextFormatter{
+		ForceColors: true,
+	})
 
 	var req CheckRequest
 	err := json.NewDecoder(os.Stdin).Decode(&req)

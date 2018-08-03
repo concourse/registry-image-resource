@@ -33,6 +33,9 @@ type MetadataField struct {
 
 func main() {
 	logrus.SetOutput(os.Stderr)
+	logrus.SetFormatter(&logrus.TextFormatter{
+		ForceColors: true,
+	})
 
 	var req InRequest
 	err := json.NewDecoder(os.Stdin).Decode(&req)
@@ -53,30 +56,36 @@ func main() {
 		return
 	}
 
+	logrus.Infof("fetching %s", ref)
+
 	image, err := remote.Image(n)
 	if err != nil {
-		logrus.Errorf("Failed to locate remote image: %s", err)
+		logrus.Errorf("failed to locate remote image: %s", err)
 		os.Exit(1)
 		return
 	}
 
+	logrus.Infof("unpacking image")
+
 	err = unpackImage(filepath.Join(dest, "rootfs"), image)
 	if err != nil {
-		logrus.Errorf("Failed to extract image: %s", err)
+		logrus.Errorf("failed to extract image: %s", err)
+		os.Exit(1)
+		return
+	}
+
+	logrus.Infof("writing metadata")
+
+	cfg, err := image.ConfigFile()
+	if err != nil {
+		logrus.Errorf("failed to inspect image config: %s", err)
 		os.Exit(1)
 		return
 	}
 
 	meta, err := os.Create(filepath.Join(dest, "metadata.json"))
 	if err != nil {
-		logrus.Errorf("Failed to create image metadata: %s", err)
-		os.Exit(1)
-		return
-	}
-
-	cfg, err := image.ConfigFile()
-	if err != nil {
-		logrus.Errorf("Failed to inspect image config: %s", err)
+		logrus.Errorf("failed to create image metadata: %s", err)
 		os.Exit(1)
 		return
 	}
@@ -86,7 +95,14 @@ func main() {
 		User: cfg.ContainerConfig.User,
 	})
 	if err != nil {
-		logrus.Errorf("Failed to write image metadata: %s", err)
+		logrus.Errorf("failed to write image metadata: %s", err)
+		os.Exit(1)
+		return
+	}
+
+	err = meta.Close()
+	if err != nil {
+		logrus.Errorf("failed to close image metadata file: %s", err)
 		os.Exit(1)
 		return
 	}
