@@ -53,7 +53,7 @@ func main() {
 
 	dest := os.Args[1]
 
-	ref := req.Source.Repository + ":" + req.Source.Tag
+	ref := req.Source.Repository + "@" + req.Version.Digest
 
 	n, err := name.ParseReference(ref, name.WeakValidation)
 	if err != nil {
