@@ -29,7 +29,7 @@ func unpackImage(dest string, img v1.Image) error {
 
 	chown := os.Getuid() == 0
 
-	progress := mpb.New(mpb.WithWidth(64), mpb.WithOutput(os.Stderr))
+	progress := mpb.New(mpb.WithOutput(os.Stderr))
 
 	bars := make([]*mpb.Bar, len(layers))
 

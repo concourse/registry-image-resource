@@ -39,6 +39,8 @@ func main() {
 		ForceColors: true,
 	})
 
+	color.NoColor = false
+
 	var req InRequest
 	err := json.NewDecoder(os.Stdin).Decode(&req)
 	if err != nil {
