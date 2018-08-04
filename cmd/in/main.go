@@ -2,10 +2,12 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 
 	resource "github.com/concourse/registry-image-resource"
+	color "github.com/fatih/color"
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/sirupsen/logrus"
@@ -62,7 +64,7 @@ func main() {
 		return
 	}
 
-	logrus.Infof("fetching %s:%s (%s)", req.Source.Repository, req.Source.Tag, req.Version.Digest)
+	fmt.Fprintf(os.Stderr, "fetching %s@%s\n", color.GreenString(req.Source.Repository), color.YellowString(req.Version.Digest))
 
 	image, err := remote.Image(n)
 	if err != nil {
@@ -71,16 +73,12 @@ func main() {
 		return
 	}
 
-	logrus.Infof("unpacking image")
-
 	err = unpackImage(filepath.Join(dest, "rootfs"), image)
 	if err != nil {
 		logrus.Errorf("failed to extract image: %s", err)
 		os.Exit(1)
 		return
 	}
-
-	logrus.Infof("writing metadata")
 
 	cfg, err := image.ConfigFile()
 	if err != nil {
