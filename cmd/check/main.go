@@ -31,7 +31,7 @@ func main() {
 		return
 	}
 
-	ref := req.Source.Repository + ":" + req.Source.Tag
+	ref := req.Source.Repository + ":" + req.Source.Tag()
 
 	n, err := name.ParseReference(ref, name.WeakValidation)
 	if err != nil {
