@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"compress/gzip"
 	"io"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -18,7 +19,7 @@ import (
 
 const whiteoutPrefix = ".wh."
 
-func unpackImage(dest string, img v1.Image) error {
+func unpackImage(dest string, img v1.Image, debug bool) error {
 	layers, err := img.Layers()
 	if err != nil {
 		return err
@@ -29,7 +30,14 @@ func unpackImage(dest string, img v1.Image) error {
 
 	chown := os.Getuid() == 0
 
-	progress := mpb.New(mpb.WithOutput(os.Stderr))
+	var out io.Writer
+	if debug {
+		out = ioutil.Discard
+	} else {
+		out = os.Stderr
+	}
+
+	progress := mpb.New(mpb.WithOutput(out))
 
 	bars := make([]*mpb.Bar, len(layers))
 
@@ -54,6 +62,8 @@ func unpackImage(dest string, img v1.Image) error {
 	// iterate over layers in reverse order; no need to write things files that
 	// are modified by later layers anyway
 	for i := len(layers) - 1; i >= 0; i-- {
+		logrus.Debugf("extracting layer %d of %d", i+1, len(layers))
+
 		err := extractLayer(dest, layers[i], bars[i], written, removed, chown)
 		if err != nil {
 			return err
@@ -92,20 +102,26 @@ func extractLayer(dest string, layer v1.Layer, bar *mpb.Bar, written, removed ma
 		base := filepath.Base(path)
 		dir := filepath.Dir(path)
 
+		logrus.Debugf("unpacking %s", hdr.Name)
+
 		if strings.HasPrefix(base, whiteoutPrefix) {
 			// layer has marked a file as deleted
 			name := strings.TrimPrefix(base, whiteoutPrefix)
-			removed[filepath.Join(dir, name)] = struct{}{}
+			removedPath := filepath.Join(dir, name)
+			removed[removedPath] = struct{}{}
+			logrus.Debugf("whiting out %s", removedPath)
 			continue
 		}
 
 		if pathIsRemoved(path, removed) {
 			// path has been removed by lower layer
+			logrus.Debugf("skipping removed path %s", path)
 			continue
 		}
 
 		if _, ok := written[path]; ok {
 			// path has already been written by lower layer
+			logrus.Debugf("skipping already-written file %s", path)
 			continue
 		}
 

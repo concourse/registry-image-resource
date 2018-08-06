@@ -15,4 +15,11 @@ RUN apk add --no-cache bash tzdata ca-certificates unzip zip gzip tar
 COPY --from=builder assets/ /opt/resource/
 RUN chmod +x /opt/resource/*
 
+FROM resource AS tests
+COPY --from=builder /tests /tests
+ADD . /docker-image-resource
+RUN set -e; for test in /tests/*.test; do \
+		$test -ginkgo.v; \
+	done
+
 FROM resource

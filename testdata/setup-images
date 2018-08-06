@@ -1,0 +1,14 @@
+#!/bin/bash
+
+set -e -u
+
+cd $(dirname $0)
+
+for df in $(find . -name Dockerfile); do
+  dir=$(dirname $df)
+  name=concourse/test-image-$(basename $dir)
+  echo "building $dir as $name"
+  docker build -t $name $dir
+  echo "pushing"
+  docker push $name
+done

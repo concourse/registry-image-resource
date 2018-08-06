@@ -19,18 +19,13 @@ type InRequest struct {
 }
 
 type InResponse struct {
-	Version  resource.Version `json:"version"`
-	Metadata []MetadataField  `json:"metadata"`
+	Version  resource.Version         `json:"version"`
+	Metadata []resource.MetadataField `json:"metadata"`
 }
 
 type ImageMetadata struct {
 	Env  []string `json:"env"`
 	User string   `json:"user"`
-}
-
-type MetadataField struct {
-	Name  string `json:"name"`
-	Value string `json:"value"`
 }
 
 func main() {
@@ -47,6 +42,10 @@ func main() {
 		logrus.Errorf("invalid payload: %s", err)
 		os.Exit(1)
 		return
+	}
+
+	if req.Source.Debug {
+		logrus.SetLevel(logrus.DebugLevel)
 	}
 
 	if len(os.Args) < 2 {
@@ -75,7 +74,7 @@ func main() {
 		return
 	}
 
-	err = unpackImage(filepath.Join(dest, "rootfs"), image)
+	err = unpackImage(filepath.Join(dest, "rootfs"), image, req.Source.Debug)
 	if err != nil {
 		logrus.Errorf("failed to extract image: %s", err)
 		os.Exit(1)
@@ -115,6 +114,6 @@ func main() {
 
 	json.NewEncoder(os.Stdout).Encode(InResponse{
 		Version:  req.Version,
-		Metadata: []MetadataField{},
+		Metadata: []resource.MetadataField{},
 	})
 }
