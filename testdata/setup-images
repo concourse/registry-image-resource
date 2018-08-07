@@ -4,7 +4,12 @@ set -e -u
 
 cd $(dirname $0)
 
-for df in $(find . -name Dockerfile); do
+filter="$(echo "$@" | tr ' ' '|')"
+if [ -z "$filter" ]; then
+  filter="."
+fi
+
+for df in $(find . -name Dockerfile | ag "$filter"); do
   dir=$(dirname $df)
   name=concourse/test-image-$(basename $dir)
   echo "building $dir as $name"
