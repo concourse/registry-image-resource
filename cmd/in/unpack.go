@@ -127,15 +127,28 @@ func extractLayer(dest string, layer v1.Layer, bar *mpb.Bar, chown bool) error {
 		}
 
 		if hdr.Typeflag == tar.TypeSymlink {
-			log.Warnf("symlinking to %s", hdr.Linkname)
+			log.Debugf("symlinking to %s", hdr.Linkname)
 		}
 
 		if hdr.Typeflag == tar.TypeLink {
-			log.Warnf("hardlinking to %s", hdr.Linkname)
+			log.Debugf("hardlinking to %s", hdr.Linkname)
+		}
+
+		if fi, err := os.Lstat(path); err == nil {
+			if fi.IsDir() && hdr.Name == "." {
+				continue
+			}
+
+			if !(fi.IsDir() && hdr.Typeflag == tar.TypeDir) {
+				log.Debugf("removing existing path")
+				if err := os.RemoveAll(path); err != nil {
+					return err
+				}
+			}
 		}
 
 		if err := tarfs.ExtractEntry(hdr, dest, tr, chown); err != nil {
-			log.Infof("extracting")
+			log.Debugf("extracting")
 			return err
 		}
 	}

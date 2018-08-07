@@ -153,7 +153,7 @@ var _ = Describe("In", func() {
 
 	Describe("a hardlink that is later removed", func() {
 		BeforeEach(func() {
-			req.Source.Repository = "concourse/test-image-symlinks"
+			req.Source.Repository = "concourse/test-image-removed-hardlinks"
 			req.Version.Digest = latestDigest(req.Source.Repository)
 		})
 
@@ -167,4 +167,22 @@ var _ = Describe("In", func() {
 			Expect(stat.Mode() & os.ModeSymlink).To(BeZero())
 		})
 	})
+
+	Describe("layers that replace symlinks with regular files", func() {
+		BeforeEach(func() {
+			req.Source.Repository = "concourse/test-image-symlinks"
+			req.Version.Digest = latestDigest(req.Source.Repository)
+		})
+
+		It("removes the symlink and writes to a new file rather than trying to open and write to it (thereby overwriting its target)", func() {
+			Expect(cat(rootfsPath("a"))).To(Equal("symlinked\n"))
+			Expect(cat(rootfsPath("b"))).To(Equal("replaced\n"))
+		})
+	})
 })
+
+func cat(path string) string {
+	bytes, err := ioutil.ReadFile(path)
+	Expect(err).ToNot(HaveOccurred())
+	return string(bytes)
+}

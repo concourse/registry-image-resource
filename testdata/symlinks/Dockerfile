@@ -1,3 +1,4 @@
 FROM alpine
-RUN apk --no-cache add git
-RUN rm /usr/bin/git
+RUN echo symlinked > a
+RUN ln -s a b
+RUN rm b && echo replaced > b
