@@ -25,9 +25,6 @@ func unpackImage(dest string, img v1.Image, debug bool) error {
 		return err
 	}
 
-	written := map[string]struct{}{}
-	removed := map[string]struct{}{}
-
 	chown := os.Getuid() == 0
 
 	var out io.Writer
@@ -61,10 +58,10 @@ func unpackImage(dest string, img v1.Image, debug bool) error {
 
 	// iterate over layers in reverse order; no need to write things files that
 	// are modified by later layers anyway
-	for i := len(layers) - 1; i >= 0; i-- {
+	for i, layer := range layers {
 		logrus.Debugf("extracting layer %d of %d", i+1, len(layers))
 
-		err := extractLayer(dest, layers[i], bars[i], written, removed, chown)
+		err := extractLayer(dest, layer, bars[i], chown)
 		if err != nil {
 			return err
 		}
@@ -75,7 +72,7 @@ func unpackImage(dest string, img v1.Image, debug bool) error {
 	return nil
 }
 
-func extractLayer(dest string, layer v1.Layer, bar *mpb.Bar, written, removed map[string]struct{}, chown bool) error {
+func extractLayer(dest string, layer v1.Layer, bar *mpb.Bar, chown bool) error {
 	r, err := layer.Compressed()
 	if err != nil {
 		return err
@@ -102,38 +99,43 @@ func extractLayer(dest string, layer v1.Layer, bar *mpb.Bar, written, removed ma
 		base := filepath.Base(path)
 		dir := filepath.Dir(path)
 
-		logrus.Debugf("unpacking %s", hdr.Name)
+		log := logrus.WithFields(logrus.Fields{
+			"Name": hdr.Name,
+		})
+
+		log.Debug("unpacking")
 
 		if strings.HasPrefix(base, whiteoutPrefix) {
 			// layer has marked a file as deleted
 			name := strings.TrimPrefix(base, whiteoutPrefix)
 			removedPath := filepath.Join(dir, name)
-			removed[removedPath] = struct{}{}
-			logrus.Debugf("whiting out %s", removedPath)
+
+			log.Debugf("removing %s", removedPath)
+
+			err := os.RemoveAll(removedPath)
+			if err != nil {
+				return nil
+			}
+
 			continue
 		}
-
-		if pathIsRemoved(path, removed) {
-			// path has been removed by lower layer
-			logrus.Debugf("skipping removed path %s", path)
-			continue
-		}
-
-		if _, ok := written[path]; ok {
-			// path has already been written by lower layer
-			logrus.Debugf("skipping already-written file %s", path)
-			continue
-		}
-
-		written[path] = struct{}{}
 
 		if hdr.Typeflag == tar.TypeBlock || hdr.Typeflag == tar.TypeChar {
 			// devices can't be created in a user namespace
-			logrus.Debugf("skipping device %s", hdr.Name)
+			log.Debugf("skipping device %s", hdr.Name)
 			continue
 		}
 
+		if hdr.Typeflag == tar.TypeSymlink {
+			log.Warnf("symlinking to %s", hdr.Linkname)
+		}
+
+		if hdr.Typeflag == tar.TypeLink {
+			log.Warnf("hardlinking to %s", hdr.Linkname)
+		}
+
 		if err := tarfs.ExtractEntry(hdr, dest, tr, chown); err != nil {
+			log.Infof("extracting")
 			return err
 		}
 	}
@@ -149,19 +151,4 @@ func extractLayer(dest string, layer v1.Layer, bar *mpb.Bar, written, removed ma
 	}
 
 	return nil
-}
-
-func pathIsRemoved(path string, removed map[string]struct{}) bool {
-	if _, ok := removed[path]; ok {
-		return true
-	}
-
-	// check if parent dir has been removed
-	for wd := range removed {
-		if strings.HasPrefix(path, wd) {
-			return true
-		}
-	}
-
-	return false
 }

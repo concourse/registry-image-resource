@@ -150,4 +150,21 @@ var _ = Describe("In", func() {
 			Expect(err).To(HaveOccurred())
 		})
 	})
+
+	Describe("a hardlink that is later removed", func() {
+		BeforeEach(func() {
+			req.Source.Repository = "concourse/test-image-symlinks"
+			req.Version.Digest = latestDigest(req.Source.Repository)
+		})
+
+		It("works", func() {
+			lstat, err := os.Lstat(rootfsPath("usr", "libexec", "git-core", "git"))
+			Expect(err).ToNot(HaveOccurred())
+			Expect(lstat.Mode() & os.ModeSymlink).To(BeZero())
+
+			stat, err := os.Stat(rootfsPath("usr", "libexec", "git-core", "git"))
+			Expect(err).ToNot(HaveOccurred())
+			Expect(stat.Mode() & os.ModeSymlink).To(BeZero())
+		})
+	})
 })
