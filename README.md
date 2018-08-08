@@ -41,17 +41,33 @@ Reports the current digest that the registry has for the given tag.
 
 ### `in`: Fetch the image's rootfs and metadata.
 
-This image is meant to be used for fetching Concourse task images and
-pipeline-provided resource types.
+#### Parameters
 
-So by default, this resource will produce the following files:
+* `format`: *Optional. Default `rootfs`.* The format to fetch as. (See below.)
+
+
+#### Formats
+
+##### `rootfs`
+
+The `rootfs` format will fetch and unpack the image for use by Concourse task
+and resource type images.
+
+This the default for the sake of brevity in pipelines and task configs.
+
+In this format, the resource will produce the following files:
 
 * `rootfs/...`: the unpacked rootfs produced by the image.
 * `metadata.json`: the runtime information to propagate to Concourse.
 
-In a later release, it might be a good idea to optionally fetch the image in
-other formats that are more useful for e.g. Docker's tooling (perhaps a file
-equivalent to `docker save`).
+##### `oci`
+
+The `oci` format will fetch the image and write it to disk in OCI format. This
+is analogous to running `docker save`.
+
+In this format, the resource will produce the following files:
+
+* `image.tar`: the OCI image tarball, suitable for passing to `docker load`.
 
 
 ### `out`: Push an image up to the registry under the given tags.

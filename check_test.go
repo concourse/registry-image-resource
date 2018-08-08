@@ -50,7 +50,7 @@ var _ = Describe("Check", func() {
 
 		It("returns the current digest", func() {
 			Expect(res).To(Equal([]resource.Version{
-				{Digest: "sha256:64a6988c58cbdd634198f56452e8f8945e5b54a4bbca4bff7e960e1c830671ff"},
+				{Digest: LATEST_STATIC_DIGEST},
 			}))
 		})
 	})
@@ -63,13 +63,13 @@ var _ = Describe("Check", func() {
 			}
 
 			req.Version = &resource.Version{
-				Digest: "sha256:64a6988c58cbdd634198f56452e8f8945e5b54a4bbca4bff7e960e1c830671ff",
+				Digest: LATEST_STATIC_DIGEST,
 			}
 		})
 
 		It("returns the given digest", func() {
 			Expect(res).To(Equal([]resource.Version{
-				{Digest: "sha256:64a6988c58cbdd634198f56452e8f8945e5b54a4bbca4bff7e960e1c830671ff"},
+				{Digest: LATEST_STATIC_DIGEST},
 			}))
 		})
 	})
@@ -83,14 +83,14 @@ var _ = Describe("Check", func() {
 
 			req.Version = &resource.Version{
 				// this was previously pushed to the 'latest' tag
-				Digest: "sha256:031567a617423a84ad68b62267c30693185bd2b92c2668732efc8c70b036bd3a",
+				Digest: OLDER_STATIC_DIGEST,
 			}
 		})
 
 		It("returns the previous digest and the current digest", func() {
 			Expect(res).To(Equal([]resource.Version{
-				{Digest: "sha256:031567a617423a84ad68b62267c30693185bd2b92c2668732efc8c70b036bd3a"},
-				{Digest: "sha256:64a6988c58cbdd634198f56452e8f8945e5b54a4bbca4bff7e960e1c830671ff"},
+				{Digest: OLDER_STATIC_DIGEST},
+				{Digest: LATEST_STATIC_DIGEST},
 			}))
 		})
 	})
@@ -110,7 +110,7 @@ var _ = Describe("Check", func() {
 
 		It("returns only the current digest", func() {
 			Expect(res).To(Equal([]resource.Version{
-				{Digest: "sha256:64a6988c58cbdd634198f56452e8f8945e5b54a4bbca4bff7e960e1c830671ff"},
+				{Digest: LATEST_STATIC_DIGEST},
 			}))
 		})
 	})

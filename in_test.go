@@ -10,6 +10,9 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/google/go-containerregistry/pkg/name"
+	"github.com/google/go-containerregistry/pkg/v1"
+	"github.com/google/go-containerregistry/pkg/v1/tarball"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
@@ -21,6 +24,7 @@ var _ = Describe("In", func() {
 
 	var req struct {
 		Source  resource.Source
+		Params  resource.GetParams
 		Version resource.Version
 	}
 
@@ -179,10 +183,38 @@ var _ = Describe("In", func() {
 			Expect(cat(rootfsPath("b"))).To(Equal("replaced\n"))
 		})
 	})
-})
 
-func cat(path string) string {
-	bytes, err := ioutil.ReadFile(path)
-	Expect(err).ToNot(HaveOccurred())
-	return string(bytes)
-}
+	Describe("fetching in OCI format", func() {
+		var manifest *v1.Manifest
+
+		BeforeEach(func() {
+			req.Source.Repository = "concourse/test-image-static"
+			req.Params.RawFormat = "oci"
+
+			req.Version.Digest, manifest = latestManifest(req.Source.Repository)
+		})
+
+		It("saves the tagged image as image.tar instead of saving the rootfs", func() {
+			_, err := os.Stat(filepath.Join(destDir, "rootfs"))
+			Expect(os.IsNotExist(err)).To(BeTrue())
+
+			_, err = os.Stat(filepath.Join(destDir, "manifest.json"))
+			Expect(os.IsNotExist(err)).To(BeTrue())
+
+			tag, err := name.NewTag("concourse/test-image-static:latest", name.WeakValidation)
+			Expect(err).ToNot(HaveOccurred())
+
+			img, err := tarball.ImageFromPath(filepath.Join(destDir, "image.tar"), &tag)
+			Expect(err).ToNot(HaveOccurred())
+
+			fetchedManifest, err := img.Manifest()
+			Expect(err).ToNot(HaveOccurred())
+
+			// cannot assert against digest because the saved image's manifest isn't
+			// JSON-prettified, so it has a different sha256. so just assert against
+			// digest within manifest, which is what ends up being the 'image id'
+			// anyway.
+			Expect(fetchedManifest.Config.Digest).To(Equal(manifest.Config.Digest))
+		})
+	})
+})

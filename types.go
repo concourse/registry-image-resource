@@ -25,3 +25,15 @@ type MetadataField struct {
 	Name  string `json:"name"`
 	Value string `json:"value"`
 }
+
+type GetParams struct {
+	RawFormat string `json:"format"`
+}
+
+func (p GetParams) Format() string {
+	if p.RawFormat == "" {
+		return "rootfs"
+	}
+
+	return p.RawFormat
+}

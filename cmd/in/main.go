@@ -9,13 +9,16 @@ import (
 	resource "github.com/concourse/registry-image-resource"
 	color "github.com/fatih/color"
 	"github.com/google/go-containerregistry/pkg/name"
+	"github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
+	"github.com/google/go-containerregistry/pkg/v1/tarball"
 	"github.com/sirupsen/logrus"
 )
 
 type InRequest struct {
-	Source  resource.Source  `json:"source"`
-	Version resource.Version `json:"version"`
+	Source  resource.Source    `json:"source"`
+	Params  resource.GetParams `json:"params"`
+	Version resource.Version   `json:"version"`
 }
 
 type InResponse struct {
@@ -74,7 +77,37 @@ func main() {
 		return
 	}
 
-	err = unpackImage(filepath.Join(dest, "rootfs"), image, req.Source.Debug)
+	switch req.Params.Format() {
+	case "oci":
+		ociFormat(dest, req, image)
+	case "rootfs":
+		rootfsFormat(dest, req, image)
+	}
+
+	json.NewEncoder(os.Stdout).Encode(InResponse{
+		Version:  req.Version,
+		Metadata: []resource.MetadataField{},
+	})
+}
+
+func ociFormat(dest string, req InRequest, image v1.Image) {
+	tag, err := name.NewTag(req.Source.Repository+":"+req.Source.Tag(), name.WeakValidation)
+	if err != nil {
+		logrus.Errorf("failed to construct tag reference: %s", err)
+		os.Exit(1)
+		return
+	}
+
+	err = tarball.WriteToFile(filepath.Join(dest, "image.tar"), tag, image, nil)
+	if err != nil {
+		logrus.Errorf("failed to write OCI image: %s", err)
+		os.Exit(1)
+		return
+	}
+}
+
+func rootfsFormat(dest string, req InRequest, image v1.Image) {
+	err := unpackImage(filepath.Join(dest, "rootfs"), image, req.Source.Debug)
 	if err != nil {
 		logrus.Errorf("failed to extract image: %s", err)
 		os.Exit(1)
@@ -111,9 +144,4 @@ func main() {
 		os.Exit(1)
 		return
 	}
-
-	json.NewEncoder(os.Stdout).Encode(InResponse{
-		Version:  req.Version,
-		Metadata: []resource.MetadataField{},
-	})
 }

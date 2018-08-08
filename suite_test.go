@@ -2,10 +2,12 @@ package resource_test
 
 import (
 	"encoding/json"
+	"io/ioutil"
 	"os"
 	"testing"
 
 	"github.com/google/go-containerregistry/pkg/name"
+	"github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -17,6 +19,10 @@ var bins struct {
 	Out   string `json:"out"`
 	Check string `json:"check"`
 }
+
+// see testdata/static/Dockerfile
+const OLDER_STATIC_DIGEST = "sha256:031567a617423a84ad68b62267c30693185bd2b92c2668732efc8c70b036bd3a"
+const LATEST_STATIC_DIGEST = "sha256:64a6988c58cbdd634198f56452e8f8945e5b54a4bbca4bff7e960e1c830671ff"
 
 var _ = SynchronizedBeforeSuite(func() []byte {
 	var err error
@@ -53,7 +59,8 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 	Expect(err).ToNot(HaveOccurred())
 })
 
-var _ = AfterSuite(func() {
+var _ = SynchronizedAfterSuite(func() {
+}, func() {
 	gexec.CleanupBuildArtifacts()
 })
 
@@ -73,4 +80,26 @@ func latestDigest(ref string) string {
 	Expect(err).ToNot(HaveOccurred())
 
 	return digest.String()
+}
+
+func latestManifest(ref string) (string, *v1.Manifest) {
+	n, err := name.ParseReference(ref, name.WeakValidation)
+	Expect(err).ToNot(HaveOccurred())
+
+	image, err := remote.Image(n)
+	Expect(err).ToNot(HaveOccurred())
+
+	manifest, err := image.Manifest()
+	Expect(err).ToNot(HaveOccurred())
+
+	digest, err := image.Digest()
+	Expect(err).ToNot(HaveOccurred())
+
+	return digest.String(), manifest
+}
+
+func cat(path string) string {
+	bytes, err := ioutil.ReadFile(path)
+	Expect(err).ToNot(HaveOccurred())
+	return string(bytes)
 }
