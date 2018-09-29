@@ -8,10 +8,9 @@ require (
 	github.com/fsnotify/fsnotify v1.4.7 // indirect
 	github.com/golang/protobuf v1.1.0 // indirect
 	github.com/google/go-cmp v0.2.0 // indirect
-	github.com/google/go-containerregistry v0.0.0-20180801194910-5f7b0e489541
+	github.com/google/go-containerregistry v0.0.0-20180919161554-52f3c54ec23c
 	github.com/hpcloud/tail v1.0.0 // indirect
 	github.com/kr/pretty v0.1.0 // indirect
-	github.com/kr/pty v1.1.2 // indirect
 	github.com/mattn/go-colorable v0.0.9 // indirect
 	github.com/mattn/go-isatty v0.0.3 // indirect
 	github.com/onsi/ginkgo v1.6.0

@@ -6,6 +6,9 @@ type Source struct {
 	Repository string `json:"repository"`
 	RawTag     string `json:"tag"`
 
+	Username string `json:"username"`
+	Password string `json:"password"`
+
 	Debug bool `json:"debug"`
 }
 
@@ -36,4 +39,8 @@ func (p GetParams) Format() string {
 	}
 
 	return p.RawFormat
+}
+
+type PutParams struct {
+	Image string `json:"image"`
 }
