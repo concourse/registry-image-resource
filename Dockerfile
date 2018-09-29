@@ -1,4 +1,4 @@
-FROM golang:1.11-rc as builder
+FROM golang:1 as builder
 COPY . /src
 WORKDIR /src
 ENV CGO_ENABLED 0
