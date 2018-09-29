@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"os"
+	"path/filepath"
 
 	"github.com/fatih/color"
 	"github.com/google/go-containerregistry/pkg/authn"
@@ -47,6 +48,14 @@ func main() {
 		logrus.SetLevel(logrus.DebugLevel)
 	}
 
+	if len(os.Args) < 2 {
+		logrus.Errorf("destination path not specified")
+		os.Exit(1)
+		return
+	}
+
+	src := os.Args[1]
+
 	logrus.Warnln("'put' is experimental, untested, and subject to change!")
 
 	ref := req.Source.Repository + ":" + req.Source.Tag()
@@ -58,7 +67,9 @@ func main() {
 		return
 	}
 
-	img, err := tarball.ImageFromPath(req.Params.Image, nil)
+	imagePath := filepath.Join(src, req.Params.Image)
+
+	img, err := tarball.ImageFromPath(imagePath, nil)
 	if err != nil {
 		logrus.Errorf("could not load image from path '%s': %s", req.Params.Image, err)
 		os.Exit(1)
