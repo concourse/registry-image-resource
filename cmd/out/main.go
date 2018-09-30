@@ -97,12 +97,19 @@ func main() {
 		Image: img,
 	}
 
+	digest, err := img.Digest()
+	if err != nil {
+		logrus.Errorf("failed to get image digest: %s", err)
+		os.Exit(1)
+		return
+	}
+
+	logrus.Infof("pushing %s to %s", digest, ref)
+
 	auth := &authn.Basic{
 		Username: req.Source.Username,
 		Password: req.Source.Password,
 	}
-
-	logrus.Infof("pushing to %s", ref)
 
 	err = remote.Write(n, img, auth, http.DefaultTransport, remote.WriteOptions{})
 	if err != nil {
@@ -112,4 +119,11 @@ func main() {
 	}
 
 	logrus.Info("pushed")
+
+	json.NewEncoder(os.Stdout).Encode(OutResponse{
+		Version: resource.Version{
+			Digest: digest.String(),
+		},
+		Metadata: []resource.MetadataField{},
+	})
 }
