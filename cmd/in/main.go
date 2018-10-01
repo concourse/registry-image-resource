@@ -130,9 +130,15 @@ func rootfsFormat(dest string, req InRequest, image v1.Image) {
 		return
 	}
 
+	env := append(cfg.Config.Env, cfg.ContainerConfig.Env...)
+	user := cfg.Config.User
+	if user == "" {
+		user = cfg.ContainerConfig.User
+	}
+
 	err = json.NewEncoder(meta).Encode(ImageMetadata{
-		Env:  cfg.ContainerConfig.Env,
-		User: cfg.ContainerConfig.User,
+		Env:  env,
+		User: user,
 	})
 	if err != nil {
 		logrus.Errorf("failed to write image metadata: %s", err)
