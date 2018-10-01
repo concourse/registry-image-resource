@@ -130,7 +130,11 @@ func rootfsFormat(dest string, req InRequest, image v1.Image) {
 		return
 	}
 
-	env := append(cfg.Config.Env, cfg.ContainerConfig.Env...)
+	env := cfg.Config.Env
+	if len(env) == 0 {
+		env = cfg.ContainerConfig.Env
+	}
+
 	user := cfg.Config.User
 	if user == "" {
 		user = cfg.ContainerConfig.User
