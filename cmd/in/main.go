@@ -3,7 +3,9 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"os"
+	"path"
 	"path/filepath"
 
 	resource "github.com/concourse/registry-image-resource"
@@ -86,10 +88,27 @@ func main() {
 		rootfsFormat(dest, req, image)
 	}
 
+	err = saveDigest(dest, image)
+	if err != nil {
+		logrus.Errorf("failed to save image digest: %s", err)
+		os.Exit(1)
+		return
+	}
+
 	json.NewEncoder(os.Stdout).Encode(InResponse{
 		Version:  req.Version,
 		Metadata: []resource.MetadataField{},
 	})
+}
+
+func saveDigest(dest string, image v1.Image) error {
+	digest, err := image.Digest()
+	if err != nil {
+		return err
+	}
+
+	digestDest := path.Join(dest, "digest")
+	return ioutil.WriteFile(digestDest, []byte(digest.String()), 0644)
 }
 
 func ociFormat(dest string, req InRequest, image v1.Image) {
