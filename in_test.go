@@ -16,7 +16,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	resource "github.com/concourse/registry-image-resource"
+	"github.com/concourse/registry-image-resource"
 )
 
 var _ = Describe("In", func() {
@@ -215,6 +215,19 @@ var _ = Describe("In", func() {
 			// digest within manifest, which is what ends up being the 'image id'
 			// anyway.
 			Expect(fetchedManifest.Config.Digest).To(Equal(manifest.Config.Digest))
+		})
+	})
+
+	Describe("saving the digest", func() {
+		BeforeEach(func() {
+			req.Source.Repository = "alpine"
+			req.Version.Digest = latestDigest(req.Source.Repository)
+		})
+
+		It("saves the digest to a file", func() {
+			digest, err := ioutil.ReadFile(filepath.Join(destDir, "digest"))
+			Expect(err).ToNot(HaveOccurred())
+			Expect(string(digest)).To(Equal(req.Version.Digest))
 		})
 	})
 })
