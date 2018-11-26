@@ -119,7 +119,7 @@ func ociFormat(dest string, req InRequest, image v1.Image) {
 		return
 	}
 
-	err = tarball.WriteToFile(filepath.Join(dest, "image.tar"), tag, image, nil)
+	err = tarball.WriteToFile(filepath.Join(dest, "image.tar"), tag, image)
 	if err != nil {
 		logrus.Errorf("failed to write OCI image: %s", err)
 		os.Exit(1)

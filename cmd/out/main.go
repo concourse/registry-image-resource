@@ -9,8 +9,6 @@ import (
 	"github.com/fatih/color"
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
-	"github.com/google/go-containerregistry/pkg/v1"
-	"github.com/google/go-containerregistry/pkg/v1/partial"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/google/go-containerregistry/pkg/v1/tarball"
 	"github.com/sirupsen/logrus"
@@ -26,21 +24,6 @@ type OutRequest struct {
 type OutResponse struct {
 	Version  resource.Version         `json:"version"`
 	Metadata []resource.MetadataField `json:"metadata"`
-}
-
-type imageWithConfigAsLayer struct {
-	v1.Image
-}
-
-func (i imageWithConfigAsLayer) LayerByDigest(h v1.Hash) (v1.Layer, error) {
-	// Support returning the ConfigFile when asked for its hash.
-	if cfgName, err := i.ConfigName(); err != nil {
-		return nil, err
-	} else if cfgName == h {
-		return partial.ConfigLayer(i)
-	}
-
-	return i.Image.LayerByDigest(h)
 }
 
 func main() {
@@ -93,10 +76,6 @@ func main() {
 		return
 	}
 
-	img = imageWithConfigAsLayer{
-		Image: img,
-	}
-
 	digest, err := img.Digest()
 	if err != nil {
 		logrus.Errorf("failed to get image digest: %s", err)
@@ -111,7 +90,7 @@ func main() {
 		Password: req.Source.Password,
 	}
 
-	err = remote.Write(n, img, auth, http.DefaultTransport, remote.WriteOptions{})
+	err = remote.Write(n, img, auth, http.DefaultTransport)
 	if err != nil {
 		logrus.Errorf("failed to upload image: %s", err)
 		os.Exit(1)
