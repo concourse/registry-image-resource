@@ -33,9 +33,7 @@ func main() {
 		return
 	}
 
-	ref := req.Source.Repository + ":" + req.Source.Tag()
-
-	n, err := name.ParseReference(ref, name.WeakValidation)
+	n, err := name.ParseReference(req.Source.Name(), name.WeakValidation)
 	if err != nil {
 		logrus.Errorf("could not resolve repository/tag reference: %s", err)
 		os.Exit(1)

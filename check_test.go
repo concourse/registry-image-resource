@@ -42,7 +42,7 @@ var _ = Describe("Check", func() {
 		BeforeEach(func() {
 			req.Source = resource.Source{
 				Repository: "concourse/test-image-static",
-				RawTag:     "latest",
+				Tag:        "latest",
 			}
 
 			req.Version = nil
@@ -59,7 +59,7 @@ var _ = Describe("Check", func() {
 		BeforeEach(func() {
 			req.Source = resource.Source{
 				Repository: "concourse/test-image-static",
-				RawTag:     "latest",
+				Tag:        "latest",
 			}
 
 			req.Version = &resource.Version{
@@ -78,7 +78,7 @@ var _ = Describe("Check", func() {
 		BeforeEach(func() {
 			req.Source = resource.Source{
 				Repository: "concourse/test-image-static",
-				RawTag:     "latest",
+				Tag:        "latest",
 			}
 
 			req.Version = &resource.Version{
@@ -99,7 +99,7 @@ var _ = Describe("Check", func() {
 		BeforeEach(func() {
 			req.Source = resource.Source{
 				Repository: "concourse/test-image-static",
-				RawTag:     "latest",
+				Tag:        "latest",
 			}
 
 			req.Version = &resource.Version{
