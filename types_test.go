@@ -20,6 +20,15 @@ var _ = Describe("Source", func() {
 		Expect(source.Tag).To(Equal(resource.Tag("0")))
 	})
 
+	It("should unmarshal tag string value into a string", func() {
+		var source resource.Source
+		raw := []byte(`{ "tag": "foo" }`)
+
+		err := json.Unmarshal(raw, &source)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(source.Tag).To(Equal(resource.Tag("foo")))
+	})
+
 	It("should unmarshal tag '' value to latest", func() {
 		var source resource.Source
 		raw := []byte(`{ "tag": "" }`)
