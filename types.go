@@ -1,10 +1,15 @@
 package resource
 
+import (
+	"encoding/json"
+	"fmt"
+)
+
 const DefaultTag = "latest"
 
 type Source struct {
 	Repository string `json:"repository"`
-	RawTag     string `json:"tag"`
+	Tag        Tag    `json:"tag"`
 
 	Username string `json:"username"`
 	Password string `json:"password"`
@@ -12,12 +17,27 @@ type Source struct {
 	Debug bool `json:"debug"`
 }
 
-func (s Source) Tag() string {
-	if s.RawTag == "" {
-		return DefaultTag
+func (source *Source) Name() string {
+	return fmt.Sprintf("%s:%s", source.Repository, source.Tag)
+}
+
+type Tag string
+
+func (tag *Tag) UnmarshalJSON(b []byte) error {
+	var n json.Number
+
+	err := json.Unmarshal(b, &n)
+	if err != nil {
+		return err
 	}
 
-	return s.RawTag
+	if n.String() == "" {
+		*tag = Tag(DefaultTag)
+		return nil
+	}
+
+	*tag = Tag(n.String())
+	return nil
 }
 
 type Version struct {

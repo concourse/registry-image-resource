@@ -112,7 +112,7 @@ func saveDigest(dest string, image v1.Image) error {
 }
 
 func ociFormat(dest string, req InRequest, image v1.Image) {
-	tag, err := name.NewTag(req.Source.Repository+":"+req.Source.Tag(), name.WeakValidation)
+	tag, err := name.NewTag(req.Source.Name(), name.WeakValidation)
 	if err != nil {
 		logrus.Errorf("failed to construct tag reference: %s", err)
 		os.Exit(1)
