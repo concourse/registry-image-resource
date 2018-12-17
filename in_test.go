@@ -187,14 +187,14 @@ var _ = Describe("In", func() {
 	Describe("fetching from a private repository with credentials", func() {
 		BeforeEach(func() {
 			req.Source = resource.Source{
-				Repository: privateRepo,
+				Repository: dockerPrivateRepo,
 				Tag:        "latest",
 
-				Username: privateRepoUsername,
-				Password: privateRepoPassword,
+				Username: dockerUsername,
+				Password: dockerPassword,
 			}
 
-			checkPrivateRepoConfigured()
+			checkDockerUserConfigured()
 
 			req.Version = resource.Version{
 				Digest: PRIVATE_LATEST_STATIC_DIGEST,

@@ -18,9 +18,10 @@ RUN chmod +x /opt/resource/*
 FROM resource AS tests
 COPY --from=builder /tests /tests
 ADD . /docker-image-resource
-ARG PRIVATE_REPO
-ARG PRIVATE_REPO_USERNAME
-ARG PRIVATE_REPO_PASSWORD
+ARG DOCKER_USERNAME
+ARG DOCKER_PASSWORD
+ARG DOCKER_PRIVATE_REPO
+ARG DOCKER_PUSH_REPO
 RUN set -e; for test in /tests/*.test; do \
 		$test -ginkgo.v; \
 	done

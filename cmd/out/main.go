@@ -56,8 +56,6 @@ func main() {
 
 	src := os.Args[1]
 
-	logrus.Warnln("'put' is experimental, untested, and subject to change!")
-
 	ref := req.Source.Name()
 
 	n, err := name.ParseReference(ref, name.WeakValidation)
