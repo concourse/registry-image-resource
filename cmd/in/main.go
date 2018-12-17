@@ -79,10 +79,10 @@ func main() {
 		Username: req.Source.Username,
 		Password: req.Source.Password,
 	}
+
 	var image v1.Image
 	if auth.Username != "" && auth.Password != "" {
 		image, err = remote.Image(n, remote.WithAuth(auth))
-
 	} else {
 		image, err = remote.Image(n)
 	}

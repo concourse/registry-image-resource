@@ -184,6 +184,28 @@ var _ = Describe("In", func() {
 		})
 	})
 
+	Describe("fetching from a private repository with credentials", func() {
+		BeforeEach(func() {
+			req.Source = resource.Source{
+				Repository: privateRepo,
+				Tag:        "latest",
+
+				Username: privateRepoUsername,
+				Password: privateRepoPassword,
+			}
+
+			checkPrivateRepoConfigured()
+
+			req.Version = resource.Version{
+				Digest: PRIVATE_LATEST_STATIC_DIGEST,
+			}
+		})
+
+		It("works", func() {
+			Expect(cat(rootfsPath("Dockerfile"))).To(ContainSubstring("hello!"))
+		})
+	})
+
 	Describe("fetching in OCI format", func() {
 		var manifest *v1.Manifest
 
