@@ -74,10 +74,10 @@ func main() {
 			os.Exit(1)
 			return
 		}
+
 		var digestImage v1.Image
 		if auth.Username != "" && auth.Password != "" {
 			digestImage, err = remote.Image(digestRef, remote.WithAuth(auth))
-
 		} else {
 			digestImage, err = remote.Image(digestRef)
 		}

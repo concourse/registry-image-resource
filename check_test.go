@@ -53,6 +53,26 @@ var _ = Describe("Check", func() {
 				{Digest: LATEST_STATIC_DIGEST},
 			}))
 		})
+
+		Context("against a private repo with credentials", func() {
+			BeforeEach(func() {
+				req.Source = resource.Source{
+					Repository: privateRepo,
+					Tag:        "latest",
+
+					Username: privateRepoUsername,
+					Password: privateRepoPassword,
+				}
+
+				checkPrivateRepoConfigured()
+			})
+
+			It("returns the current digest", func() {
+				Expect(res).To(Equal([]resource.Version{
+					{Digest: PRIVATE_LATEST_STATIC_DIGEST},
+				}))
+			})
+		})
 	})
 
 	Context("when invoked with an up-to-date cursor version", func() {
@@ -71,6 +91,30 @@ var _ = Describe("Check", func() {
 			Expect(res).To(Equal([]resource.Version{
 				{Digest: LATEST_STATIC_DIGEST},
 			}))
+		})
+
+		Context("against a private repo with credentials", func() {
+			BeforeEach(func() {
+				req.Source = resource.Source{
+					Repository: privateRepo,
+					Tag:        "latest",
+
+					Username: privateRepoUsername,
+					Password: privateRepoPassword,
+				}
+
+				checkPrivateRepoConfigured()
+
+				req.Version = &resource.Version{
+					Digest: PRIVATE_LATEST_STATIC_DIGEST,
+				}
+			})
+
+			It("returns the current digest", func() {
+				Expect(res).To(Equal([]resource.Version{
+					{Digest: PRIVATE_LATEST_STATIC_DIGEST},
+				}))
+			})
 		})
 	})
 
@@ -93,6 +137,32 @@ var _ = Describe("Check", func() {
 				{Digest: LATEST_STATIC_DIGEST},
 			}))
 		})
+
+		Context("against a private repo with credentials", func() {
+			BeforeEach(func() {
+				req.Source = resource.Source{
+					Repository: privateRepo,
+					Tag:        "latest",
+
+					Username: privateRepoUsername,
+					Password: privateRepoPassword,
+				}
+
+				checkPrivateRepoConfigured()
+
+				req.Version = &resource.Version{
+					// this was previously pushed to the 'latest' tag
+					Digest: PRIVATE_OLDER_STATIC_DIGEST,
+				}
+			})
+
+			It("returns the current digest", func() {
+				Expect(res).To(Equal([]resource.Version{
+					{Digest: PRIVATE_OLDER_STATIC_DIGEST},
+					{Digest: PRIVATE_LATEST_STATIC_DIGEST},
+				}))
+			})
+		})
 	})
 
 	Context("when invoked with an invalid cursor version", func() {
@@ -112,6 +182,26 @@ var _ = Describe("Check", func() {
 			Expect(res).To(Equal([]resource.Version{
 				{Digest: LATEST_STATIC_DIGEST},
 			}))
+		})
+
+		Context("against a private repo with credentials", func() {
+			BeforeEach(func() {
+				req.Source = resource.Source{
+					Repository: privateRepo,
+					Tag:        "latest",
+
+					Username: privateRepoUsername,
+					Password: privateRepoPassword,
+				}
+
+				checkPrivateRepoConfigured()
+			})
+
+			It("returns the current digest", func() {
+				Expect(res).To(Equal([]resource.Version{
+					{Digest: PRIVATE_LATEST_STATIC_DIGEST},
+				}))
+			})
 		})
 	})
 })
