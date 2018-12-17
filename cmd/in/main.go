@@ -10,6 +10,7 @@ import (
 
 	resource "github.com/concourse/registry-image-resource"
 	color "github.com/fatih/color"
+	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
@@ -74,7 +75,17 @@ func main() {
 
 	fmt.Fprintf(os.Stderr, "fetching %s@%s\n", color.GreenString(req.Source.Repository), color.YellowString(req.Version.Digest))
 
-	image, err := remote.Image(n)
+	auth := &authn.Basic{
+		Username: req.Source.Username,
+		Password: req.Source.Password,
+	}
+	var image v1.Image
+	if auth.Username != "" && auth.Password != "" {
+		image, err = remote.Image(n, remote.WithAuth(auth))
+
+	} else {
+		image, err = remote.Image(n)
+	}
 	if err != nil {
 		logrus.Errorf("failed to locate remote image: %s", err)
 		os.Exit(1)
@@ -112,7 +123,7 @@ func saveDigest(dest string, image v1.Image) error {
 }
 
 func ociFormat(dest string, req InRequest, image v1.Image) {
-	tag, err := name.NewTag(req.Source.Repository+":"+req.Source.Tag(), name.WeakValidation)
+	tag, err := name.NewTag(req.Source.Name(), name.WeakValidation)
 	if err != nil {
 		logrus.Errorf("failed to construct tag reference: %s", err)
 		os.Exit(1)
