@@ -49,13 +49,19 @@ Reports the current digest that the registry has for the tag configured in
 
 ### `in`: Fetch the image's rootfs and metadata.
 
-Fetches an image.
+Fetches an image at a digest.
 
 #### Parameters
 
-* `format`: *Optional. Default `rootfs`.* The format to fetch as. (See below.)
+* `format`: *Optional. Default `rootfs`.* The format to fetch as.
 
-#### Formats
+#### Files created by the resource
+
+The resource will produce the following files:
+
+* `./digest`: A file containing the image's digest, e.g. `sha256:...`.
+
+The remaining files depend on the configuration value for `format`:
 
 ##### `rootfs`
 
@@ -66,8 +72,8 @@ This the default for the sake of brevity in pipelines and task configs.
 
 In this format, the resource will produce the following files:
 
-* `rootfs/...`: the unpacked rootfs produced by the image.
-* `metadata.json`: the runtime information to propagate to Concourse.
+* `./rootfs/...`: the unpacked rootfs produced by the image.
+* `./metadata.json`: the runtime information to propagate to Concourse.
 
 ##### `oci`
 
@@ -76,7 +82,7 @@ is analogous to running `docker save`.
 
 In this format, the resource will produce the following files:
 
-* `image.tar`: the OCI image tarball, suitable for passing to `docker load`.
+* `./image.tar`: the OCI image tarball, suitable for passing to `docker load`.
 
 
 ### `out`: Push an image up to the registry under the given tags.
