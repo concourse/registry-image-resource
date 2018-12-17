@@ -7,18 +7,16 @@ resource](https://github.com/concourse/docker-image-resource). Here are the key
 differences:
 
 * This resource is implemented in pure Go and does not use the Docker daemon or
-  CLI.
+  CLI. This makes it safer (no need for `privileged: true`), more efficient,
+  and less error-prone (now that we're using Go APIs and not parsing `docker`
+  CLI output).
 
 * This resource has stronger test coverage.
 
-* Therefore, it does not need to run privileged, and should be much more
-  efficient. It will also be less error-prone (parsing `docker` CLI output was
-  janky).
-
-* This resource does *not* support building. This should instead be done with
-  something like the [`concourse/builder`
-  task](https://github.com/concourse/builder) (or anything that can produce OCI
-  image tarballs).
+* This resource does not and will never support building - only registry image
+  pushing/pulling. Building should instead be done with something like the
+  [`concourse/builder` task](https://github.com/concourse/builder) (or anything
+  that can produce OCI image tarballs).
 
 * A goal of this resource is to stay as focused and simple as possible. The
   Docker Image resource grew way too large and complicated. There are simply
