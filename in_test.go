@@ -92,6 +92,27 @@ var _ = Describe("In", func() {
 		})
 	})
 
+	Describe("response metadata", func() {
+		BeforeEach(func() {
+			req.Source.Repository = "concourse/test-image-metadata"
+			req.Version.Digest = latestDigest(req.Source.Repository)
+		})
+
+		It("returns metadata", func() {
+			Expect(res.Version).To(Equal(req.Version))
+			Expect(res.Metadata).To(Equal([]resource.MetadataField{
+				resource.MetadataField{
+					Name:  "repository",
+					Value: "concourse/test-image-metadata",
+				},
+				resource.MetadataField{
+					Name:  "tag",
+					Value: "latest",
+				},
+			}))
+		})
+	})
+
 	Describe("file attributes", func() {
 		BeforeEach(func() {
 			req.Source.Repository = "concourse/test-image-file-perms-mtime"
