@@ -108,7 +108,7 @@ func main() {
 
 	json.NewEncoder(os.Stdout).Encode(InResponse{
 		Version:  req.Version,
-		Metadata: []resource.MetadataField{},
+		Metadata: req.Source.Metadata(),
 	})
 }
 

@@ -21,6 +21,19 @@ func (source *Source) Name() string {
 	return fmt.Sprintf("%s:%s", source.Repository, source.Tag)
 }
 
+func (source *Source) Metadata() []MetadataField {
+	return []MetadataField{
+		MetadataField{
+			Name:  "repository",
+			Value: source.Repository,
+		},
+		MetadataField{
+			Name:  "tag",
+			Value: string(source.Tag),
+		},
+	}
+}
+
 type Tag string
 
 func (tag *Tag) UnmarshalJSON(b []byte) error {

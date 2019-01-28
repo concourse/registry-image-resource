@@ -101,6 +101,6 @@ func main() {
 		Version: resource.Version{
 			Digest: digest.String(),
 		},
-		Metadata: []resource.MetadataField{},
+		Metadata: req.Source.Metadata(),
 	})
 }
