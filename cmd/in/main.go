@@ -106,20 +106,9 @@ func main() {
 		return
 	}
 
-	meta := []resource.MetadataField{
-		resource.MetadataField{
-			Name:  "repository",
-			Value: req.Source.Repository,
-		},
-		resource.MetadataField{
-			Name:  "tag",
-			Value: string(req.Source.Tag),
-		},
-	}
-
 	json.NewEncoder(os.Stdout).Encode(InResponse{
 		Version:  req.Version,
-		Metadata: meta,
+		Metadata: req.Source.Metadata(),
 	})
 }
 

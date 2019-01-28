@@ -102,5 +102,18 @@ var _ = Describe("Out", func() {
 
 			Expect(pushedDigest).To(Equal(randomDigest))
 		})
+
+		It("returns metadata", func() {
+			Expect(res.Metadata).To(Equal([]resource.MetadataField{
+				resource.MetadataField{
+					Name:  "repository",
+					Value: dockerPushRepo,
+				},
+				resource.MetadataField{
+					Name:  "tag",
+					Value: "latest",
+				},
+			}))
+		})
 	})
 })
