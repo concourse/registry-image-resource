@@ -1,4 +1,4 @@
-FROM golang:1 as builder
+FROM concourse/golang-builder as builder
 COPY . /src
 WORKDIR /src
 ENV CGO_ENABLED 0
@@ -10,8 +10,14 @@ RUN set -e; for pkg in $(go list ./...); do \
 		go test -o "/tests/$(basename $pkg).test" -c $pkg; \
 	done
 
-FROM alpine:edge AS resource
-RUN apk add --no-cache bash tzdata ca-certificates unzip zip gzip tar
+FROM ubuntu:bionic AS resource
+RUN apt-get update \
+      && apt-get install -y --no-install-recommends \
+        tzdata \
+        ca-certificates \
+        unzip \
+        zip \
+      && rm -rf /var/lib/apt/lists/*
 COPY --from=builder assets/ /opt/resource/
 RUN chmod +x /opt/resource/*
 
