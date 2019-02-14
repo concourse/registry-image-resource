@@ -8,15 +8,16 @@ import (
 	"os/exec"
 	"path/filepath"
 
+	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
-	"github.com/google/go-containerregistry/pkg/v1"
+	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/random"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/google/go-containerregistry/pkg/v1/tarball"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	"github.com/concourse/registry-image-resource"
+	resource "github.com/concourse/registry-image-resource"
 )
 
 var _ = Describe("Out", func() {
@@ -69,11 +70,11 @@ var _ = Describe("Out", func() {
 				Repository: dockerPushRepo,
 				Tag:        "latest",
 
-				Username: dockerUsername,
-				Password: dockerPassword,
+				Username: dockerPushUsername,
+				Password: dockerPushPassword,
 			}
 
-			checkDockerUserConfigured()
+			checkDockerPushUserConfigured()
 
 			tag, err := name.NewTag(req.Source.Name(), name.WeakValidation)
 			Expect(err).ToNot(HaveOccurred())
@@ -91,7 +92,12 @@ var _ = Describe("Out", func() {
 			name, err := name.ParseReference(req.Source.Name(), name.WeakValidation)
 			Expect(err).ToNot(HaveOccurred())
 
-			image, err := remote.Image(name)
+			auth := &authn.Basic{
+				Username: req.Source.Username,
+				Password: req.Source.Password,
+			}
+
+			image, err := remote.Image(name, remote.WithAuth(auth))
 			Expect(err).ToNot(HaveOccurred())
 
 			pushedDigest, err := image.Digest()

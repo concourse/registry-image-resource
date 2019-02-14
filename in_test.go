@@ -11,12 +11,12 @@ import (
 	"time"
 
 	"github.com/google/go-containerregistry/pkg/name"
-	"github.com/google/go-containerregistry/pkg/v1"
+	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/tarball"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	"github.com/concourse/registry-image-resource"
+	resource "github.com/concourse/registry-image-resource"
 )
 
 var _ = Describe("In", func() {
@@ -211,11 +211,11 @@ var _ = Describe("In", func() {
 				Repository: dockerPrivateRepo,
 				Tag:        "latest",
 
-				Username: dockerUsername,
-				Password: dockerPassword,
+				Username: dockerPrivateUsername,
+				Password: dockerPrivatePassword,
 			}
 
-			checkDockerUserConfigured()
+			checkDockerPrivateUserConfigured()
 
 			req.Version = resource.Version{
 				Digest: PRIVATE_LATEST_STATIC_DIGEST,

@@ -60,11 +60,11 @@ var _ = Describe("Check", func() {
 					Repository: dockerPrivateRepo,
 					Tag:        "latest",
 
-					Username: dockerUsername,
-					Password: dockerPassword,
+					Username: dockerPrivateUsername,
+					Password: dockerPrivatePassword,
 				}
 
-				checkDockerUserConfigured()
+				checkDockerPrivateUserConfigured()
 			})
 
 			It("returns the current digest", func() {
@@ -99,11 +99,11 @@ var _ = Describe("Check", func() {
 					Repository: dockerPrivateRepo,
 					Tag:        "latest",
 
-					Username: dockerUsername,
-					Password: dockerPassword,
+					Username: dockerPrivateUsername,
+					Password: dockerPrivatePassword,
 				}
 
-				checkDockerUserConfigured()
+				checkDockerPrivateUserConfigured()
 
 				req.Version = &resource.Version{
 					Digest: PRIVATE_LATEST_STATIC_DIGEST,
@@ -144,11 +144,11 @@ var _ = Describe("Check", func() {
 					Repository: dockerPrivateRepo,
 					Tag:        "latest",
 
-					Username: dockerUsername,
-					Password: dockerPassword,
+					Username: dockerPrivateUsername,
+					Password: dockerPrivatePassword,
 				}
 
-				checkDockerUserConfigured()
+				checkDockerPrivateUserConfigured()
 
 				req.Version = &resource.Version{
 					// this was previously pushed to the 'latest' tag
@@ -190,11 +190,11 @@ var _ = Describe("Check", func() {
 					Repository: dockerPrivateRepo,
 					Tag:        "latest",
 
-					Username: dockerUsername,
-					Password: dockerPassword,
+					Username: dockerPrivateUsername,
+					Password: dockerPrivatePassword,
 				}
 
-				checkDockerUserConfigured()
+				checkDockerPrivateUserConfigured()
 			})
 
 			It("returns the current digest", func() {

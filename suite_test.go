@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/google/go-containerregistry/pkg/name"
-	"github.com/google/go-containerregistry/pkg/v1"
+	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -24,23 +24,29 @@ var bins struct {
 const OLDER_STATIC_DIGEST = "sha256:031567a617423a84ad68b62267c30693185bd2b92c2668732efc8c70b036bd3a"
 const LATEST_STATIC_DIGEST = "sha256:64a6988c58cbdd634198f56452e8f8945e5b54a4bbca4bff7e960e1c830671ff"
 
-// same Dockerfile, but pushed again (twice; old + latest) to a private repo
+// a pre-configured, static private repo used for testing 'check' and 'in'
+var dockerPrivateRepo = os.Getenv("DOCKER_PRIVATE_REPO")
+var dockerPrivateUsername = os.Getenv("DOCKER_PRIVATE_USERNAME")
+var dockerPrivatePassword = os.Getenv("DOCKER_PRIVATE_PASSWORD")
+
+// testdata/static/Dockerfile, but pushed again (twice; old + latest) to the above private repo
 const PRIVATE_OLDER_STATIC_DIGEST = "sha256:a5e6442b86fd5f555f528deea32326e9709851f6b18d490d6dfb290c22d6ff52"
 const PRIVATE_LATEST_STATIC_DIGEST = "sha256:96c8ddb11d01b236fbf063e5a468d17f4c44ccffa19470471162dbd5bdc922a4"
 
-// a Docker Hub account used for testing interactions w/ credentials
-var dockerUsername = os.Getenv("DOCKER_USERNAME")
-var dockerPassword = os.Getenv("DOCKER_PASSWORD")
-
-// a pre-configured, static private repo used for testing 'check' and 'in'
-var dockerPrivateRepo = os.Getenv("DOCKER_PRIVATE_REPO")
-
 // a repo to which random images will be pushed when testing 'out'
 var dockerPushRepo = os.Getenv("DOCKER_PUSH_REPO")
+var dockerPushUsername = os.Getenv("DOCKER_PUSH_USERNAME")
+var dockerPushPassword = os.Getenv("DOCKER_PUSH_PASSWORD")
 
-func checkDockerUserConfigured() {
-	if dockerUsername == "" || dockerPassword == "" || dockerPrivateRepo == "" || dockerPushRepo == "" {
-		Skip("must specify $DOCKER_USERNAME, $DOCKER_PASSWORD, $DOCKER_PRIVATE_REPO, and $DOCKER_PUSH_REPO")
+func checkDockerPrivateUserConfigured() {
+	if dockerPrivateRepo == "" || dockerPrivateUsername == "" || dockerPrivatePassword == "" {
+		Skip("must specify $DOCKER_PRIVATE_REPO, $DOCKER_PRIVATE_USERNAME, and $DOCKER_PRIVATE_PASSWORD")
+	}
+}
+
+func checkDockerPushUserConfigured() {
+	if dockerPushRepo == "" || dockerPushUsername == "" || dockerPushPassword == "" {
+		Skip("must specify $DOCKER_PUSH_REPO, $DOCKER_PUSH_USERNAME, and $DOCKER_PUSH_PASSWORD")
 	}
 }
 
