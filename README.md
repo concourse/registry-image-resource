@@ -88,6 +88,9 @@ In this format, the resource will produce the following files:
 ### `out`: Push an image up to the registry under the given tags.
 
 Uploads an image to the registry under the tag configured in `source`.
+ 
+If `additional_tags` param is defined then the uploaded image will also be 
+tagged with each one of the values specified in that file.
 
 The currently encouraged way to build these images is by using the
 [`concourse/builder` task](https://github.com/concourse/builder).
@@ -95,3 +98,6 @@ The currently encouraged way to build these images is by using the
 #### Parameters
 
 * `image`: *Required.* The path to the OCI image tarball to upload.
+* `additional_tags`: *Optional.* The path to a file with whitespace-separated 
+list of tag values to tag the image with (in addition to the tag configured in 
+`source`).
