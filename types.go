@@ -3,6 +3,9 @@ package resource
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"path/filepath"
+	"strings"
 )
 
 const DefaultTag = "latest"
@@ -30,6 +33,19 @@ func (source *Source) Metadata() []MetadataField {
 		MetadataField{
 			Name:  "tag",
 			Value: string(source.Tag),
+		},
+	}
+}
+
+func (source *Source) MetadataWithAdditionalTags(tags []string) []MetadataField {
+	return []MetadataField{
+		MetadataField{
+			Name:  "repository",
+			Value: source.Repository,
+		},
+		MetadataField{
+			Name:  "tags",
+			Value: strings.Join(append(tags, string(source.Tag)), " "),
 		},
 	}
 }
@@ -75,5 +91,21 @@ func (p GetParams) Format() string {
 }
 
 type PutParams struct {
-	Image string `json:"image"`
+	Image          string `json:"image"`
+	AdditionalTags string `json:"additional_tags"`
+}
+
+func (p *PutParams) ParseTags(src string) ([]string, error) {
+	if p.AdditionalTags == "" {
+		return nil, nil
+	}
+
+	filepath := filepath.Join(src, p.AdditionalTags)
+
+	content, err := ioutil.ReadFile(filepath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read file at %q: %s", filepath, err)
+	}
+
+	return strings.Fields(string(content)), nil
 }
