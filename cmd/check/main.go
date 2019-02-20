@@ -7,7 +7,7 @@ import (
 	resource "github.com/concourse/registry-image-resource"
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
-	"github.com/google/go-containerregistry/pkg/v1"
+	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/sirupsen/logrus"
 )
@@ -47,12 +47,15 @@ func main() {
 		Password: req.Source.Password,
 	}
 
-	var image v1.Image
-	if auth.Username != "" && auth.Password != "" {
-		image, err = remote.Image(n, remote.WithAuth(auth))
-	} else {
-		image, err = remote.Image(n)
+	imageOpts := []remote.ImageOption{
+		remote.WithTransport(resource.RetryTransport),
 	}
+
+	if auth.Username != "" && auth.Password != "" {
+		imageOpts = append(imageOpts, remote.WithAuth(auth))
+	}
+
+	image, err := remote.Image(n, imageOpts...)
 	if err != nil {
 		logrus.Errorf("failed to get remote image: %s", err)
 		os.Exit(1)
