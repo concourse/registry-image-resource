@@ -1,8 +1,11 @@
 module github.com/concourse/registry-image-resource
 
 require (
+	code.cloudfoundry.org/lager v2.0.0+incompatible
 	github.com/VividCortex/ewma v1.1.1 // indirect
+	github.com/cenkalti/backoff v2.1.1+incompatible // indirect
 	github.com/concourse/go-archive v1.0.0
+	github.com/concourse/retryhttp v0.0.0-20181126170240-7ab5e29e634f
 	github.com/fatih/color v1.7.0
 	github.com/google/go-cmp v0.2.0 // indirect
 	github.com/google/go-containerregistry v0.0.0-20181122122528-61e4aeff7593

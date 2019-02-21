@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -56,13 +57,32 @@ func main() {
 
 	src := os.Args[1]
 
-	ref := req.Source.Name()
-
-	n, err := name.ParseReference(ref, name.WeakValidation)
+	ref, err := name.ParseReference(req.Source.Name(), name.WeakValidation)
 	if err != nil {
 		logrus.Errorf("could not resolve repository/tag reference: %s", err)
 		os.Exit(1)
 		return
+	}
+
+	tags, err := req.Params.ParseTags(src)
+	if err != nil {
+		logrus.Errorf("could not parse additional tags: %s", err)
+		os.Exit(1)
+		return
+	}
+
+	var extraRefs []name.Reference
+	for _, tag := range tags {
+		n := fmt.Sprintf("%s:%s", req.Source.Repository, tag)
+
+		extraRef, err := name.ParseReference(n, name.WeakValidation)
+		if err != nil {
+			logrus.Errorf("could not resolve repository/tag reference: %s", err)
+			os.Exit(1)
+			return
+		}
+
+		extraRefs = append(extraRefs, extraRef)
 	}
 
 	imagePath := filepath.Join(src, req.Params.Image)
@@ -81,14 +101,14 @@ func main() {
 		return
 	}
 
-	logrus.Infof("pushing %s to %s", digest, ref)
+	logrus.Infof("pushing %s to %s", digest, ref.Name())
 
 	auth := &authn.Basic{
 		Username: req.Source.Username,
 		Password: req.Source.Password,
 	}
 
-	err = remote.Write(n, img, auth, http.DefaultTransport)
+	err = remote.Write(ref, img, auth, resource.RetryTransport)
 	if err != nil {
 		logrus.Errorf("failed to upload image: %s", err)
 		os.Exit(1)
@@ -97,10 +117,23 @@ func main() {
 
 	logrus.Info("pushed")
 
+	for _, extraRef := range extraRefs {
+		logrus.Infof("tagging %s with %s", digest, extraRef.Identifier())
+
+		err = remote.Write(extraRef, img, auth, http.DefaultTransport)
+		if err != nil {
+			logrus.Errorf("failed to tag image: %s", err)
+			os.Exit(1)
+			return
+		}
+
+		logrus.Info("tagged")
+	}
+
 	json.NewEncoder(os.Stdout).Encode(OutResponse{
 		Version: resource.Version{
 			Digest: digest.String(),
 		},
-		Metadata: req.Source.Metadata(),
+		Metadata: req.Source.MetadataWithAdditionalTags(tags),
 	})
 }

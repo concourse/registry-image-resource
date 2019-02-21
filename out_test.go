@@ -8,15 +8,16 @@ import (
 	"os/exec"
 	"path/filepath"
 
+	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
-	"github.com/google/go-containerregistry/pkg/v1"
+	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/random"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/google/go-containerregistry/pkg/v1/tarball"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	"github.com/concourse/registry-image-resource"
+	resource "github.com/concourse/registry-image-resource"
 )
 
 var _ = Describe("Out", func() {
@@ -61,7 +62,7 @@ var _ = Describe("Out", func() {
 		Expect(err).ToNot(HaveOccurred())
 	})
 
-	Describe("pushing an OCI image tarball", func() {
+	Context("pushing an OCI image tarball", func() {
 		var randomImage v1.Image
 
 		BeforeEach(func() {
@@ -69,11 +70,11 @@ var _ = Describe("Out", func() {
 				Repository: dockerPushRepo,
 				Tag:        "latest",
 
-				Username: dockerUsername,
-				Password: dockerPassword,
+				Username: dockerPushUsername,
+				Password: dockerPushPassword,
 			}
 
-			checkDockerUserConfigured()
+			checkDockerPushUserConfigured()
 
 			tag, err := name.NewTag(req.Source.Name(), name.WeakValidation)
 			Expect(err).ToNot(HaveOccurred())
@@ -91,7 +92,12 @@ var _ = Describe("Out", func() {
 			name, err := name.ParseReference(req.Source.Name(), name.WeakValidation)
 			Expect(err).ToNot(HaveOccurred())
 
-			image, err := remote.Image(name)
+			auth := &authn.Basic{
+				Username: req.Source.Username,
+				Password: req.Source.Password,
+			}
+
+			image, err := remote.Image(name, remote.WithAuth(auth))
 			Expect(err).ToNot(HaveOccurred())
 
 			pushedDigest, err := image.Digest()
@@ -110,10 +116,47 @@ var _ = Describe("Out", func() {
 					Value: dockerPushRepo,
 				},
 				resource.MetadataField{
-					Name:  "tag",
+					Name:  "tags",
 					Value: "latest",
 				},
 			}))
+		})
+
+		Context("with additional_tags (newline separator)", func() {
+
+			BeforeEach(func() {
+				req.Params.AdditionalTags = "tags"
+
+				err := ioutil.WriteFile(
+					filepath.Join(srcDir, req.Params.AdditionalTags),
+					[]byte("additional\ntags\n"),
+					0644,
+				)
+				Expect(err).ToNot(HaveOccurred())
+			})
+
+			It("pushes provided tags in addition to the tag in 'source'", func() {
+				randomDigest, err := randomImage.Digest()
+				Expect(err).ToNot(HaveOccurred())
+
+				for _, tag := range []string{"latest", "additional", "tags"} {
+					name, err := name.ParseReference(req.Source.Repository+":"+tag, name.WeakValidation)
+					Expect(err).ToNot(HaveOccurred())
+
+					auth := &authn.Basic{
+						Username: req.Source.Username,
+						Password: req.Source.Password,
+					}
+
+					image, err := remote.Image(name, remote.WithAuth(auth))
+					Expect(err).ToNot(HaveOccurred())
+
+					pushedDigest, err := image.Digest()
+					Expect(err).ToNot(HaveOccurred())
+
+					Expect(pushedDigest).To(Equal(randomDigest))
+				}
+			})
 		})
 	})
 })
