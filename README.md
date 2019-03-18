@@ -127,9 +127,8 @@ docker build -t registry-image-resource -f dockerfiles/ubuntu/Dockerfile .
 
 #### Integration tests
 
-The integration requires two AWS S3 buckets, one without versioning and another
-with. The `docker build` step requires setting `--build-args` so the
-integration will run.
+The integration requires 2 docker repos, one private and one public. The `docker build` 
+step requires setting `--build-args` so the integration will run.
 
 Run the tests with the following command:
 
