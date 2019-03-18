@@ -101,3 +101,57 @@ The currently encouraged way to build these images is by using the
 * `additional_tags`: *Optional.* The path to a file with whitespace-separated 
 list of tag values to tag the image with (in addition to the tag configured in 
 `source`).
+
+## Development
+
+### Prerequisites
+
+* golang is *required* - version 1.11.x or above is required for go mod to work
+* docker is *required* - version 17.06.x is tested; earlier versions may also
+  work.
+* go mod is used for dependency management of the golang packages.
+
+### Running the tests
+
+The tests have been embedded with the `Dockerfile`; ensuring that the testing
+environment is consistent across any `docker` enabled platform. When the docker
+image builds, the test are run inside the docker container, on failure they
+will stop the build.
+
+Run the tests with the following commands for both `alpine` and `ubuntu` images:
+
+```sh
+docker build -t registry-image-resource -f dockerfiles/alpine/Dockerfile .
+docker build -t registry-image-resource -f dockerfiles/ubuntu/Dockerfile .
+```
+
+#### Integration tests
+
+The integration requires two AWS S3 buckets, one without versioning and another
+with. The `docker build` step requires setting `--build-args` so the
+integration will run.
+
+Run the tests with the following command:
+
+```sh
+docker build . -t registry-image-resource -f dockerfiles/alpine/Dockerfile \
+  --build-arg DOCKER_PRIVATE_USERNAME="some-username" \
+  --build-arg DOCKER_PRIVATE_PASSWORD="some-password" \
+  --build-arg DOCKER_PRIVATE_REPO="some/repo" \
+  --build-arg DOCKER_PUSH_USERNAME="some-username" \
+  --build-arg DOCKER_PUSH_PASSWORD="some-password" \
+  --build-arg DOCKER_PUSH_REPO="some/repo"
+
+docker build . -t registry-image-resource -f dockerfiles/ubuntu/Dockerfile \
+  --build-arg DOCKER_PRIVATE_USERNAME="some-username" \
+  --build-arg DOCKER_PRIVATE_PASSWORD="some-password" \
+  --build-arg DOCKER_PRIVATE_REPO="some/repo" \
+  --build-arg DOCKER_PUSH_USERNAME="some-username" \
+  --build-arg DOCKER_PUSH_PASSWORD="some-password" \
+  --build-arg DOCKER_PUSH_REPO="some/repo"
+```
+
+### Contributing
+
+Please make all pull requests to the `master` branch and ensure tests pass
+locally.
