@@ -12,7 +12,7 @@ require (
 	github.com/kr/pretty v0.1.0 // indirect
 	github.com/mattn/go-colorable v0.0.9 // indirect
 	github.com/mattn/go-isatty v0.0.4 // indirect
-	github.com/onsi/ginkgo v1.7.0
+	github.com/onsi/ginkgo v1.8.0
 	github.com/onsi/gomega v1.4.3
 	github.com/sirupsen/logrus v1.2.0
 	github.com/vbauerster/mpb v3.3.2+incompatible
