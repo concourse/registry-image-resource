@@ -15,7 +15,7 @@ require (
 	github.com/onsi/ginkgo v1.7.0
 	github.com/onsi/gomega v1.4.3
 	github.com/sirupsen/logrus v1.2.0
-	github.com/vbauerster/mpb v3.3.2+incompatible
+	github.com/vbauerster/mpb v3.4.0+incompatible
 	golang.org/x/crypto v0.0.0-20181126093934-9eb0be3963ea // indirect
 	golang.org/x/net v0.0.0-20181114220301-adae6a3d119a // indirect
 	golang.org/x/sync v0.0.0-20181108010431-42b317875d0f // indirect
