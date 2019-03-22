@@ -22,7 +22,10 @@ var bins struct {
 
 // see testdata/static/Dockerfile
 const OLDER_STATIC_DIGEST = "sha256:031567a617423a84ad68b62267c30693185bd2b92c2668732efc8c70b036bd3a"
-const LATEST_STATIC_DIGEST = "sha256:64a6988c58cbdd634198f56452e8f8945e5b54a4bbca4bff7e960e1c830671ff"
+const LATEST_STATIC_DIGEST = "sha256:2374201198a54c35ad03124f1218bb553eaa97368ce8d2359b43e0bc3b17e06f"
+
+// see testdata/static.tagged/Dockerfile
+const LATEST_TAGGED_STATIC_DIGEST = "sha256:91ef224d8aaf5377d9baa6bae710d4eef2184cefda910ccc0994f973fa8e57be"
 
 // a pre-configured, static private repo used for testing 'check' and 'in'
 var dockerPrivateRepo = os.Getenv("DOCKER_PRIVATE_REPO")

@@ -37,6 +37,12 @@ var _ = Describe("Out", func() {
 		var err error
 		srcDir, err = ioutil.TempDir("", "docker-image-out-dir")
 		Expect(err).ToNot(HaveOccurred())
+
+		req.Source = resource.Source{}
+		req.Params = resource.PutParams{}
+
+		res.Version = resource.Version{}
+		res.Metadata = nil
 	})
 
 	AfterEach(func() {

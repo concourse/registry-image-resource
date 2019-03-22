@@ -60,6 +60,7 @@ Fetches an image at a digest.
 The resource will produce the following files:
 
 * `./digest`: A file containing the image's digest, e.g. `sha256:...`.
+* `./tag`: A file containing the tag from `source`, e.g. `latest`.
 
 The remaining files depend on the configuration value for `format`:
 

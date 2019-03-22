@@ -19,6 +19,13 @@ var _ = Describe("Check", func() {
 
 	var res []resource.Version
 
+	BeforeEach(func() {
+		req.Source = resource.Source{}
+		req.Version = nil
+
+		res = nil
+	})
+
 	JustBeforeEach(func() {
 		cmd := exec.Command(bins.Check)
 
@@ -173,8 +180,7 @@ var _ = Describe("Check", func() {
 			}
 
 			req.Version = &resource.Version{
-				// (note the end)
-				Digest: "sha256:031567a617423a84ad68b62267c30693185bd2b92c2668732efc8c70deadbeef",
+				Digest: "sha256:deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
 			}
 		})
 

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"path"
 	"path/filepath"
 
 	resource "github.com/concourse/registry-image-resource"
@@ -102,6 +101,13 @@ func main() {
 		rootfsFormat(dest, req, image)
 	}
 
+	err = ioutil.WriteFile(filepath.Join(dest, "tag"), []byte(req.Source.Tag), 0644)
+	if err != nil {
+		logrus.Errorf("failed to save image tag: %s", err)
+		os.Exit(1)
+		return
+	}
+
 	err = saveDigest(dest, image)
 	if err != nil {
 		logrus.Errorf("failed to save image digest: %s", err)
@@ -121,7 +127,7 @@ func saveDigest(dest string, image v1.Image) error {
 		return err
 	}
 
-	digestDest := path.Join(dest, "digest")
+	digestDest := filepath.Join(dest, "digest")
 	return ioutil.WriteFile(digestDest, []byte(digest.String()), 0644)
 }
 

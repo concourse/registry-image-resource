@@ -23,14 +23,14 @@ var _ = Describe("In", func() {
 	var destDir string
 
 	var req struct {
-		Source  resource.Source
-		Params  resource.GetParams
-		Version resource.Version
+		Source  resource.Source    `json:"source"`
+		Params  resource.GetParams `json:"params"`
+		Version resource.Version   `json:"version"`
 	}
 
 	var res struct {
-		Version  resource.Version
-		Metadata []resource.MetadataField
+		Version  resource.Version         `json:"version"`
+		Metadata []resource.MetadataField `json:"metadata"`
 	}
 
 	rootfsPath := func(path ...string) string {
@@ -41,6 +41,13 @@ var _ = Describe("In", func() {
 		var err error
 		destDir, err = ioutil.TempDir("", "docker-image-in-dir")
 		Expect(err).ToNot(HaveOccurred())
+
+		req.Source = resource.Source{}
+		req.Params = resource.GetParams{}
+		req.Version = resource.Version{}
+
+		res.Version = resource.Version{}
+		res.Metadata = nil
 	})
 
 	AfterEach(func() {
@@ -263,14 +270,46 @@ var _ = Describe("In", func() {
 
 	Describe("saving the digest", func() {
 		BeforeEach(func() {
-			req.Source.Repository = "alpine"
-			req.Version.Digest = latestDigest(req.Source.Repository)
+			req.Source.Repository = "concourse/test-image-static"
+			req.Version.Digest = LATEST_STATIC_DIGEST
 		})
 
 		It("saves the digest to a file", func() {
 			digest, err := ioutil.ReadFile(filepath.Join(destDir, "digest"))
 			Expect(err).ToNot(HaveOccurred())
 			Expect(string(digest)).To(Equal(req.Version.Digest))
+		})
+	})
+
+	Describe("saving the tag", func() {
+		BeforeEach(func() {
+			req.Source.Repository = "concourse/test-image-static"
+			req.Version.Digest = LATEST_STATIC_DIGEST
+		})
+
+		Context("with no tag specified", func() {
+			BeforeEach(func() {
+				req.Source.Tag = ""
+			})
+
+			It("assumes 'latest' and saves the tag to a file", func() {
+				digest, err := ioutil.ReadFile(filepath.Join(destDir, "tag"))
+				Expect(err).ToNot(HaveOccurred())
+				Expect(string(digest)).To(Equal("latest"))
+			})
+		})
+
+		Context("with a tag specified", func() {
+			BeforeEach(func() {
+				req.Source.Tag = "tagged"
+				req.Version.Digest = LATEST_TAGGED_STATIC_DIGEST
+			})
+
+			It("saves the tag to a file", func() {
+				tag, err := ioutil.ReadFile(filepath.Join(destDir, "tag"))
+				Expect(err).ToNot(HaveOccurred())
+				Expect(string(tag)).To(Equal("tagged"))
+			})
 		})
 	})
 })
