@@ -49,7 +49,7 @@ var _ = Describe("Check", func() {
 		BeforeEach(func() {
 			req.Source = resource.Source{
 				Repository: "concourse/test-image-static",
-				Tag:        "latest",
+				RawTag:     "latest",
 			}
 
 			req.Version = nil
@@ -65,7 +65,7 @@ var _ = Describe("Check", func() {
 			BeforeEach(func() {
 				req.Source = resource.Source{
 					Repository: dockerPrivateRepo,
-					Tag:        "latest",
+					RawTag:     "latest",
 
 					Username: dockerPrivateUsername,
 					Password: dockerPrivatePassword,
@@ -86,7 +86,7 @@ var _ = Describe("Check", func() {
 		BeforeEach(func() {
 			req.Source = resource.Source{
 				Repository: "concourse/test-image-static",
-				Tag:        "latest",
+				RawTag:     "latest",
 			}
 
 			req.Version = &resource.Version{
@@ -104,7 +104,7 @@ var _ = Describe("Check", func() {
 			BeforeEach(func() {
 				req.Source = resource.Source{
 					Repository: dockerPrivateRepo,
-					Tag:        "latest",
+					RawTag:     "latest",
 
 					Username: dockerPrivateUsername,
 					Password: dockerPrivatePassword,
@@ -129,7 +129,7 @@ var _ = Describe("Check", func() {
 		BeforeEach(func() {
 			req.Source = resource.Source{
 				Repository: "concourse/test-image-static",
-				Tag:        "latest",
+				RawTag:     "latest",
 			}
 
 			req.Version = &resource.Version{
@@ -149,7 +149,7 @@ var _ = Describe("Check", func() {
 			BeforeEach(func() {
 				req.Source = resource.Source{
 					Repository: dockerPrivateRepo,
-					Tag:        "latest",
+					RawTag:     "latest",
 
 					Username: dockerPrivateUsername,
 					Password: dockerPrivatePassword,
@@ -176,7 +176,7 @@ var _ = Describe("Check", func() {
 		BeforeEach(func() {
 			req.Source = resource.Source{
 				Repository: "concourse/test-image-static",
-				Tag:        "latest",
+				RawTag:     "latest",
 			}
 
 			req.Version = &resource.Version{
@@ -194,7 +194,7 @@ var _ = Describe("Check", func() {
 			BeforeEach(func() {
 				req.Source = resource.Source{
 					Repository: dockerPrivateRepo,
-					Tag:        "latest",
+					RawTag:     "latest",
 
 					Username: dockerPrivateUsername,
 					Password: dockerPrivatePassword,

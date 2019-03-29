@@ -74,7 +74,7 @@ var _ = Describe("Out", func() {
 		BeforeEach(func() {
 			req.Source = resource.Source{
 				Repository: dockerPushRepo,
-				Tag:        "latest",
+				RawTag:     "latest",
 
 				Username: dockerPushUsername,
 				Password: dockerPushPassword,

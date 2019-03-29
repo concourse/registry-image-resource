@@ -12,16 +12,24 @@ const DefaultTag = "latest"
 
 type Source struct {
 	Repository string `json:"repository"`
-	Tag        Tag    `json:"tag"`
+	RawTag     Tag    `json:"tag,omitempty"`
 
-	Username string `json:"username"`
-	Password string `json:"password"`
+	Username string `json:"username,omitempty"`
+	Password string `json:"password,omitempty"`
 
-	Debug bool `json:"debug"`
+	Debug bool `json:"debug,omitempty"`
 }
 
 func (source *Source) Name() string {
-	return fmt.Sprintf("%s:%s", source.Repository, source.Tag)
+	return fmt.Sprintf("%s:%s", source.Repository, source.Tag())
+}
+
+func (source *Source) Tag() string {
+	if source.RawTag != "" {
+		return string(source.RawTag)
+	}
+
+	return DefaultTag
 }
 
 func (source *Source) Metadata() []MetadataField {
@@ -32,7 +40,7 @@ func (source *Source) Metadata() []MetadataField {
 		},
 		MetadataField{
 			Name:  "tag",
-			Value: string(source.Tag),
+			Value: source.Tag(),
 		},
 	}
 }
@@ -45,27 +53,24 @@ func (source *Source) MetadataWithAdditionalTags(tags []string) []MetadataField 
 		},
 		MetadataField{
 			Name:  "tags",
-			Value: strings.Join(append(tags, string(source.Tag)), " "),
+			Value: strings.Join(append(tags, source.Tag()), " "),
 		},
 	}
 }
 
+// Tag refers to a tag for an image in the registry.
 type Tag string
 
+// UnmarshalJSON accepts numeric and string values.
 func (tag *Tag) UnmarshalJSON(b []byte) error {
 	var n json.Number
-
 	err := json.Unmarshal(b, &n)
 	if err != nil {
 		return err
 	}
 
-	if n.String() == "" {
-		*tag = Tag(DefaultTag)
-		return nil
-	}
-
 	*tag = Tag(n.String())
+
 	return nil
 }
 

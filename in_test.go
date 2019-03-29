@@ -216,7 +216,7 @@ var _ = Describe("In", func() {
 		BeforeEach(func() {
 			req.Source = resource.Source{
 				Repository: dockerPrivateRepo,
-				Tag:        "latest",
+				RawTag:     "latest",
 
 				Username: dockerPrivateUsername,
 				Password: dockerPrivatePassword,
@@ -289,7 +289,7 @@ var _ = Describe("In", func() {
 
 		Context("with no tag specified", func() {
 			BeforeEach(func() {
-				req.Source.Tag = ""
+				req.Source.RawTag = ""
 			})
 
 			It("assumes 'latest' and saves the tag to a file", func() {
@@ -301,7 +301,7 @@ var _ = Describe("In", func() {
 
 		Context("with a tag specified", func() {
 			BeforeEach(func() {
-				req.Source.Tag = "tagged"
+				req.Source.RawTag = "tagged"
 				req.Version.Digest = LATEST_TAGGED_STATIC_DIGEST
 			})
 
