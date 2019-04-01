@@ -17,6 +17,12 @@ type Source struct {
 	Username string `json:"username,omitempty"`
 	Password string `json:"password,omitempty"`
 
+	Ecr                bool   `json:"ecr,omitempty"`
+	AwsAccessKeyId     string `json:"aws_access_key_id,omitempty"`
+	AwsSecretAccessKey string `json:"aws_secret_access_key,omitempty"`
+	AwsRegion          string `json:"aws_region,omitempty"`
+	AwsRoleArn         string `json:"aws_role_arn,omitempty"`
+
 	Debug bool `json:"debug,omitempty"`
 }
 

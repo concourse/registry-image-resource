@@ -1,12 +1,19 @@
 package main
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
 
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/awserr"
+	"github.com/aws/aws-sdk-go/aws/credentials/stscreds"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/ecr"
 	resource "github.com/concourse/registry-image-resource"
 	color "github.com/fatih/color"
 	"github.com/google/go-containerregistry/pkg/authn"
@@ -62,6 +69,68 @@ func main() {
 	}
 
 	dest := os.Args[1]
+
+	if req.Source.Ecr {
+		if req.Source.AwsAccessKeyId != "" {
+			os.Setenv("AWS_ACCESS_KEY_ID", req.Source.AwsAccessKeyId)
+		}
+		if req.Source.AwsSecretAccessKey != "" {
+			os.Setenv("AWS_SECRET_ACCESS_KEY", req.Source.AwsSecretAccessKey)
+		}
+		if req.Source.AwsRegion != "" {
+			os.Setenv("AWS_REGION", req.Source.AwsRegion)
+		}
+		mySession := session.Must(session.NewSession())
+		client := ecr.New(mySession)
+		// If a role arn has been supplied, then assume role and get a new session
+		if req.Source.AwsRoleArn != "" {
+			creds := stscreds.NewCredentials(mySession, req.Source.AwsRoleArn)
+			client = ecr.New(mySession, &aws.Config{Credentials: creds})
+		}
+		input := &ecr.GetAuthorizationTokenInput{}
+		result, err := client.GetAuthorizationToken(input)
+		if err != nil {
+			if aerr, ok := err.(awserr.Error); ok {
+				switch aerr.Code() {
+				case ecr.ErrCodeServerException:
+					logrus.Errorf(ecr.ErrCodeServerException)
+					logrus.Errorf(aerr.Error())
+				case ecr.ErrCodeInvalidParameterException:
+					logrus.Errorf(ecr.ErrCodeServerException)
+					logrus.Errorf(aerr.Error())
+				default:
+					logrus.Errorf(aerr.Error())
+				}
+			} else {
+				// Print the error, cast err to awserr.Error to get the Code and
+				// Message from an error.
+				logrus.Errorf(err.Error())
+			}
+			return
+		}
+
+		for _, data := range result.AuthorizationData {
+			output, err := base64.StdEncoding.DecodeString(*data.AuthorizationToken)
+
+			if err != nil {
+				logrus.Errorf("Failed to decode credential (%s)", err.Error())
+				return
+			}
+
+			split := strings.Split(string(output), ":")
+
+			if len(split) == 2 {
+				req.Source.Password = strings.TrimSpace(split[1])
+			} else {
+				logrus.Errorf("Failed to parse password.")
+				return
+			}
+		}
+
+		// Update username and repository
+		req.Source.Username = "AWS"
+		req.Source.Repository = strings.Join([]string{strings.Replace(*result.AuthorizationData[0].ProxyEndpoint, "https://", "", -1), req.Source.Repository}, "/")
+	}
 
 	ref := req.Source.Repository + "@" + req.Version.Digest
 
