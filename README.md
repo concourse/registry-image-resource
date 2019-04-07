@@ -51,6 +51,13 @@ differences:
 
 * `aws_role_arn`: *Optional. Default `"`.* If set **and** `ecr` set, then
 the role will be assumed before authenticating to ECR
+* `aws_access_key_id`, `aws_secret_access_key` and `aws_region`: *Optional.*
+  Used to authenticate to ECR repos. Must be specified for ECR repos.
+  Setting these will override `username` and `password`
+
+* `aws_role_arn`: *Optional.* If set, then the role will be assumed before
+  authenticating to ECR. **Requires** `aws_access_key_id`, `aws_secret_access_key`
+  to be set.
 
 * `debug`: *Optional. Default `false`.* If set, progress bars will be disabled
   and debugging output will be printed instead.
