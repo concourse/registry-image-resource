@@ -1,11 +1,19 @@
 package resource
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/credentials/stscreds"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/ecr"
+	"github.com/sirupsen/logrus"
 )
 
 const DefaultTag = "latest"
@@ -17,7 +25,6 @@ type Source struct {
 	Username string `json:"username,omitempty"`
 	Password string `json:"password,omitempty"`
 
-	Ecr                bool   `json:"ecr,omitempty"`
 	AwsAccessKeyId     string `json:"aws_access_key_id,omitempty"`
 	AwsSecretAccessKey string `json:"aws_secret_access_key,omitempty"`
 	AwsRegion          string `json:"aws_region,omitempty"`
@@ -62,6 +69,49 @@ func (source *Source) MetadataWithAdditionalTags(tags []string) []MetadataField 
 			Value: strings.Join(append(tags, source.Tag()), " "),
 		},
 	}
+}
+
+func (source *Source) AuthenticateToECR() bool {
+	os.Setenv("AWS_ACCESS_KEY_ID", source.AwsAccessKeyId)
+	os.Setenv("AWS_SECRET_ACCESS_KEY", source.AwsSecretAccessKey)
+	os.Setenv("AWS_REGION", source.AwsRegion)
+	mySession := session.Must(session.NewSession())
+	client := ecr.New(mySession)
+	// If a role arn has been supplied, then assume role and get a new session
+	if source.AwsRoleArn != "" {
+		creds := stscreds.NewCredentials(mySession, source.AwsRoleArn)
+		client = ecr.New(mySession, &aws.Config{Credentials: creds})
+	}
+	input := &ecr.GetAuthorizationTokenInput{}
+	result, err := client.GetAuthorizationToken(input)
+	if err != nil {
+		logrus.Errorf("Failed to authenticate to ECR: %s", err)
+		return false
+	}
+
+	for _, data := range result.AuthorizationData {
+		output, err := base64.StdEncoding.DecodeString(*data.AuthorizationToken)
+
+		if err != nil {
+			logrus.Errorf("Failed to decode credential (%s)", err.Error())
+			return false
+		}
+
+		split := strings.Split(string(output), ":")
+
+		if len(split) == 2 {
+			source.Password = strings.TrimSpace(split[1])
+		} else {
+			logrus.Errorf("Failed to parse password.")
+			return false
+		}
+	}
+
+	// Update username and repository
+	source.Username = "AWS"
+	source.Repository = strings.Join([]string{strings.TrimPrefix(*result.AuthorizationData[0].ProxyEndpoint, "https://"), source.Repository}, "/")
+
+	return true
 }
 
 // Tag refers to a tag for an image in the registry.

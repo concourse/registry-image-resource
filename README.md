@@ -37,20 +37,13 @@ differences:
   authenticating to the registry. Must be specified for private repos or when
   using `put`.
 
-* `ecr`: *Optional. Default `false`.* If set, Access Key ID and secret will be 
-  used to authenticate, `username` and `password` will be ignored.
+* `aws_access_key_id`, `aws_secret_access_key` and `aws_region`: *Optional.* 
+  Used to authenticate to ECR repos. Must be specified for ECR repos. 
+  Setting these will override `username` and `password`
 
-* `aws_access_key_id`: *Optional. Default `"""`.* If set, will be used to set
-    `AWS_ACCESS_KEY_ID` environment variable
-
-* `aws_secret_access_key`: *Optional. Default `"""`.* If set, will be used to set
-    `AWS_SECRET_ACCESS_KEY` environment variable
-
-* `aws_region`: *Optional. Default `"`.* If set, will be used to set
-    `AWS_REGION` environment variable
-
-* `aws_role_arn`: *Optional. Default `"`.* If set **and** `ecr` set, then 
-the role will be assumed before authenticating to ECR
+* `aws_role_arn`: *Optional.* If set, then the role will be assumed before 
+  authenticating to ECR. **Requires** `aws_access_key_id`, `aws_secret_access_key`
+  to be set.
 
 * `debug`: *Optional. Default `false`.* If set, progress bars will be disabled
   and debugging output will be printed instead.
