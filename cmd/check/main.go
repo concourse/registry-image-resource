@@ -62,11 +62,15 @@ func main() {
 		return
 	}
 
+	var missingTag bool
 	digest, err := image.Digest()
 	if err != nil {
-		logrus.Errorf("failed get image digest: %s", err)
-		os.Exit(1)
-		return
+		missingTag = checkMissingManifest(err)
+		if !missingTag {
+			logrus.Errorf("failed to get cursor image digest: %s", err)
+			os.Exit(1)
+			return
+		}
 	}
 
 	response := CheckResponse{}
@@ -93,15 +97,7 @@ func main() {
 		var missingDigest bool
 		_, err = digestImage.Digest()
 		if err != nil {
-			if rErr, ok := err.(*remote.Error); ok {
-				for _, e := range rErr.Errors {
-					if e.Code == remote.ManifestUnknownErrorCode {
-						missingDigest = true
-						break
-					}
-				}
-			}
-
+			missingDigest = checkMissingManifest(err)
 			if !missingDigest {
 				logrus.Errorf("failed to get cursor image digest: %s", err)
 				os.Exit(1)
@@ -114,9 +110,24 @@ func main() {
 		}
 	}
 
-	response = append(response, resource.Version{
-		Digest: digest.String(),
-	})
+	if !missingTag {
+		response = append(response, resource.Version{
+			Digest: digest.String(),
+		})
+	}
 
 	json.NewEncoder(os.Stdout).Encode(response)
+}
+
+func checkMissingManifest(err error) bool {
+	var missing bool
+	if rErr, ok := err.(*remote.Error); ok {
+		for _, e := range rErr.Errors {
+			if e.Code == remote.ManifestUnknownErrorCode {
+				missing = true
+				break
+			}
+		}
+	}
+	return missing
 }
