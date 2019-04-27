@@ -5,14 +5,25 @@ import (
 	"fmt"
 	"io/ioutil"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
-const DefaultTag = "latest"
+const (
+	DefaultTag                  = "latest"
+	DefaultPlatformArchitecture = runtime.GOARCH
+	DefaultPlatformOS           = runtime.GOOS
+)
+
+type PlatformField struct {
+	Architecture string `json:"architecture,omitempty"`
+	OS           string `json:"os,omitempty"`
+}
 
 type Source struct {
-	Repository string `json:"repository"`
-	RawTag     Tag    `json:"tag,omitempty"`
+	Repository  string        `json:"repository"`
+	RawTag      Tag           `json:"tag,omitempty"`
+	RawPlatform PlatformField `json:"platform,omitempty"`
 
 	Username string `json:"username,omitempty"`
 	Password string `json:"password,omitempty"`
@@ -22,6 +33,20 @@ type Source struct {
 
 func (source *Source) Name() string {
 	return fmt.Sprintf("%s:%s", source.Repository, source.Tag())
+}
+
+func (source *Source) Platform() PlatformField {
+	p := source.RawPlatform
+
+	if p.Architecture == "" {
+		p.Architecture = DefaultPlatformArchitecture
+	}
+
+	if p.OS == "" {
+		p.OS = DefaultPlatformOS
+	}
+
+	return p
 }
 
 func (source *Source) Tag() string {

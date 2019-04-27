@@ -9,6 +9,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
+	"github.com/google/go-containerregistry/pkg/v1/remote/transport"
 	"github.com/sirupsen/logrus"
 )
 
@@ -47,8 +48,14 @@ func main() {
 		Password: req.Source.Password,
 	}
 
+	platform := req.Source.Platform()
+
 	imageOpts := []remote.ImageOption{
 		remote.WithTransport(resource.RetryTransport),
+		remote.WithPlatform(v1.Platform{
+			Architecture: platform.Architecture,
+			OS:           platform.OS,
+		}),
 	}
 
 	if auth.Username != "" && auth.Password != "" {
@@ -93,9 +100,9 @@ func main() {
 		var missingDigest bool
 		_, err = digestImage.Digest()
 		if err != nil {
-			if rErr, ok := err.(*remote.Error); ok {
+			if rErr, ok := err.(*transport.Error); ok {
 				for _, e := range rErr.Errors {
-					if e.Code == remote.ManifestUnknownErrorCode {
+					if e.Code == transport.ManifestUnknownErrorCode {
 						missingDigest = true
 						break
 					}

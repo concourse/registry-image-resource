@@ -8,7 +8,7 @@ require (
 	github.com/concourse/retryhttp v0.0.0-20181126170240-7ab5e29e634f
 	github.com/fatih/color v1.7.0
 	github.com/google/go-cmp v0.2.0 // indirect
-	github.com/google/go-containerregistry v0.0.0-20181122122528-61e4aeff7593
+	github.com/google/go-containerregistry v0.0.0-20190426165109-b6d875c30fe7
 	github.com/kr/pretty v0.1.0 // indirect
 	github.com/mattn/go-colorable v0.0.9 // indirect
 	github.com/mattn/go-isatty v0.0.4 // indirect
