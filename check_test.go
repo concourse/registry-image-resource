@@ -210,4 +210,36 @@ var _ = Describe("Check", func() {
 			})
 		})
 	})
+
+	Context("when invoked with not exist image", func() {
+		BeforeEach(func() {
+			req.Source = resource.Source{
+				Repository: "concourse/test-image-static",
+				RawTag:     "not-exist-image",
+			}
+			req.Version = nil
+		})
+
+		It("returns empty digest", func() {
+			Expect(res).To(Equal([]resource.Version{}))
+		})
+
+		Context("against a private repo with credentials", func() {
+			BeforeEach(func() {
+				req.Source = resource.Source{
+					Repository: dockerPrivateRepo,
+					RawTag:     "not-exist-image",
+
+					Username: dockerPrivateUsername,
+					Password: dockerPrivatePassword,
+				}
+
+				checkDockerPrivateUserConfigured()
+			})
+
+			It("returns empty digest", func() {
+				Expect(res).To(Equal([]resource.Version{}))
+			})
+		})
+	})
 })
