@@ -15,7 +15,7 @@ differences:
 
 * This resource does not and will never support building - only registry image
   pushing/pulling. Building should instead be done with something like the
-  [`concourse/builder` task](https://github.com/concourse/builder) (or anything
+  [`builder` task](https://github.com/concourse/builder-task) (or anything
   that can produce OCI image tarballs).
 
 * A goal of this resource is to stay as focused and simple as possible. The
