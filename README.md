@@ -102,6 +102,24 @@ The currently encouraged way to build these images is by using the
 * `additional_tags`: *Optional.* The path to a file with whitespace-separated 
 list of tag values to tag the image with (in addition to the tag configured in 
 `source`).
+* `content_trust`: *Optional.* Configuration about content trust.
+  * `config_dir`: *Important* A directory contains following files
+    * certificate file: `tls/<notary-host>:4443/xxx.cert`
+    * key file: `tls/<notary-host>:4443/xxx.key`
+    * signing key: `trust/private/xxxxxxxxxxxxx.key`
+
+```
+  - put: some-docker-image
+    params:
+      image: image/image.tar
+      content_trust:
+        enable: true
+        server: https://127.0.0.1:4443
+        config_dir: notary-config-dir
+        repository_passphrase: "xxxxxxx"
+        root_passphrase: "xxxxxxx"
+```
+
 
 ## Development
 

@@ -95,9 +95,23 @@ func (p GetParams) Format() string {
 	return p.RawFormat
 }
 
+type ContentTrust struct {
+	Enable                 bool   `json:"enable"`
+	Server                 string `json:"server"`
+	ConfigDir              string `json:"config_dir"`
+	RepositoryPassphrase   string `json:"repository_passphrase"`
+	RootPassphrase         string `json:"root_passphrase"`
+}
+
+func (ct *ContentTrust) AbsConfigDir(src string) string {
+	filepath := filepath.Join(src, ct.ConfigDir)
+	return filepath
+}
+
 type PutParams struct {
-	Image          string `json:"image"`
-	AdditionalTags string `json:"additional_tags"`
+	Image          string          `json:"image"`
+	AdditionalTags string          `json:"additional_tags"`
+	ContentTrust   ContentTrust    `json:"content_trust,omitempty"`
 }
 
 func (p *PutParams) ParseTags(src string) ([]string, error) {

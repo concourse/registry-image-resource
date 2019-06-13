@@ -10,11 +10,13 @@ import (
 	"github.com/fatih/color"
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
+	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/google/go-containerregistry/pkg/v1/tarball"
 	"github.com/sirupsen/logrus"
 
 	resource "github.com/concourse/registry-image-resource"
+	trust "github.com/concourse/registry-image-resource/trust"
 )
 
 type OutRequest struct {
@@ -117,6 +119,12 @@ func main() {
 
 	logrus.Info("pushed")
 
+	err = signImage(src, ref, img, auth, digest, req.Params.ContentTrust)
+	if err != nil {
+		os.Exit(1)
+		return
+	}
+
 	for _, extraRef := range extraRefs {
 		logrus.Infof("tagging %s with %s", digest, extraRef.Identifier())
 
@@ -128,6 +136,12 @@ func main() {
 		}
 
 		logrus.Info("tagged")
+
+		err = signImage(src, ref, img, auth, digest, req.Params.ContentTrust)
+		if err != nil {
+			os.Exit(1)
+			return
+		}
 	}
 
 	json.NewEncoder(os.Stdout).Encode(OutResponse{
@@ -136,4 +150,16 @@ func main() {
 		},
 		Metadata: req.Source.MetadataWithAdditionalTags(tags),
 	})
+}
+
+func signImage(src string, ref name.Reference, img v1.Image, auth authn.Authenticator, digest v1.Hash, ct resource.ContentTrust) error {
+	if ct.Enable {
+		err := trust.PushTrustedReference(src, ref, img, auth, digest, ct)
+		if err != nil {
+			logrus.Errorf("failed to sign image: %s", err)
+			return err
+		}
+		logrus.Infof("signed: %s", ref.Identifier())
+	}
+	return nil
 }
