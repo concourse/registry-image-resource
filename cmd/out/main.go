@@ -14,6 +14,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/tarball"
 	"github.com/sirupsen/logrus"
 
+	gcr "github.com/SimonXming/notary-gcr/pkg/gcr"
 	resource "github.com/concourse/registry-image-resource"
 )
 
@@ -117,6 +118,23 @@ func main() {
 
 	logrus.Info("pushed")
 
+	if req.Source.ContentTrust.Enable {
+		notaryConfigDir, err := req.Source.ContentTrust.PrepareConfigDir(src)
+		if err != nil {
+			logrus.Errorf("failed to prepare notary-config-dir: %s", err)
+			os.Exit(1)
+			return
+		}
+		os.Setenv("NOTARY_CONFIG_DIR", notaryConfigDir)
+		trustedRepo, err := gcr.NewTrustedGcrRepository(ref, auth)
+		if err != nil {
+			logrus.Errorf("failed to create TrustedGcrRepository: %s", err)
+			os.Exit(1)
+			return
+		}
+		trustedRepo.SignImage(img)
+	}
+
 	for _, extraRef := range extraRefs {
 		logrus.Infof("tagging %s with %s", digest, extraRef.Identifier())
 
@@ -128,6 +146,15 @@ func main() {
 		}
 
 		logrus.Info("tagged")
+		if req.Source.ContentTrust.Enable {
+			trustedRepo, err := gcr.NewTrustedGcrRepository(extraRef, auth)
+			if err != nil {
+				logrus.Errorf("failed to create TrustedGcrRepository: %s", err)
+				os.Exit(1)
+				return
+			}
+			trustedRepo.SignImage(img)
+		}
 	}
 
 	json.NewEncoder(os.Stdout).Encode(OutResponse{
