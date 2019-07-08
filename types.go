@@ -37,7 +37,7 @@ type ContentTrust struct {
 ├── gcr-config.json
 └── trust
 	└── private
-		└── a116dd84f9a486c5ad717bccf24d9da869190aa32f49854b46a8cef5bee1780b.key
+		└── <private-key-id>.key
 └── tls
 	└── <notary-host>
 		├── client.cert
