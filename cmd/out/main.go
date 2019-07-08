@@ -132,7 +132,10 @@ func main() {
 			os.Exit(1)
 			return
 		}
-		trustedRepo.SignImage(img)
+		err = trustedRepo.SignImage(img)
+		if err != nil {
+			logrus.Errorf("failed to sign image: %s", err)
+		}
 	}
 
 	for _, extraRef := range extraRefs {
@@ -153,7 +156,10 @@ func main() {
 				os.Exit(1)
 				return
 			}
-			trustedRepo.SignImage(img)
+			err = trustedRepo.SignImage(img)
+			if err != nil {
+				logrus.Errorf("failed to sign image: %s", err)
+			}
 		}
 	}
 
