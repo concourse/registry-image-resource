@@ -7,7 +7,6 @@ require (
 	github.com/concourse/go-archive v1.0.1
 	github.com/concourse/retryhttp v0.0.0-20181126170240-7ab5e29e634f
 	github.com/fatih/color v1.7.0
-	github.com/go-logfmt/logfmt v0.4.0 // indirect
 	github.com/google/go-containerregistry v0.0.0-20181122122528-61e4aeff7593
 	github.com/mattn/go-colorable v0.0.9 // indirect
 	github.com/mattn/go-isatty v0.0.4 // indirect
