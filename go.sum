@@ -11,9 +11,6 @@ github.com/Shopify/logrus-bugsnag v0.0.0-20171204204709-577dee27f20d h1:UrqY+r/O
 github.com/Shopify/logrus-bugsnag v0.0.0-20171204204709-577dee27f20d/go.mod h1:HI8ITrYtUY+O+ZhtlqUnD8+KwNPOyugEhfP9fdUIaEQ=
 github.com/Shopify/sarama v1.19.0/go.mod h1:FVkBWblsNy7DGZRfXLU0O9RCGt5g3g3yEuWXgklEdEo=
 github.com/Shopify/toxiproxy v2.1.4+incompatible/go.mod h1:OXgGpZ6Cli1/URJOF1DMxUHB2q5Ap20/P/eIdh4G0pI=
-github.com/SimonXming/notary-gcr v0.0.0-20190708074828-186417a81fc6 h1:OsreH1DbG/q3T+ip9puP/7W7JXgVY2sgDLhLM8XJZm4=
-github.com/SimonXming/notary-gcr v0.0.0-20190708074828-186417a81fc6/go.mod h1:uXClzwCLOnK7hDDrrAcLnQuIPOM06/pVRk/Y41lNMxQ=
-github.com/SimonXming/notary-gcr v0.0.0-20190715042003-b5b0ef192347 h1:Tnt1Slw3WBLL/a57iXccWC0ShT34RYq3K9x32bYUnn4=
 github.com/SimonXming/notary-gcr v0.0.0-20190715042003-b5b0ef192347/go.mod h1:boX/SGOUY6zupdXaEl+JTypGbC0ZqdLoDCFC2Kgr7N0=
 github.com/VividCortex/ewma v1.1.1 h1:MnEK4VOv6n0RSY4vtRe3h11qjxL3+t0B8yOL8iMXdcM=
 github.com/VividCortex/ewma v1.1.1/go.mod h1:2Tkkvm3sRDVXaiyucHiACn4cqf7DpdyLvmxzcbUokwA=
@@ -207,6 +204,8 @@ github.com/prometheus/procfs v0.0.2/go.mod h1:TjEm7ze935MbeOT/UhFTIMYKhuLP4wbCsT
 github.com/prometheus/tsdb v0.7.1/go.mod h1:qhTCs0VvXwvX/y3TZrWD7rabWM+ijKTux40TwIPHuXU=
 github.com/rcrowley/go-metrics v0.0.0-20181016184325-3113b8401b8a/go.mod h1:bCqnVzQkZxMG4s8nGwiZ5l3QUCyqpo9Y+/ZMZ9VjZe4=
 github.com/rogpeppe/fastuuid v0.0.0-20150106093220-6724a57986af/go.mod h1:XWv6SoW27p1b0cqNHllgS5HIMJraePCO15w5zCzIWYg=
+github.com/simonshyu/notary-gcr v0.0.0-20190715091934-8d81a216e128 h1:QvGss90ItjWdTPP6RGI4dlbWwzefI5N8D3uyzsrAp04=
+github.com/simonshyu/notary-gcr v0.0.0-20190715091934-8d81a216e128/go.mod h1:3Vs6jT1Bh5nan2LQYX3GT3LO8R/AjHTTmO3Mcf3nB9A=
 github.com/sirupsen/logrus v1.2.0/go.mod h1:LxeOpSwHxABJmUn/MG1IvRgCAasNZTLOkJPxbbu5VWo=
 github.com/sirupsen/logrus v1.4.2 h1:SPIRibHv4MatM3XXNO2BJeFLZwZ2LvZgfQ5+UNI2im4=
 github.com/sirupsen/logrus v1.4.2 h1:SPIRibHv4MatM3XXNO2BJeFLZwZ2LvZgfQ5+UNI2im4=
