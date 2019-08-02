@@ -18,7 +18,7 @@ RUN apt-get update \
         unzip \
         zip \
       && rm -rf /var/lib/apt/lists/*
-COPY --from=builder assets/ /opt/resource/
+COPY --from=builder /assets/ /opt/resource/
 RUN chmod +x /opt/resource/*
 
 FROM resource AS tests
