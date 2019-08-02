@@ -135,7 +135,7 @@ var _ = Describe("Out", func() {
 
 				err := ioutil.WriteFile(
 					filepath.Join(srcDir, req.Params.AdditionalTags),
-					[]byte("additional\ntags\n"),
+					[]byte("additional\nlatest\ntags"),
 					0644,
 				)
 				Expect(err).ToNot(HaveOccurred())

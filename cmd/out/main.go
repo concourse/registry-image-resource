@@ -73,6 +73,11 @@ func main() {
 
 	var extraRefs []name.Reference
 	for _, tag := range tags {
+		if tag == req.Source.Tag() {
+			logrus.Debugf("ignoring additional tag %q (same as source tag)", tag)
+			continue
+		}
+
 		n := fmt.Sprintf("%s:%s", req.Source.Repository, tag)
 
 		extraRef, err := name.ParseReference(n, name.WeakValidation)
