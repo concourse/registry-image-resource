@@ -79,7 +79,7 @@ func main() {
 		Password: req.Source.Password,
 	}
 
-	imageOpts := []remote.ImageOption{
+	imageOpts := []remote.Option{
 		remote.WithTransport(resource.RetryTransport),
 	}
 

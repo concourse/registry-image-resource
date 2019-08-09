@@ -9,6 +9,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
+	"github.com/google/go-containerregistry/pkg/v1/remote/transport"
 	"github.com/sirupsen/logrus"
 )
 
@@ -47,7 +48,7 @@ func main() {
 		Password: req.Source.Password,
 	}
 
-	imageOpts := []remote.ImageOption{
+	imageOpts := []remote.Option{
 		remote.WithTransport(resource.RetryTransport),
 	}
 
@@ -121,9 +122,9 @@ func main() {
 
 func checkMissingManifest(err error) bool {
 	var missing bool
-	if rErr, ok := err.(*remote.Error); ok {
+	if rErr, ok := err.(*transport.Error); ok {
 		for _, e := range rErr.Errors {
-			if e.Code == remote.ManifestUnknownErrorCode {
+			if e.Code == transport.ManifestUnknownErrorCode {
 				missing = true
 				break
 			}
