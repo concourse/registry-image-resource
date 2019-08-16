@@ -1,12 +1,12 @@
 package resource
 
 import (
-	"os"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"path/filepath"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -16,15 +16,14 @@ type Source struct {
 	Repository string `json:"repository"`
 	RawTag     Tag    `json:"tag,omitempty"`
 
-	Username     string       `json:"username,omitempty"`
-	Password     string       `json:"password,omitempty"`
-	ContentTrust ContentTrust `json:"content_trust,omitempty"`
+	Username     string        `json:"username,omitempty"`
+	Password     string        `json:"password,omitempty"`
+	ContentTrust *ContentTrust `json:"content_trust,omitempty"`
 
 	Debug bool `json:"debug,omitempty"`
 }
 
 type ContentTrust struct {
-	Enable               bool   `json:"enable"`
 	Server               string `json:"server"`
 	RepositoryKeyID      string `json:"repository_key_id"`
 	RepositoryKey        string `json:"repository_key"`
@@ -66,11 +65,12 @@ func (ct *ContentTrust) PrepareConfigDir(src string) (string, error) {
 	repoKey := fmt.Sprintf("%s.key", ct.RepositoryKeyID)
 	err = ioutil.WriteFile(filepath.Join(privateDir, repoKey), []byte(ct.RepositoryKey), 0600)
 
-	certDir := filepath.Join(configDir, "tls", u.Host)
-	os.MkdirAll(certDir, os.ModePerm)
-	err = ioutil.WriteFile(filepath.Join(certDir, "client.cert"), []byte(ct.TLSCert), 0644)
-	err = ioutil.WriteFile(filepath.Join(certDir, "client.key"), []byte(ct.TLSKey), 0644)
-
+	if u.Host != "" {
+		certDir := filepath.Join(configDir, "tls", u.Host)
+		os.MkdirAll(certDir, os.ModePerm)
+		err = ioutil.WriteFile(filepath.Join(certDir, "client.cert"), []byte(ct.TLSCert), 0644)
+		err = ioutil.WriteFile(filepath.Join(certDir, "client.key"), []byte(ct.TLSKey), 0644)
+	}
 	return configDir, nil
 }
 
