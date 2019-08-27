@@ -118,15 +118,15 @@ func main() {
 
 	logrus.Info("pushed")
 
+	var notaryConfigDir string
 	if req.Source.ContentTrust != nil {
-		notaryConfigDir, err := req.Source.ContentTrust.PrepareConfigDir(src)
+		notaryConfigDir, err = req.Source.ContentTrust.PrepareConfigDir(src)
 		if err != nil {
 			logrus.Errorf("failed to prepare notary-config-dir: %s", err)
 			os.Exit(1)
 			return
 		}
-		os.Setenv("NOTARY_CONFIG_DIR", notaryConfigDir)
-		trustedRepo, err := gcr.NewTrustedGcrRepository(ref, auth)
+		trustedRepo, err := gcr.NewTrustedGcrRepository(notaryConfigDir, ref, auth)
 		if err != nil {
 			logrus.Errorf("failed to create TrustedGcrRepository: %s", err)
 			os.Exit(1)
@@ -150,7 +150,7 @@ func main() {
 
 		logrus.Info("tagged")
 		if req.Source.ContentTrust != nil {
-			trustedRepo, err := gcr.NewTrustedGcrRepository(extraRef, auth)
+			trustedRepo, err := gcr.NewTrustedGcrRepository(notaryConfigDir, extraRef, auth)
 			if err != nil {
 				logrus.Errorf("failed to create TrustedGcrRepository: %s", err)
 				os.Exit(1)

@@ -205,6 +205,8 @@ github.com/rcrowley/go-metrics v0.0.0-20181016184325-3113b8401b8a/go.mod h1:bCqn
 github.com/rogpeppe/fastuuid v0.0.0-20150106093220-6724a57986af/go.mod h1:XWv6SoW27p1b0cqNHllgS5HIMJraePCO15w5zCzIWYg=
 github.com/simonshyu/notary-gcr v0.0.0-20190715091934-8d81a216e128 h1:QvGss90ItjWdTPP6RGI4dlbWwzefI5N8D3uyzsrAp04=
 github.com/simonshyu/notary-gcr v0.0.0-20190715091934-8d81a216e128/go.mod h1:3Vs6jT1Bh5nan2LQYX3GT3LO8R/AjHTTmO3Mcf3nB9A=
+github.com/simonshyu/notary-gcr v0.0.0-20190827084005-56dbd05c3ead h1:LuiWSEIqa/Z2URCb8N9EmxTA2498iMsGYpe9XVd/PAA=
+github.com/simonshyu/notary-gcr v0.0.0-20190827084005-56dbd05c3ead/go.mod h1:3Vs6jT1Bh5nan2LQYX3GT3LO8R/AjHTTmO3Mcf3nB9A=
 github.com/sirupsen/logrus v1.2.0/go.mod h1:LxeOpSwHxABJmUn/MG1IvRgCAasNZTLOkJPxbbu5VWo=
 github.com/sirupsen/logrus v1.4.2 h1:SPIRibHv4MatM3XXNO2BJeFLZwZ2LvZgfQ5+UNI2im4=
 github.com/sirupsen/logrus v1.4.2 h1:SPIRibHv4MatM3XXNO2BJeFLZwZ2LvZgfQ5+UNI2im4=
