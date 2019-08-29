@@ -53,7 +53,7 @@ func (ct *ContentTrust) PrepareConfigDir(src string) (string, error) {
 	configObj["server_url"] = ct.Server
 	configObj["root_passphrase"] = ""
 	configObj["repository_passphrase"] = ct.RepositoryPassphrase
-	configData, err = json.Marshal(configObj)
+	configData, err := json.Marshal(configObj)
 	if err != nil {
 		return "", err
 	}
