@@ -44,32 +44,53 @@ type ContentTrust struct {
 */
 func (ct *ContentTrust) PrepareConfigDir(src string) (string, error) {
 	configDir := filepath.Join(src, ".notary")
-	os.Mkdir(configDir, os.ModePerm)
+	err := os.Mkdir(configDir, os.ModePerm)
+	if err != nil {
+		return "", err
+	}
 
 	configObj := make(map[string]string)
 	configObj["server_url"] = ct.Server
 	configObj["root_passphrase"] = ""
 	configObj["repository_passphrase"] = ct.RepositoryPassphrase
-	configData, err := json.Marshal(configObj)
+	configData, err = json.Marshal(configObj)
 	if err != nil {
 		return "", err
 	}
 	err = ioutil.WriteFile(filepath.Join(configDir, "gcr-config.json"), configData, 0644)
+	if err != nil {
+		return "", err
+	}
 
 	u, err := url.Parse(ct.Server)
 	if err != nil {
 		return "", err
 	}
 	privateDir := filepath.Join(configDir, "trust", "private")
-	os.MkdirAll(privateDir, os.ModePerm)
+	err = os.MkdirAll(privateDir, os.ModePerm)
+	if err != nil {
+		return "", err
+	}
 	repoKey := fmt.Sprintf("%s.key", ct.RepositoryKeyID)
 	err = ioutil.WriteFile(filepath.Join(privateDir, repoKey), []byte(ct.RepositoryKey), 0600)
+	if err != nil {
+		return "", err
+	}
 
 	if u.Host != "" {
 		certDir := filepath.Join(configDir, "tls", u.Host)
-		os.MkdirAll(certDir, os.ModePerm)
+		err = os.MkdirAll(certDir, os.ModePerm)
+		if err != nil {
+			return "", err
+		}
 		err = ioutil.WriteFile(filepath.Join(certDir, "client.cert"), []byte(ct.TLSCert), 0644)
+		if err != nil {
+			return "", err
+		}
 		err = ioutil.WriteFile(filepath.Join(certDir, "client.key"), []byte(ct.TLSKey), 0644)
+		if err != nil {
+			return "", err
+		}
 	}
 	return configDir, nil
 }
