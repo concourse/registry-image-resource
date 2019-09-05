@@ -3,6 +3,7 @@ package resource_test
 import (
 	"bytes"
 	"encoding/json"
+	"io"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -33,6 +34,8 @@ var _ = Describe("Out", func() {
 		Metadata []resource.MetadataField
 	}
 
+	var expectedErr string
+
 	BeforeEach(func() {
 		var err error
 		srcDir, err = ioutil.TempDir("", "docker-image-out-dir")
@@ -56,16 +59,21 @@ var _ = Describe("Out", func() {
 		Expect(err).ToNot(HaveOccurred())
 
 		outBuf := new(bytes.Buffer)
+		errBuf := new(bytes.Buffer)
 
 		cmd.Stdin = bytes.NewBuffer(payload)
 		cmd.Stdout = outBuf
-		cmd.Stderr = GinkgoWriter
+		cmd.Stderr = io.MultiWriter(GinkgoWriter, errBuf)
 
 		err = cmd.Run()
-		Expect(err).ToNot(HaveOccurred())
-
-		err = json.Unmarshal(outBuf.Bytes(), &res)
-		Expect(err).ToNot(HaveOccurred())
+		if len(expectedErr) == 0 {
+			Expect(err).ToNot(HaveOccurred())
+			err = json.Unmarshal(outBuf.Bytes(), &res)
+			Expect(err).ToNot(HaveOccurred())
+		} else {
+			Expect(err).To(HaveOccurred())
+			Expect(errBuf.String()).To(ContainSubstring(expectedErr))
+		}
 	})
 
 	Context("pushing an OCI image tarball", func() {
@@ -126,6 +134,85 @@ var _ = Describe("Out", func() {
 					Value: "latest",
 				},
 			}))
+		})
+
+		Context("when the requested tarball is provided as a glob pattern", func() {
+			var randomImage2 v1.Image
+
+			BeforeEach(func() {
+				var err error
+				randomImage2, err = random.Image(1024, 1)
+				Expect(err).ToNot(HaveOccurred())
+
+				tag, err := name.NewTag(req.Source.Name(), name.WeakValidation)
+				Expect(err).ToNot(HaveOccurred())
+
+				err = tarball.WriteToFile(filepath.Join(srcDir, "image-glob.tar"), tag, randomImage2)
+				Expect(err).ToNot(HaveOccurred())
+
+				req.Params.Image = "image-*.tar"
+			})
+
+			It("works", func() {
+				name, err := name.ParseReference(req.Source.Name(), name.WeakValidation)
+				Expect(err).ToNot(HaveOccurred())
+
+				auth := &authn.Basic{
+					Username: req.Source.Username,
+					Password: req.Source.Password,
+				}
+
+				image, err := remote.Image(name, remote.WithAuth(auth))
+				Expect(err).ToNot(HaveOccurred())
+
+				pushedDigest, err := image.Digest()
+				Expect(err).ToNot(HaveOccurred())
+
+				randomDigest, err := randomImage2.Digest()
+				Expect(err).ToNot(HaveOccurred())
+
+				Expect(pushedDigest).To(Equal(randomDigest))
+			})
+
+			Context("when the glob pattern matches more than one file", func() {
+				BeforeEach(func() {
+					req.Params.Image = "imag*.tar"
+					expectedErr = "too many files match glob"
+				})
+
+				It("exits non-zero and returns an error", func() {
+					name, err := name.ParseReference(req.Source.Name(), name.WeakValidation)
+					Expect(err).ToNot(HaveOccurred())
+
+					auth := &authn.Basic{
+						Username: req.Source.Username,
+						Password: req.Source.Password,
+					}
+
+					_, err = remote.Image(name, remote.WithAuth(auth))
+					Expect(err).ToNot(HaveOccurred())
+				})
+			})
+
+			Context("when the glob pattern matches no files", func() {
+				BeforeEach(func() {
+					req.Params.Image = "nomatch.tar"
+					expectedErr = "no files match glob"
+				})
+
+				It("exits non-zero and returns an error", func() {
+					name, err := name.ParseReference(req.Source.Name(), name.WeakValidation)
+					Expect(err).ToNot(HaveOccurred())
+
+					auth := &authn.Basic{
+						Username: req.Source.Username,
+						Password: req.Source.Password,
+					}
+
+					_, err = remote.Image(name, remote.WithAuth(auth))
+					Expect(err).ToNot(HaveOccurred())
+				})
+			})
 		})
 
 		Context("with additional_tags (newline separator)", func() {
