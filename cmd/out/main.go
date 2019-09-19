@@ -15,6 +15,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	resource "github.com/concourse/registry-image-resource"
+	gcr "github.com/simonshyu/notary-gcr/pkg/gcr"
 )
 
 type OutRequest struct {
@@ -117,6 +118,26 @@ func main() {
 
 	logrus.Info("pushed")
 
+	var notaryConfigDir string
+	if req.Source.ContentTrust != nil {
+		notaryConfigDir, err = req.Source.ContentTrust.PrepareConfigDir(src)
+		if err != nil {
+			logrus.Errorf("failed to prepare notary-config-dir: %s", err)
+			os.Exit(1)
+			return
+		}
+		trustedRepo, err := gcr.NewTrustedGcrRepository(notaryConfigDir, ref, auth)
+		if err != nil {
+			logrus.Errorf("failed to create TrustedGcrRepository: %s", err)
+			os.Exit(1)
+			return
+		}
+		err = trustedRepo.SignImage(img)
+		if err != nil {
+			logrus.Errorf("failed to sign image: %s", err)
+		}
+	}
+
 	for _, extraRef := range extraRefs {
 		logrus.Infof("tagging %s with %s", digest, extraRef.Identifier())
 
@@ -128,6 +149,18 @@ func main() {
 		}
 
 		logrus.Info("tagged")
+		if req.Source.ContentTrust != nil {
+			trustedRepo, err := gcr.NewTrustedGcrRepository(notaryConfigDir, extraRef, auth)
+			if err != nil {
+				logrus.Errorf("failed to create TrustedGcrRepository: %s", err)
+				os.Exit(1)
+				return
+			}
+			err = trustedRepo.SignImage(img)
+			if err != nil {
+				logrus.Errorf("failed to sign image: %s", err)
+			}
+		}
 	}
 
 	json.NewEncoder(os.Stdout).Encode(OutResponse{

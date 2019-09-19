@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"net/url"
+	"os"
 	"path/filepath"
 	"strings"
 )
@@ -14,10 +16,83 @@ type Source struct {
 	Repository string `json:"repository"`
 	RawTag     Tag    `json:"tag,omitempty"`
 
-	Username string `json:"username,omitempty"`
-	Password string `json:"password,omitempty"`
+	Username     string        `json:"username,omitempty"`
+	Password     string        `json:"password,omitempty"`
+	ContentTrust *ContentTrust `json:"content_trust,omitempty"`
 
 	Debug bool `json:"debug,omitempty"`
+}
+
+type ContentTrust struct {
+	Server               string `json:"server"`
+	RepositoryKeyID      string `json:"repository_key_id"`
+	RepositoryKey        string `json:"repository_key"`
+	RepositoryPassphrase string `json:"repository_passphrase"`
+	TLSKey               string `json:"tls_key"`
+	TLSCert              string `json:"tls_cert"`
+}
+
+/* Create notary config directory with following structure
+├── gcr-config.json
+└── trust
+	└── private
+		└── <private-key-id>.key
+└── tls
+	└── <notary-host>
+		├── client.cert
+		└── client.key
+*/
+func (ct *ContentTrust) PrepareConfigDir(src string) (string, error) {
+	configDir := filepath.Join(src, ".notary")
+	err := os.Mkdir(configDir, os.ModePerm)
+	if err != nil {
+		return "", err
+	}
+
+	configObj := make(map[string]string)
+	configObj["server_url"] = ct.Server
+	configObj["root_passphrase"] = ""
+	configObj["repository_passphrase"] = ct.RepositoryPassphrase
+	configData, err := json.Marshal(configObj)
+	if err != nil {
+		return "", err
+	}
+	err = ioutil.WriteFile(filepath.Join(configDir, "gcr-config.json"), configData, 0644)
+	if err != nil {
+		return "", err
+	}
+
+	u, err := url.Parse(ct.Server)
+	if err != nil {
+		return "", err
+	}
+	privateDir := filepath.Join(configDir, "trust", "private")
+	err = os.MkdirAll(privateDir, os.ModePerm)
+	if err != nil {
+		return "", err
+	}
+	repoKey := fmt.Sprintf("%s.key", ct.RepositoryKeyID)
+	err = ioutil.WriteFile(filepath.Join(privateDir, repoKey), []byte(ct.RepositoryKey), 0600)
+	if err != nil {
+		return "", err
+	}
+
+	if u.Host != "" {
+		certDir := filepath.Join(configDir, "tls", u.Host)
+		err = os.MkdirAll(certDir, os.ModePerm)
+		if err != nil {
+			return "", err
+		}
+		err = ioutil.WriteFile(filepath.Join(certDir, "client.cert"), []byte(ct.TLSCert), 0644)
+		if err != nil {
+			return "", err
+		}
+		err = ioutil.WriteFile(filepath.Join(certDir, "client.key"), []byte(ct.TLSKey), 0644)
+		if err != nil {
+			return "", err
+		}
+	}
+	return configDir, nil
 }
 
 func (source *Source) Name() string {

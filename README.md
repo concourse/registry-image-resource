@@ -38,6 +38,13 @@ differences:
 * `debug`: *Optional. Default `false`.* If set, progress bars will be disabled
   and debugging output will be printed instead.
 
+* `content_trust`: *Optional.* Configuration about content trust.
+  * `server`: *Optional.* URL for the notary server. (equal to `DOCKER_CONTENT_TRUST_SERVER`)
+  * `repository_key_id`: *Required.* Target key's ID used to sign the trusted collection, could be retrieved by `notary key list`
+  * `repository_key`: *Required.* Target key used to sign the trusted collection.
+  * `repository_passphrase`: *Required.* The passphrase of the signing/target key. (equal to `DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE`)
+  * `tls_key`: *Optional. Default `""`* TLS key for the notary server.
+  * `tls_cert`: *Optional. Default `""`* TLS certificate for the notary server.
 
 ## Behavior
 
