@@ -3,6 +3,7 @@ package resource_test
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -74,7 +75,7 @@ var _ = Describe("Out", func() {
 		BeforeEach(func() {
 			req.Source = resource.Source{
 				Repository: dockerPushRepo,
-				RawTag:     "latest",
+				RawTag:     resource.Tag(parallelTag("latest")),
 
 				Username: dockerPushUsername,
 				Password: dockerPushPassword,
@@ -123,19 +124,18 @@ var _ = Describe("Out", func() {
 				},
 				resource.MetadataField{
 					Name:  "tags",
-					Value: "latest",
+					Value: parallelTag("latest"),
 				},
 			}))
 		})
 
 		Context("with additional_tags (newline separator)", func() {
-
 			BeforeEach(func() {
 				req.Params.AdditionalTags = "tags"
 
 				err := ioutil.WriteFile(
 					filepath.Join(srcDir, req.Params.AdditionalTags),
-					[]byte("additional\ntags\n"),
+					[]byte(fmt.Sprintf("%s\n%s\n", parallelTag("additional"), parallelTag("tags"))),
 					0644,
 				)
 				Expect(err).ToNot(HaveOccurred())
@@ -145,7 +145,9 @@ var _ = Describe("Out", func() {
 				randomDigest, err := randomImage.Digest()
 				Expect(err).ToNot(HaveOccurred())
 
-				for _, tag := range []string{"latest", "additional", "tags"} {
+				for _, t := range []string{"latest", "additional", "tags"} {
+					tag := parallelTag(t)
+
 					name, err := name.ParseReference(req.Source.Repository+":"+tag, name.WeakValidation)
 					Expect(err).ToNot(HaveOccurred())
 
@@ -166,3 +168,7 @@ var _ = Describe("Out", func() {
 		})
 	})
 })
+
+func parallelTag(tag string) string {
+	return fmt.Sprintf("%s-%d", tag, GinkgoParallelNode())
+}

@@ -1,6 +1,7 @@
 #!/bin/bash
 
 set -e -u
+set -o pipefail
 
 cd $(dirname $0)
 
@@ -9,15 +10,71 @@ if [ -z "$filter" ]; then
   filter="."
 fi
 
-for df in $(find . -name Dockerfile | ag "$filter"); do
-  dir=$(dirname $df)
-  name=concourse/test-image-$(basename $dir | tr . :)
+function build_and_push() {
+  local dir=$1
+  local name=$2
 
+  if ! echo "$name" | grep :; then
+    name="${name}:latest"
+  fi
+
+  echo ""
   echo "building $dir as $name"
   docker build -t $name $dir
 
-  echo "pushing"
-  docker push $name
+  echo ""
+  echo "pushing $name"
+  docker push $name | tee /tmp/registry-image-push-output
+}
+
+function latest_digest() {
+  grep digest /tmp/registry-image-push-output | awk '{print $3}'
+}
+
+consts=()
+for df in $(find . -maxdepth 2 -name Dockerfile | grep "$filter"); do
+  break
+  dir=$(dirname $df)
+  name=concourse/test-image-$(basename $dir | tr . :)
+
+  older_digest=""
+  if [ -d $dir/older ]; then
+    build_and_push $dir/older $name
+    older_digest=$(latest_digest)
+  fi
+
+  build_and_push $dir $name
+  digest=$(latest_digest)
+
+  if [ "$name" = "concourse/test-image-static:latest" ]; then
+    consts+=("const OLDER_STATIC_DIGEST = \"${older_digest}\"")
+    consts+=("const LATEST_STATIC_DIGEST = \"${digest}\"")
+  fi
+
+  if [ "$name" = "concourse/test-image-static:tagged" ]; then
+    consts+=("const LATEST_TAGGED_STATIC_DIGEST = \"${digest}\"")
+  fi
 done
 
-echo "now update LATEST_STATIC_DIGEST and LATEST_TAGGED_STATIC_DIGEST in suite_test.go!"
+if [[ -v DOCKER_PRIVATE_REPO ]]; then
+  echo "$DOCKER_PRIVATE_PASSWORD" | docker login -u "$DOCKER_PRIVATE_USERNAME" --password-stdin
+
+  dir=./static
+  name="$DOCKER_PRIVATE_REPO"
+
+  build_and_push $dir/older $name
+  older_digest=$(latest_digest)
+  consts+=("const PRIVATE_OLDER_STATIC_DIGEST = \"${older_digest}\"")
+
+  build_and_push $dir $name
+  digest=$(latest_digest)
+  consts+=("const PRIVATE_LATEST_STATIC_DIGEST = \"${digest}\"")
+fi
+
+echo ""
+echo "now update suite_test.go with the following consts:"
+echo ""
+
+for const in "${consts[@]}"; do
+  echo $const
+done
