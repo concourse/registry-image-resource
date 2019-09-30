@@ -15,3 +15,5 @@ require (
 	github.com/sirupsen/logrus v1.4.2
 	github.com/vbauerster/mpb v3.4.0+incompatible
 )
+
+go 1.13

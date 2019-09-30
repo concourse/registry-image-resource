@@ -21,11 +21,11 @@ var bins struct {
 }
 
 // see testdata/static/Dockerfile
-const OLDER_STATIC_DIGEST = "sha256:031567a617423a84ad68b62267c30693185bd2b92c2668732efc8c70b036bd3a"
-const LATEST_STATIC_DIGEST = "sha256:2374201198a54c35ad03124f1218bb553eaa97368ce8d2359b43e0bc3b17e06f"
+const OLDER_STATIC_DIGEST = "sha256:7dabedca9d367a71d1cd646bd8d79f14de7b07327e4417ab691f5f13be5647a9"
+const LATEST_STATIC_DIGEST = "sha256:fc484c7e21a5616c600778d7ee720b3adfe1373c896be4f068c3da4a205d4a2e"
 
 // see testdata/static.tagged/Dockerfile
-const LATEST_TAGGED_STATIC_DIGEST = "sha256:91ef224d8aaf5377d9baa6bae710d4eef2184cefda910ccc0994f973fa8e57be"
+const LATEST_TAGGED_STATIC_DIGEST = "sha256:ecfdc2527b0a5d7d134be55234590336209e7feafc2ec364a930adf4a9c722e2"
 
 // a pre-configured, static private repo used for testing 'check' and 'in'
 var dockerPrivateRepo = os.Getenv("DOCKER_PRIVATE_REPO")
@@ -33,8 +33,8 @@ var dockerPrivateUsername = os.Getenv("DOCKER_PRIVATE_USERNAME")
 var dockerPrivatePassword = os.Getenv("DOCKER_PRIVATE_PASSWORD")
 
 // testdata/static/Dockerfile, but pushed again (twice; old + latest) to the above private repo
-const PRIVATE_OLDER_STATIC_DIGEST = "sha256:a5e6442b86fd5f555f528deea32326e9709851f6b18d490d6dfb290c22d6ff52"
-const PRIVATE_LATEST_STATIC_DIGEST = "sha256:96c8ddb11d01b236fbf063e5a468d17f4c44ccffa19470471162dbd5bdc922a4"
+const PRIVATE_OLDER_STATIC_DIGEST = "sha256:4003f4c3fad6024467f7e59d8153c4c1ef3e2a749d0f234a326cd0ea6bd31359"
+const PRIVATE_LATEST_STATIC_DIGEST = "sha256:2374201198a54c35ad03124f1218bb553eaa97368ce8d2359b43e0bc3b17e06f"
 
 // a repo to which random images will be pushed when testing 'out'
 var dockerPushRepo = os.Getenv("DOCKER_PUSH_REPO")
