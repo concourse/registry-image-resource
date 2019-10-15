@@ -87,8 +87,24 @@ func main() {
 	}
 
 	imagePath := filepath.Join(src, req.Params.Image)
+	matches, err := filepath.Glob(imagePath)
+	if err != nil {
+		logrus.Errorf("failed to glob path '%s': %s", req.Params.Image, err)
+		os.Exit(1)
+		return
+	}
+	if len(matches) == 0 {
+		logrus.Errorf("no files match glob '%s'", req.Params.Image)
+		os.Exit(1)
+		return
+	}
+	if len(matches) > 1 {
+		logrus.Errorf("too many files match glob '%s'", req.Params.Image)
+		os.Exit(1)
+		return
+	}
 
-	img, err := tarball.ImageFromPath(imagePath, nil)
+	img, err := tarball.ImageFromPath(matches[0], nil)
 	if err != nil {
 		logrus.Errorf("could not load image from path '%s': %s", req.Params.Image, err)
 		os.Exit(1)

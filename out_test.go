@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -22,7 +23,11 @@ import (
 )
 
 var _ = Describe("Out", func() {
-	var srcDir string
+	var (
+		srcDir          string
+		actualErr       error
+		actualErrOutput string
+	)
 
 	var req struct {
 		Source resource.Source
@@ -57,16 +62,18 @@ var _ = Describe("Out", func() {
 		Expect(err).ToNot(HaveOccurred())
 
 		outBuf := new(bytes.Buffer)
+		errBuf := new(bytes.Buffer)
 
 		cmd.Stdin = bytes.NewBuffer(payload)
 		cmd.Stdout = outBuf
-		cmd.Stderr = GinkgoWriter
+		cmd.Stderr = io.MultiWriter(GinkgoWriter, errBuf)
 
-		err = cmd.Run()
-		Expect(err).ToNot(HaveOccurred())
-
-		err = json.Unmarshal(outBuf.Bytes(), &res)
-		Expect(err).ToNot(HaveOccurred())
+		actualErr = cmd.Run()
+		actualErrOutput = errBuf.String()
+		if actualErr == nil {
+			err = json.Unmarshal(outBuf.Bytes(), &res)
+			Expect(err).ToNot(HaveOccurred())
+		}
 	})
 
 	Context("pushing an OCI image tarball", func() {
@@ -96,6 +103,8 @@ var _ = Describe("Out", func() {
 		})
 
 		It("works", func() {
+			Expect(actualErr).ToNot(HaveOccurred())
+
 			name, err := name.ParseReference(req.Source.Name(), name.WeakValidation)
 			Expect(err).ToNot(HaveOccurred())
 
@@ -117,6 +126,8 @@ var _ = Describe("Out", func() {
 		})
 
 		It("returns metadata", func() {
+			Expect(actualErr).ToNot(HaveOccurred())
+
 			Expect(res.Metadata).To(Equal([]resource.MetadataField{
 				resource.MetadataField{
 					Name:  "repository",
@@ -127,6 +138,91 @@ var _ = Describe("Out", func() {
 					Value: parallelTag("latest"),
 				},
 			}))
+		})
+
+		Context("when the requested tarball is provided as a glob pattern", func() {
+			var randomImage2 v1.Image
+
+			BeforeEach(func() {
+				var err error
+				randomImage2, err = random.Image(1024, 1)
+				Expect(err).ToNot(HaveOccurred())
+
+				tag, err := name.NewTag(req.Source.Name(), name.WeakValidation)
+				Expect(err).ToNot(HaveOccurred())
+
+				err = tarball.WriteToFile(filepath.Join(srcDir, "image-glob.tar"), tag, randomImage2)
+				Expect(err).ToNot(HaveOccurred())
+
+				req.Params.Image = "image-*.tar"
+			})
+
+			It("works", func() {
+				Expect(actualErr).ToNot(HaveOccurred())
+
+				name, err := name.ParseReference(req.Source.Name(), name.WeakValidation)
+				Expect(err).ToNot(HaveOccurred())
+
+				auth := &authn.Basic{
+					Username: req.Source.Username,
+					Password: req.Source.Password,
+				}
+
+				image, err := remote.Image(name, remote.WithAuth(auth))
+				Expect(err).ToNot(HaveOccurred())
+
+				pushedDigest, err := image.Digest()
+				Expect(err).ToNot(HaveOccurred())
+
+				randomDigest, err := randomImage2.Digest()
+				Expect(err).ToNot(HaveOccurred())
+
+				Expect(pushedDigest).To(Equal(randomDigest))
+			})
+
+			Context("when the glob pattern matches more than one file", func() {
+				BeforeEach(func() {
+					req.Params.Image = "imag*.tar"
+				})
+
+				It("exits non-zero and returns an error", func() {
+					Expect(actualErr).To(HaveOccurred())
+					Expect(actualErrOutput).To(ContainSubstring("too many files match glob"))
+
+					name, err := name.ParseReference(req.Source.Name(), name.WeakValidation)
+					Expect(err).ToNot(HaveOccurred())
+
+					auth := &authn.Basic{
+						Username: req.Source.Username,
+						Password: req.Source.Password,
+					}
+
+					_, err = remote.Image(name, remote.WithAuth(auth))
+					Expect(err).ToNot(HaveOccurred())
+				})
+			})
+
+			Context("when the glob pattern matches no files", func() {
+				BeforeEach(func() {
+					req.Params.Image = "nomatch.tar"
+				})
+
+				It("exits non-zero and returns an error", func() {
+					Expect(actualErr).To(HaveOccurred())
+					Expect(actualErrOutput).To(ContainSubstring("no files match glob"))
+
+					name, err := name.ParseReference(req.Source.Name(), name.WeakValidation)
+					Expect(err).ToNot(HaveOccurred())
+
+					auth := &authn.Basic{
+						Username: req.Source.Username,
+						Password: req.Source.Password,
+					}
+
+					_, err = remote.Image(name, remote.WithAuth(auth))
+					Expect(err).ToNot(HaveOccurred())
+				})
+			})
 		})
 
 		Context("with additional_tags (newline separator)", func() {
