@@ -105,10 +105,11 @@ The currently encouraged way to build these images is by using the
 
 #### Parameters
 
-* `image`: *Required.* The path to the OCI image tarball to upload.
-* `additional_tags`: *Optional.* The path to a file with whitespace-separated 
-list of tag values to tag the image with (in addition to the tag configured in 
-`source`).
+* `image`: *Required.* The path to the OCI image tarball to upload. Expanded
+  with [`filepath.Glob`](https://golang.org/pkg/path/filepath/#Glob).
+* `additional_tags`: *Optional.* The path to a file with whitespace-separated
+  list of tag values to tag the image with (in addition to the tag configured
+  in `source`).
 
 ## Development
 
