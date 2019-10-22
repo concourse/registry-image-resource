@@ -56,18 +56,21 @@ func main() {
 		imageOpts = append(imageOpts, remote.WithAuth(auth))
 	}
 
-	image, err := remote.Image(n, imageOpts...)
-	if err != nil {
-		logrus.Errorf("failed to get remote image: %s", err)
-		os.Exit(1)
-		return
-	}
-
 	var missingTag bool
-	digest, err := image.Digest()
+	image, err := remote.Image(n, imageOpts...)
 	if err != nil {
 		missingTag = checkMissingManifest(err)
 		if !missingTag {
+			logrus.Errorf("failed to get remote image: %s", err)
+			os.Exit(1)
+			return
+		}
+	}
+
+	var digest v1.Hash
+	if !missingTag {
+		digest, err = image.Digest()
+		if err != nil {
 			logrus.Errorf("failed to get cursor image digest: %s", err)
 			os.Exit(1)
 			return
@@ -75,7 +78,7 @@ func main() {
 	}
 
 	response := CheckResponse{}
-	if req.Version != nil && req.Version.Digest != digest.String() {
+	if req.Version != nil && !missingTag && req.Version.Digest != digest.String() {
 		digestRef, err := name.ParseReference(req.Source.Repository+"@"+req.Version.Digest, name.WeakValidation)
 		if err != nil {
 			logrus.Errorf("could not resolve repository/digest reference: %s", err)
@@ -84,29 +87,28 @@ func main() {
 		}
 
 		var digestImage v1.Image
+		var missingDigest bool
 		if auth.Username != "" && auth.Password != "" {
 			digestImage, err = remote.Image(digestRef, remote.WithAuth(auth))
 		} else {
 			digestImage, err = remote.Image(digestRef)
 		}
 		if err != nil {
-			logrus.Errorf("failed to get remote image: %s", err)
-			os.Exit(1)
-			return
-		}
-
-		var missingDigest bool
-		_, err = digestImage.Digest()
-		if err != nil {
 			missingDigest = checkMissingManifest(err)
 			if !missingDigest {
-				logrus.Errorf("failed to get cursor image digest: %s", err)
+				logrus.Errorf("failed to get remote image: %s", err)
 				os.Exit(1)
 				return
 			}
 		}
 
 		if !missingDigest {
+			_, err = digestImage.Digest()
+			if err != nil {
+				logrus.Errorf("failed to get cursor image digest: %s", err)
+				os.Exit(1)
+				return
+			}
 			response = append(response, *req.Version)
 		}
 	}
