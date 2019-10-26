@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/credentials/stscreds"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ecr"
@@ -150,10 +151,11 @@ func (source *Source) MetadataWithAdditionalTags(tags []string) []MetadataField 
 }
 
 func (source *Source) AuthenticateToECR() bool {
-	os.Setenv("AWS_ACCESS_KEY_ID", source.AwsAccessKeyId)
-	os.Setenv("AWS_SECRET_ACCESS_KEY", source.AwsSecretAccessKey)
-	os.Setenv("AWS_REGION", source.AwsRegion)
-	mySession := session.Must(session.NewSession())
+	logrus.Warnln("ECR integration is experimental and untested")
+	mySession := session.Must(session.NewSession(&aws.Config{
+		Region:      aws.String(source.AwsRegion),
+		Credentials: credentials.NewStaticCredentials(source.AwsAccessKeyId, source.AwsSecretAccessKey, ""),
+	}))
 	client := ecr.New(mySession)
 	// If a role arn has been supplied, then assume role and get a new session
 	if source.AwsRoleArn != "" {
@@ -163,7 +165,7 @@ func (source *Source) AuthenticateToECR() bool {
 	input := &ecr.GetAuthorizationTokenInput{}
 	result, err := client.GetAuthorizationToken(input)
 	if err != nil {
-		logrus.Errorf("Failed to authenticate to ECR: %s", err)
+		logrus.Errorf("failed to authenticate to ECR: %s", err)
 		return false
 	}
 
@@ -171,7 +173,7 @@ func (source *Source) AuthenticateToECR() bool {
 		output, err := base64.StdEncoding.DecodeString(*data.AuthorizationToken)
 
 		if err != nil {
-			logrus.Errorf("Failed to decode credential (%s)", err.Error())
+			logrus.Errorf("failed to decode credential (%s)", err.Error())
 			return false
 		}
 
@@ -180,7 +182,7 @@ func (source *Source) AuthenticateToECR() bool {
 		if len(split) == 2 {
 			source.Password = strings.TrimSpace(split[1])
 		} else {
-			logrus.Errorf("Failed to parse password.")
+			logrus.Errorf("failed to parse password.")
 			return false
 		}
 	}
