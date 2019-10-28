@@ -80,7 +80,7 @@ func main() {
 	}
 
 	imageOpts := []remote.Option{
-		remote.WithTransport(resource.RetryTransport),
+		remote.WithTransport(resource.RetryTransport()),
 	}
 
 	if auth.Username != "" && auth.Password != "" {
