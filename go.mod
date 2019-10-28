@@ -8,7 +8,7 @@ require (
 	github.com/hashicorp/go-retryablehttp v0.6.2
 	github.com/mattn/go-colorable v0.0.9 // indirect
 	github.com/mattn/go-isatty v0.0.4 // indirect
-	github.com/onsi/ginkgo v1.10.1
+	github.com/onsi/ginkgo v1.10.2
 	github.com/onsi/gomega v1.7.0
 	github.com/simonshyu/notary-gcr v0.0.0-20191008014436-475bb0dafd9a
 	github.com/sirupsen/logrus v1.4.2
