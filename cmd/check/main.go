@@ -49,7 +49,7 @@ func main() {
 	}
 
 	imageOpts := []remote.Option{
-		remote.WithTransport(resource.RetryTransport),
+		remote.WithTransport(resource.RetryTransport()),
 	}
 
 	if auth.Username != "" && auth.Password != "" {
@@ -86,13 +86,8 @@ func main() {
 			return
 		}
 
-		var digestImage v1.Image
+		digestImage, err := remote.Image(digestRef, imageOpts...)
 		var missingDigest bool
-		if auth.Username != "" && auth.Password != "" {
-			digestImage, err = remote.Image(digestRef, remote.WithAuth(auth))
-		} else {
-			digestImage, err = remote.Image(digestRef)
-		}
 		if err != nil {
 			missingDigest = checkMissingManifest(err)
 			if !missingDigest {

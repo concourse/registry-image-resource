@@ -125,7 +125,7 @@ func main() {
 		Password: req.Source.Password,
 	}
 
-	err = remote.Write(ref, img, remote.WithAuth(auth), remote.WithTransport(resource.RetryTransport))
+	err = remote.Write(ref, img, remote.WithAuth(auth), remote.WithTransport(resource.RetryTransport()))
 	if err != nil {
 		logrus.Errorf("failed to upload image: %s", err)
 		os.Exit(1)

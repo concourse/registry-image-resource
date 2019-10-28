@@ -1,28 +1,31 @@
 package resource
 
 import (
+	"context"
 	"net/http"
-	"time"
 
-	"code.cloudfoundry.org/lager"
-	"github.com/concourse/retryhttp"
+	"github.com/hashicorp/go-retryablehttp"
 )
 
-var RetryTransport = &retryhttp.RetryRoundTripper{
-	Logger:         &discardLogger{},
-	BackOffFactory: retryhttp.NewExponentialBackOffFactory(10 * time.Minute),
-	RoundTripper:   http.DefaultTransport,
-	Retryer:        &retryhttp.DefaultRetryer{},
+func RetryTransport() http.RoundTripper {
+	client := retryablehttp.NewClient()
+	client.CheckRetry = func(ctx context.Context, resp *http.Response, err error) (bool, error) {
+		if err == nil && resp.StatusCode == 429 {
+			return true, nil
+		}
+		return retryablehttp.DefaultRetryPolicy(ctx, resp, err)
+	}
+	return &retryableTransport{client}
 }
 
-// discardLogger is an inert logger.
-type discardLogger struct{}
+type retryableTransport struct {
+	*retryablehttp.Client
+}
 
-func (*discardLogger) Debug(string, ...lager.Data)                  {}
-func (*discardLogger) Info(string, ...lager.Data)                   {}
-func (*discardLogger) Error(string, error, ...lager.Data)           {}
-func (*discardLogger) Fatal(string, error, ...lager.Data)           {}
-func (*discardLogger) RegisterSink(lager.Sink)                      {}
-func (*discardLogger) SessionName() string                          { return "" }
-func (d *discardLogger) Session(string, ...lager.Data) lager.Logger { return d }
-func (d *discardLogger) WithData(lager.Data) lager.Logger           { return d }
+func (c *retryableTransport) RoundTrip(request *http.Request) (*http.Response, error) {
+	req, err := retryablehttp.FromRequest(request)
+	if err != nil {
+		return nil, err
+	}
+	return c.Do(req)
+}
