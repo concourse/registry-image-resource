@@ -15,7 +15,7 @@ differences:
 
 * This resource does not and will never support building - only registry image
   pushing/pulling. Building should instead be done with something like the
-  [`builder` task](https://github.com/concourse/builder-task) (or anything
+  [`oci-build` task](https://github.com/vito/oci-build-task) (or anything
   that can produce OCI image tarballs).
 
 * A goal of this resource is to stay as focused and simple as possible. The
@@ -101,7 +101,7 @@ If `additional_tags` param is defined then the uploaded image will also be
 tagged with each one of the values specified in that file.
 
 The currently encouraged way to build these images is by using the
-[`concourse/builder` task](https://github.com/concourse/builder).
+[`oci-build-task`](https://github.com/vito/oci-build-task).
 
 #### Parameters
 
