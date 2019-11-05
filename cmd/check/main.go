@@ -2,6 +2,8 @@ package main
 
 import (
 	"encoding/json"
+	"github.com/google/go-containerregistry/pkg/logs"
+	"log"
 	"os"
 
 	resource "github.com/concourse/registry-image-resource"
@@ -25,6 +27,8 @@ func main() {
 	logrus.SetFormatter(&logrus.TextFormatter{
 		ForceColors: true,
 	})
+
+	logs.Progress = log.New(os.Stderr, "go-cr-progress-", log.LstdFlags)
 
 	var req CheckRequest
 	decoder := json.NewDecoder(os.Stdin)

@@ -3,7 +3,9 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/google/go-containerregistry/pkg/logs"
 	"io/ioutil"
+	"log"
 	"os"
 	"path/filepath"
 
@@ -38,6 +40,9 @@ func main() {
 	logrus.SetFormatter(&logrus.TextFormatter{
 		ForceColors: true,
 	})
+
+	logs.Progress = log.New(os.Stderr, "go-cr-progress-", log.LstdFlags)
+	logs.Warn = log.New(os.Stderr, "go-cr-warn-", log.LstdFlags)
 
 	color.NoColor = false
 
