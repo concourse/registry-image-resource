@@ -8,16 +8,15 @@ import (
 	"os"
 	"path/filepath"
 
+	resource "github.com/concourse/registry-image-resource"
 	"github.com/fatih/color"
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/logs"
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/google/go-containerregistry/pkg/v1/tarball"
-	"github.com/sirupsen/logrus"
-
-	resource "github.com/concourse/registry-image-resource"
 	gcr "github.com/simonshyu/notary-gcr/pkg/gcr"
+	"github.com/sirupsen/logrus"
 )
 
 type OutRequest struct {

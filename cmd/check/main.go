@@ -2,12 +2,12 @@ package main
 
 import (
 	"encoding/json"
-	"github.com/google/go-containerregistry/pkg/logs"
 	"log"
 	"os"
 
 	resource "github.com/concourse/registry-image-resource"
 	"github.com/google/go-containerregistry/pkg/authn"
+	"github.com/google/go-containerregistry/pkg/logs"
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
