@@ -28,7 +28,8 @@ func main() {
 		ForceColors: true,
 	})
 
-	logs.Progress = log.New(os.Stderr, "go-cr-progress-", log.LstdFlags)
+	logs.Progress = log.New(os.Stderr, "", log.LstdFlags)
+	logs.Warn = log.New(os.Stderr, "", log.LstdFlags)
 
 	var req CheckRequest
 	decoder := json.NewDecoder(os.Stdin)

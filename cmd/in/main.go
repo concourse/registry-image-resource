@@ -41,8 +41,8 @@ func main() {
 		ForceColors: true,
 	})
 
-	logs.Progress = log.New(os.Stderr, "go-cr-progress-", log.LstdFlags)
-	logs.Warn = log.New(os.Stderr, "go-cr-warn-", log.LstdFlags)
+	logs.Progress = log.New(os.Stderr, "", log.LstdFlags)
+	logs.Warn = log.New(os.Stderr, "", log.LstdFlags)
 
 	color.NoColor = false
 
