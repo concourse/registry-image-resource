@@ -4,12 +4,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"os"
 	"path/filepath"
 
 	resource "github.com/concourse/registry-image-resource"
 	color "github.com/fatih/color"
 	"github.com/google/go-containerregistry/pkg/authn"
+	"github.com/google/go-containerregistry/pkg/logs"
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
@@ -38,6 +40,9 @@ func main() {
 	logrus.SetFormatter(&logrus.TextFormatter{
 		ForceColors: true,
 	})
+
+	logs.Progress = log.New(os.Stderr, "", log.LstdFlags)
+	logs.Warn = log.New(os.Stderr, "", log.LstdFlags)
 
 	color.NoColor = false
 

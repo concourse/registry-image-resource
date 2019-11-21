@@ -2,10 +2,12 @@ package main
 
 import (
 	"encoding/json"
+	"log"
 	"os"
 
 	resource "github.com/concourse/registry-image-resource"
 	"github.com/google/go-containerregistry/pkg/authn"
+	"github.com/google/go-containerregistry/pkg/logs"
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
@@ -25,6 +27,9 @@ func main() {
 	logrus.SetFormatter(&logrus.TextFormatter{
 		ForceColors: true,
 	})
+
+	logs.Progress = log.New(os.Stderr, "", log.LstdFlags)
+	logs.Warn = log.New(os.Stderr, "", log.LstdFlags)
 
 	var req CheckRequest
 	decoder := json.NewDecoder(os.Stdin)
