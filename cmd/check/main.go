@@ -53,9 +53,7 @@ func main() {
 		Password: req.Source.Password,
 	}
 
-	imageOpts := []remote.Option{
-		remote.WithTransport(resource.RetryTransport()),
-	}
+	imageOpts := []remote.Option{}
 
 	if auth.Username != "" && auth.Password != "" {
 		imageOpts = append(imageOpts, remote.WithAuth(auth))
