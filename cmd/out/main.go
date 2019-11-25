@@ -13,6 +13,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/logs"
 	"github.com/google/go-containerregistry/pkg/name"
+	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/google/go-containerregistry/pkg/v1/tarball"
 	gcr "github.com/simonshyu/notary-gcr/pkg/gcr"
@@ -124,63 +125,13 @@ func main() {
 
 	logrus.Infof("pushing %s to %s", digest, ref.Name())
 
-	auth := &authn.Basic{
-		Username: req.Source.Username,
-		Password: req.Source.Password,
-	}
-
-	err = remote.Write(ref, img, remote.WithAuth(auth))
+	err = resource.RetryOnRateLimit(func() error {
+		return put(req, img, ref, extraRefs)
+	})
 	if err != nil {
-		logrus.Errorf("failed to upload image: %s", err)
+		logrus.Errorf("pushing image failed: %s", err)
 		os.Exit(1)
 		return
-	}
-
-	logrus.Info("pushed")
-
-	var notaryConfigDir string
-	if req.Source.ContentTrust != nil {
-		notaryConfigDir, err = req.Source.ContentTrust.PrepareConfigDir(src)
-		if err != nil {
-			logrus.Errorf("failed to prepare notary-config-dir: %s", err)
-			os.Exit(1)
-			return
-		}
-		trustedRepo, err := gcr.NewTrustedGcrRepository(notaryConfigDir, ref, auth)
-		if err != nil {
-			logrus.Errorf("failed to create TrustedGcrRepository: %s", err)
-			os.Exit(1)
-			return
-		}
-		err = trustedRepo.SignImage(img)
-		if err != nil {
-			logrus.Errorf("failed to sign image: %s", err)
-		}
-	}
-
-	for _, extraRef := range extraRefs {
-		logrus.Infof("tagging %s with %s", digest, extraRef.Identifier())
-
-		err = remote.Write(extraRef, img, remote.WithAuth(auth), remote.WithTransport(http.DefaultTransport))
-		if err != nil {
-			logrus.Errorf("failed to tag image: %s", err)
-			os.Exit(1)
-			return
-		}
-
-		logrus.Info("tagged")
-		if req.Source.ContentTrust != nil {
-			trustedRepo, err := gcr.NewTrustedGcrRepository(notaryConfigDir, extraRef, auth)
-			if err != nil {
-				logrus.Errorf("failed to create TrustedGcrRepository: %s", err)
-				os.Exit(1)
-				return
-			}
-			err = trustedRepo.SignImage(img)
-			if err != nil {
-				logrus.Errorf("failed to sign image: %s", err)
-			}
-		}
 	}
 
 	json.NewEncoder(os.Stdout).Encode(OutResponse{
@@ -189,4 +140,63 @@ func main() {
 		},
 		Metadata: req.Source.MetadataWithAdditionalTags(tags),
 	})
+}
+
+func put(req OutRequest, img v1.Image, ref name.Reference, extraRefs []name.Reference) error {
+	auth := &authn.Basic{
+		Username: req.Source.Username,
+		Password: req.Source.Password,
+	}
+
+	err := remote.Write(ref, img, remote.WithAuth(auth))
+	if err != nil {
+		return fmt.Errorf("upload image: %w", err)
+	}
+
+	logrus.Info("pushed")
+
+	var notaryConfigDir string
+	if req.Source.ContentTrust != nil {
+		notaryConfigDir, err = req.Source.ContentTrust.PrepareConfigDir()
+		if err != nil {
+			return fmt.Errorf("prepare notary-config-dir: %w", err)
+		}
+
+		trustedRepo, err := gcr.NewTrustedGcrRepository(notaryConfigDir, ref, auth)
+		if err != nil {
+			return fmt.Errorf("create TrustedGcrRepository: %w", err)
+		}
+
+		err = trustedRepo.SignImage(img)
+		if err != nil {
+			logrus.Errorf("failed to sign image: %s", err)
+		}
+	}
+
+	for _, extraRef := range extraRefs {
+		logrus.Infof("pushing as tag %s", extraRef.Identifier())
+
+		err = remote.Write(extraRef, img, remote.WithAuth(auth), remote.WithTransport(http.DefaultTransport))
+		if err != nil {
+			return fmt.Errorf("tag image: %w", err)
+		}
+
+		logrus.Info("tagged")
+
+		if notaryConfigDir != "" {
+			trustedRepo, err := gcr.NewTrustedGcrRepository(notaryConfigDir, extraRef, auth)
+			if err != nil {
+				return fmt.Errorf("create TrustedGcrRepository: %w", err)
+			}
+
+			logrus.Info("signing image")
+
+			err = trustedRepo.SignImage(img)
+			if err != nil {
+				logrus.Errorf("failed to sign image: %s", err)
+			}
+		}
+	}
+
+	return nil
 }

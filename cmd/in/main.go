@@ -68,9 +68,7 @@ func main() {
 
 	dest := os.Args[1]
 
-	ref := req.Source.Repository + "@" + req.Version.Digest
-
-	n, err := name.ParseReference(ref, name.WeakValidation)
+	ref, err := name.ParseReference(req.Source.Repository+"@"+req.Version.Digest, name.WeakValidation)
 	if err != nil {
 		logrus.Errorf("failed to resolve name: %s", err)
 		os.Exit(1)
@@ -79,6 +77,22 @@ func main() {
 
 	fmt.Fprintf(os.Stderr, "fetching %s@%s\n", color.GreenString(req.Source.Repository), color.YellowString(req.Version.Digest))
 
+	err = resource.RetryOnRateLimit(func() error {
+		return get(req, ref, dest)
+	})
+	if err != nil {
+		logrus.Errorf("fetching image failed: %s", err)
+		os.Exit(1)
+		return
+	}
+
+	json.NewEncoder(os.Stdout).Encode(InResponse{
+		Version:  req.Version,
+		Metadata: req.Source.Metadata(),
+	})
+}
+
+func get(req InRequest, ref name.Reference, dest string) error {
 	auth := &authn.Basic{
 		Username: req.Source.Username,
 		Password: req.Source.Password,
@@ -90,86 +104,75 @@ func main() {
 		imageOpts = append(imageOpts, remote.WithAuth(auth))
 	}
 
-	image, err := remote.Image(n, imageOpts...)
+	image, err := remote.Image(ref, imageOpts...)
 	if err != nil {
-		logrus.Errorf("failed to locate remote image: %s", err)
-		os.Exit(1)
-		return
+		return fmt.Errorf("locate remote image: %w", err)
 	}
 
 	switch req.Params.Format() {
 	case "oci":
-		ociFormat(dest, req, image)
+		err := ociFormat(dest, req, image)
+		if err != nil {
+			return fmt.Errorf("write oci image: %w", err)
+		}
 	case "rootfs":
-		rootfsFormat(dest, req, image)
+		err := rootfsFormat(dest, req, image)
+		if err != nil {
+			return fmt.Errorf("write rootfs: %w", err)
+		}
 	}
 
 	err = ioutil.WriteFile(filepath.Join(dest, "tag"), []byte(req.Source.Tag()), 0644)
 	if err != nil {
-		logrus.Errorf("failed to save image tag: %s", err)
-		os.Exit(1)
-		return
+		return fmt.Errorf("save image tag: %w", err)
 	}
 
 	err = saveDigest(dest, image)
 	if err != nil {
-		logrus.Errorf("failed to save image digest: %s", err)
-		os.Exit(1)
-		return
+		return fmt.Errorf("save image digest: %w", err)
 	}
 
-	json.NewEncoder(os.Stdout).Encode(InResponse{
-		Version:  req.Version,
-		Metadata: req.Source.Metadata(),
-	})
+	return err
 }
 
 func saveDigest(dest string, image v1.Image) error {
 	digest, err := image.Digest()
 	if err != nil {
-		return err
+		return fmt.Errorf("get image digest: %w", err)
 	}
 
 	digestDest := filepath.Join(dest, "digest")
 	return ioutil.WriteFile(digestDest, []byte(digest.String()), 0644)
 }
 
-func ociFormat(dest string, req InRequest, image v1.Image) {
+func ociFormat(dest string, req InRequest, image v1.Image) error {
 	tag, err := name.NewTag(req.Source.Name(), name.WeakValidation)
 	if err != nil {
-		logrus.Errorf("failed to construct tag reference: %s", err)
-		os.Exit(1)
-		return
+		return fmt.Errorf("construct tag reference: %w", err)
 	}
 
 	err = tarball.WriteToFile(filepath.Join(dest, "image.tar"), tag, image)
 	if err != nil {
-		logrus.Errorf("failed to write OCI image: %s", err)
-		os.Exit(1)
-		return
+		return fmt.Errorf("write OCI image: %s", err)
 	}
+
+	return nil
 }
 
-func rootfsFormat(dest string, req InRequest, image v1.Image) {
+func rootfsFormat(dest string, req InRequest, image v1.Image) error {
 	err := unpackImage(filepath.Join(dest, "rootfs"), image, req.Source.Debug)
 	if err != nil {
-		logrus.Errorf("failed to extract image: %s", err)
-		os.Exit(1)
-		return
+		return fmt.Errorf("extract image: %w", err)
 	}
 
 	cfg, err := image.ConfigFile()
 	if err != nil {
-		logrus.Errorf("failed to inspect image config: %s", err)
-		os.Exit(1)
-		return
+		return fmt.Errorf("inspect image config: %w", err)
 	}
 
 	meta, err := os.Create(filepath.Join(dest, "metadata.json"))
 	if err != nil {
-		logrus.Errorf("failed to create image metadata: %s", err)
-		os.Exit(1)
-		return
+		return fmt.Errorf("create image metadata: %w", err)
 	}
 
 	env := cfg.Config.Env
@@ -181,15 +184,13 @@ func rootfsFormat(dest string, req InRequest, image v1.Image) {
 		User: user,
 	})
 	if err != nil {
-		logrus.Errorf("failed to write image metadata: %s", err)
-		os.Exit(1)
-		return
+		return fmt.Errorf("write image metadata: %w", err)
 	}
 
 	err = meta.Close()
 	if err != nil {
-		logrus.Errorf("failed to close image metadata file: %s", err)
-		os.Exit(1)
-		return
+		return fmt.Errorf("close image metadata file: %w", err)
 	}
+
+	return nil
 }

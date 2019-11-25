@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io/ioutil"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -12,9 +13,11 @@ import (
 
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
+	"github.com/google/go-containerregistry/pkg/v1/empty"
 	"github.com/google/go-containerregistry/pkg/v1/tarball"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega/ghttp"
 
 	resource "github.com/concourse/registry-image-resource"
 )
@@ -56,6 +59,7 @@ var _ = Describe("In", func() {
 
 	JustBeforeEach(func() {
 		cmd := exec.Command(bins.In, destDir)
+		cmd.Env = []string{"TEST=true"}
 
 		payload, err := json.Marshal(req)
 		Expect(err).ToNot(HaveOccurred())
@@ -310,6 +314,88 @@ var _ = Describe("In", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(string(tag)).To(Equal("tagged"))
 			})
+		})
+	})
+
+	Context("when the registry returns 429 Too Many Requests", func() {
+		var registry *ghttp.Server
+
+		BeforeEach(func() {
+			registry = ghttp.NewServer()
+
+			fakeImage := empty.Image
+
+			digest, err := fakeImage.Digest()
+			Expect(err).ToNot(HaveOccurred())
+
+			manifest, err := fakeImage.RawManifest()
+			Expect(err).ToNot(HaveOccurred())
+
+			config, err := fakeImage.RawConfigFile()
+			Expect(err).ToNot(HaveOccurred())
+
+			configDigest, err := fakeImage.ConfigName()
+			Expect(err).ToNot(HaveOccurred())
+
+			registry.AppendHandlers(
+				// immediate 429
+				ghttp.CombineHandlers(
+					ghttp.VerifyRequest("GET", "/v2/"),
+					ghttp.RespondWith(http.StatusTooManyRequests, "calm down"),
+				),
+
+				// 429 on manifest fetch
+				ghttp.CombineHandlers(
+					ghttp.VerifyRequest("GET", "/v2/"),
+					ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
+				),
+				ghttp.CombineHandlers(
+					ghttp.VerifyRequest("GET", "/v2/fake-image/manifests/"+digest.String()),
+					ghttp.RespondWith(http.StatusTooManyRequests, "calm down"),
+				),
+
+				// 429 on blob fetch
+				ghttp.CombineHandlers(
+					ghttp.VerifyRequest("GET", "/v2/"),
+					ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
+				),
+				ghttp.CombineHandlers(
+					ghttp.VerifyRequest("GET", "/v2/fake-image/manifests/"+digest.String()),
+					ghttp.RespondWith(http.StatusOK, manifest),
+				),
+				ghttp.CombineHandlers(
+					ghttp.VerifyRequest("GET", "/v2/fake-image/blobs/"+configDigest.String()),
+					ghttp.RespondWith(http.StatusTooManyRequests, "calm down"),
+				),
+
+				// successful sequence
+				ghttp.CombineHandlers(
+					ghttp.VerifyRequest("GET", "/v2/"),
+					ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
+				),
+				ghttp.CombineHandlers(
+					ghttp.VerifyRequest("GET", "/v2/fake-image/manifests/"+digest.String()),
+					ghttp.RespondWith(http.StatusOK, manifest),
+				),
+				ghttp.CombineHandlers(
+					ghttp.VerifyRequest("GET", "/v2/fake-image/blobs/"+configDigest.String()),
+					ghttp.RespondWith(http.StatusOK, config),
+				),
+			)
+
+			req.Source = resource.Source{
+				Repository: registry.Addr() + "/fake-image",
+			}
+
+			req.Version.Digest = digest.String()
+		})
+
+		AfterEach(func() {
+			registry.Close()
+		})
+
+		It("retries", func() {
+			Expect(res.Version).To(Equal(req.Version))
 		})
 	})
 })

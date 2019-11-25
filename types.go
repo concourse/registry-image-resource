@@ -42,9 +42,8 @@ type ContentTrust struct {
 		├── client.cert
 		└── client.key
 */
-func (ct *ContentTrust) PrepareConfigDir(src string) (string, error) {
-	configDir := filepath.Join(src, ".notary")
-	err := os.Mkdir(configDir, os.ModePerm)
+func (ct *ContentTrust) PrepareConfigDir() (string, error) {
+	configDir, err := ioutil.TempDir("", "notary-config")
 	if err != nil {
 		return "", err
 	}
@@ -53,10 +52,12 @@ func (ct *ContentTrust) PrepareConfigDir(src string) (string, error) {
 	configObj["server_url"] = ct.Server
 	configObj["root_passphrase"] = ""
 	configObj["repository_passphrase"] = ct.RepositoryPassphrase
+
 	configData, err := json.Marshal(configObj)
 	if err != nil {
 		return "", err
 	}
+
 	err = ioutil.WriteFile(filepath.Join(configDir, "gcr-config.json"), configData, 0644)
 	if err != nil {
 		return "", err
@@ -66,11 +67,13 @@ func (ct *ContentTrust) PrepareConfigDir(src string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+
 	privateDir := filepath.Join(configDir, "trust", "private")
 	err = os.MkdirAll(privateDir, os.ModePerm)
 	if err != nil {
 		return "", err
 	}
+
 	repoKey := fmt.Sprintf("%s.key", ct.RepositoryKeyID)
 	err = ioutil.WriteFile(filepath.Join(privateDir, repoKey), []byte(ct.RepositoryKey), 0600)
 	if err != nil {
@@ -92,6 +95,7 @@ func (ct *ContentTrust) PrepareConfigDir(src string) (string, error) {
 			return "", err
 		}
 	}
+
 	return configDir, nil
 }
 
