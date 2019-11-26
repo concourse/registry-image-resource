@@ -3,10 +3,12 @@ package resource_test
 import (
 	"bytes"
 	"encoding/json"
+	"net/http"
 	"os/exec"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega/ghttp"
 
 	resource "github.com/concourse/registry-image-resource"
 )
@@ -28,6 +30,7 @@ var _ = Describe("Check", func() {
 
 	JustBeforeEach(func() {
 		cmd := exec.Command(bins.Check)
+		cmd.Env = []string{"TEST=true"}
 
 		payload, err := json.Marshal(req)
 		Expect(err).ToNot(HaveOccurred())
@@ -240,6 +243,52 @@ var _ = Describe("Check", func() {
 			It("returns empty digest", func() {
 				Expect(res).To(Equal([]resource.Version{}))
 			})
+		})
+	})
+
+	Context("when the registry returns 429 Too Many Requests", func() {
+		var registry *ghttp.Server
+
+		BeforeEach(func() {
+			registry = ghttp.NewServer()
+
+			registry.AppendHandlers(
+				ghttp.CombineHandlers(
+					ghttp.VerifyRequest("GET", "/v2/"),
+					ghttp.RespondWith(http.StatusTooManyRequests, "calm down"),
+				),
+				ghttp.CombineHandlers(
+					ghttp.VerifyRequest("GET", "/v2/"),
+					ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
+				),
+				ghttp.CombineHandlers(
+					ghttp.VerifyRequest("GET", "/v2/fake-image/manifests/latest"),
+					ghttp.RespondWith(http.StatusTooManyRequests, "calm down"),
+				),
+				ghttp.CombineHandlers(
+					ghttp.VerifyRequest("GET", "/v2/"),
+					ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
+				),
+				ghttp.CombineHandlers(
+					ghttp.VerifyRequest("GET", "/v2/fake-image/manifests/latest"),
+					ghttp.RespondWith(http.StatusOK, `{"fake":"manifest"}`),
+				),
+			)
+
+			req.Source = resource.Source{
+				Repository: registry.Addr() + "/fake-image",
+			}
+		})
+
+		AfterEach(func() {
+			registry.Close()
+		})
+
+		It("retries", func() {
+			Expect(res).To(Equal([]resource.Version{
+				// sha256 of {"fake":"Manifest"}
+				{Digest: "sha256:c4c25c2cd70e3071f08cf124c4b5c656c061dd38247d166d97098d58eeea8aa6"},
+			}))
 		})
 	})
 })

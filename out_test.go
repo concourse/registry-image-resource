@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -18,6 +19,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/tarball"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega/ghttp"
 
 	resource "github.com/concourse/registry-image-resource"
 )
@@ -57,6 +59,7 @@ var _ = Describe("Out", func() {
 
 	JustBeforeEach(func() {
 		cmd := exec.Command(bins.Out, srcDir)
+		cmd.Env = []string{"TEST=true"}
 
 		payload, err := json.Marshal(req)
 		Expect(err).ToNot(HaveOccurred())
@@ -188,17 +191,6 @@ var _ = Describe("Out", func() {
 				It("exits non-zero and returns an error", func() {
 					Expect(actualErr).To(HaveOccurred())
 					Expect(actualErrOutput).To(ContainSubstring("too many files match glob"))
-
-					name, err := name.ParseReference(req.Source.Name(), name.WeakValidation)
-					Expect(err).ToNot(HaveOccurred())
-
-					auth := &authn.Basic{
-						Username: req.Source.Username,
-						Password: req.Source.Password,
-					}
-
-					_, err = remote.Image(name, remote.WithAuth(auth))
-					Expect(err).ToNot(HaveOccurred())
 				})
 			})
 
@@ -210,17 +202,6 @@ var _ = Describe("Out", func() {
 				It("exits non-zero and returns an error", func() {
 					Expect(actualErr).To(HaveOccurred())
 					Expect(actualErrOutput).To(ContainSubstring("no files match glob"))
-
-					name, err := name.ParseReference(req.Source.Name(), name.WeakValidation)
-					Expect(err).ToNot(HaveOccurred())
-
-					auth := &authn.Basic{
-						Username: req.Source.Username,
-						Password: req.Source.Password,
-					}
-
-					_, err = remote.Image(name, remote.WithAuth(auth))
-					Expect(err).ToNot(HaveOccurred())
 				})
 			})
 		})
@@ -260,6 +241,109 @@ var _ = Describe("Out", func() {
 
 					Expect(pushedDigest).To(Equal(randomDigest))
 				}
+			})
+		})
+
+		Context("when the registry returns 429 Too Many Requests", func() {
+			var registry *ghttp.Server
+
+			BeforeEach(func() {
+				registry = ghttp.NewServer()
+
+				layers, err := randomImage.Layers()
+				Expect(err).ToNot(HaveOccurred())
+
+				configDigest, err := randomImage.ConfigName()
+				Expect(err).ToNot(HaveOccurred())
+
+				pingRateLimits := make(chan struct{}, 1)
+				checkBlobRateLimits := make(chan struct{}, 1)
+				createUploadRateLimits := make(chan struct{}, 1)
+				uploadBlobRateLimits := make(chan struct{}, 1)
+				commitBlobRateLimits := make(chan struct{}, 1)
+				updateManifestRateLimits := make(chan struct{}, 1)
+
+				registry.RouteToHandler("GET", "/v2/", func(w http.ResponseWriter, r *http.Request) {
+					select {
+					case pingRateLimits <- struct{}{}:
+						ghttp.RespondWith(http.StatusTooManyRequests, "ping limited")(w, r)
+					default:
+						ghttp.RespondWith(http.StatusOK, "welcome to zombocom")(w, r)
+					}
+				})
+
+				registry.RouteToHandler("HEAD", "/v2/fake-image/blobs/"+configDigest.String(), func(w http.ResponseWriter, r *http.Request) {
+					select {
+					case checkBlobRateLimits <- struct{}{}:
+						ghttp.RespondWith(http.StatusTooManyRequests, "check config blob limited")(w, r)
+					default:
+						ghttp.RespondWith(http.StatusOK, "blob totally exists")(w, r)
+					}
+				})
+
+				registry.RouteToHandler("POST", "/v2/fake-image/blobs/uploads/", func(w http.ResponseWriter, r *http.Request) {
+					select {
+					case createUploadRateLimits <- struct{}{}:
+						ghttp.RespondWith(http.StatusTooManyRequests, "create upload limited")(w, r)
+					default:
+						w.Header().Add("Location", "/upload/some-blob")
+						w.WriteHeader(http.StatusAccepted)
+					}
+				})
+
+				registry.RouteToHandler("PATCH", "/upload/some-blob", func(w http.ResponseWriter, r *http.Request) {
+					select {
+					case uploadBlobRateLimits <- struct{}{}:
+						ghttp.RespondWith(http.StatusTooManyRequests, "upload blob limited")(w, r)
+					default:
+						w.Header().Add("Location", "/commit/some-blob")
+						w.WriteHeader(http.StatusAccepted)
+					}
+				})
+
+				registry.RouteToHandler("PUT", "/commit/some-blob", func(w http.ResponseWriter, r *http.Request) {
+					select {
+					case commitBlobRateLimits <- struct{}{}:
+						ghttp.RespondWith(http.StatusTooManyRequests, "commit blob limited")(w, r)
+					default:
+						ghttp.RespondWith(http.StatusCreated, "upload complete")(w, r)
+					}
+				})
+
+				for _, l := range layers {
+					layerDigest, err := l.Digest()
+					Expect(err).ToNot(HaveOccurred())
+
+					registry.RouteToHandler("HEAD", "/v2/fake-image/blobs/"+layerDigest.String(), func(w http.ResponseWriter, r *http.Request) {
+						select {
+						case checkBlobRateLimits <- struct{}{}:
+							ghttp.RespondWith(http.StatusTooManyRequests, "check layer blob limited")(w, r)
+						default:
+							ghttp.RespondWith(http.StatusNotFound, "needs upload")(w, r)
+						}
+					})
+				}
+
+				registry.RouteToHandler("PUT", "/v2/fake-image/manifests/latest", func(w http.ResponseWriter, r *http.Request) {
+					select {
+					case updateManifestRateLimits <- struct{}{}:
+						ghttp.RespondWith(http.StatusTooManyRequests, "update manifest limited")(w, r)
+					default:
+						ghttp.RespondWith(http.StatusOK, "manifest updated")(w, r)
+					}
+				})
+
+				req.Source = resource.Source{
+					Repository: registry.Addr() + "/fake-image",
+				}
+			})
+
+			AfterEach(func() {
+				registry.Close()
+			})
+
+			It("retries", func() {
+				Expect(actualErr).ToNot(HaveOccurred())
 			})
 		})
 	})

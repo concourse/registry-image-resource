@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"os"
 
@@ -41,34 +42,46 @@ func main() {
 		return
 	}
 
-	n, err := name.ParseReference(req.Source.Name(), name.WeakValidation)
+	ref, err := name.ParseReference(req.Source.Name(), name.WeakValidation)
 	if err != nil {
 		logrus.Errorf("could not resolve repository/tag reference: %s", err)
 		os.Exit(1)
 		return
 	}
 
+	var response CheckResponse
+	err = resource.RetryOnRateLimit(func() error {
+		var err error
+		response, err = check(req, ref)
+		return err
+	})
+	if err != nil {
+		logrus.Errorf("check failed: %s", err)
+		os.Exit(1)
+		return
+	}
+
+	json.NewEncoder(os.Stdout).Encode(response)
+}
+
+func check(req CheckRequest, ref name.Reference) (CheckResponse, error) {
 	auth := &authn.Basic{
 		Username: req.Source.Username,
 		Password: req.Source.Password,
 	}
 
-	imageOpts := []remote.Option{
-		remote.WithTransport(resource.RetryTransport()),
-	}
+	imageOpts := []remote.Option{}
 
 	if auth.Username != "" && auth.Password != "" {
 		imageOpts = append(imageOpts, remote.WithAuth(auth))
 	}
 
 	var missingTag bool
-	image, err := remote.Image(n, imageOpts...)
+	image, err := remote.Image(ref, imageOpts...)
 	if err != nil {
 		missingTag = checkMissingManifest(err)
 		if !missingTag {
-			logrus.Errorf("failed to get remote image: %s", err)
-			os.Exit(1)
-			return
+			return CheckResponse{}, fmt.Errorf("get remote image: %w", err)
 		}
 	}
 
@@ -76,9 +89,7 @@ func main() {
 	if !missingTag {
 		digest, err = image.Digest()
 		if err != nil {
-			logrus.Errorf("failed to get cursor image digest: %s", err)
-			os.Exit(1)
-			return
+			return CheckResponse{}, fmt.Errorf("get cursor image digest: %w", err)
 		}
 	}
 
@@ -86,9 +97,7 @@ func main() {
 	if req.Version != nil && !missingTag && req.Version.Digest != digest.String() {
 		digestRef, err := name.ParseReference(req.Source.Repository+"@"+req.Version.Digest, name.WeakValidation)
 		if err != nil {
-			logrus.Errorf("could not resolve repository/digest reference: %s", err)
-			os.Exit(1)
-			return
+			return CheckResponse{}, fmt.Errorf("resolve repository/digest reference: %w", err)
 		}
 
 		digestImage, err := remote.Image(digestRef, imageOpts...)
@@ -96,19 +105,16 @@ func main() {
 		if err != nil {
 			missingDigest = checkMissingManifest(err)
 			if !missingDigest {
-				logrus.Errorf("failed to get remote image: %s", err)
-				os.Exit(1)
-				return
+				return CheckResponse{}, fmt.Errorf("get remote image: %w", err)
 			}
 		}
 
 		if !missingDigest {
 			_, err = digestImage.Digest()
 			if err != nil {
-				logrus.Errorf("failed to get cursor image digest: %s", err)
-				os.Exit(1)
-				return
+				return CheckResponse{}, fmt.Errorf("get cursor image digest: %w", err)
 			}
+
 			response = append(response, *req.Version)
 		}
 	}
@@ -119,7 +125,7 @@ func main() {
 		})
 	}
 
-	json.NewEncoder(os.Stdout).Encode(response)
+	return response, nil
 }
 
 func checkMissingManifest(err error) bool {
