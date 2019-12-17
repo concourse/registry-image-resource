@@ -156,12 +156,16 @@ func (source *Source) AuthenticateToECR() bool {
 		Region:      aws.String(source.AwsRegion),
 		Credentials: credentials.NewStaticCredentials(source.AwsAccessKeyId, source.AwsSecretAccessKey, ""),
 	}))
-	client := ecr.New(mySession)
+
+	var config aws.Config
+
 	// If a role arn has been supplied, then assume role and get a new session
 	if source.AwsRoleArn != "" {
-		creds := stscreds.NewCredentials(mySession, source.AwsRoleArn)
-		client = ecr.New(mySession, &aws.Config{Credentials: creds})
+		config = aws.Config{Credentials: stscreds.NewCredentials(mySession, source.AwsRoleArn)}
 	}
+
+	client := ecr.New(mySession, &config)
+
 	input := &ecr.GetAuthorizationTokenInput{}
 	result, err := client.GetAuthorizationToken(input)
 	if err != nil {
