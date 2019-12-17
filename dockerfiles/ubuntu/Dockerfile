@@ -11,6 +11,7 @@ RUN set -e; for pkg in $(go list ./...); do \
 	done
 
 FROM ubuntu:bionic AS resource
+DEBIAN_FRONTEND=noninteractive
 RUN apt-get update \
       && apt-get install -y --no-install-recommends \
         tzdata \
