@@ -63,6 +63,13 @@ func main() {
 
 	src := os.Args[1]
 
+	if req.Source.AwsAccessKeyId != "" && req.Source.AwsSecretAccessKey != "" && req.Source.AwsRegion != "" {
+		if !req.Source.AuthenticateToECR() {
+			os.Exit(1)
+			return
+		}
+	}
+
 	ref, err := name.ParseReference(req.Source.Name(), name.WeakValidation)
 	if err != nil {
 		logrus.Errorf("could not resolve repository/tag reference: %s", err)

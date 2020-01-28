@@ -26,7 +26,9 @@ differences:
 
 ## Source Configuration
 
-* `repository`: *Required.* The name of the repository, e.g. `alpine`.
+* `repository`: *Required.* The name of the repository, e.g. `alpine`. If using ecr
+    you only need the repository name, not the full URI e.g. `alpine` not
+    `012345678910.dkr.ecr.us-east-1.amazonaws.com/alpine`
 
 * `tag`: *Optional. Default `latest`.* The name of the tag to monitor and
   publish to.
@@ -34,6 +36,17 @@ differences:
 * `username` and `password`: *Optional.* A username and password to use when
   authenticating to the registry. Must be specified for private repos or when
   using `put`.
+
+* `aws_access_key_id`: *Optional. Default `"""`.* The access key ID to use for
+  authenticating with ECR.
+
+* `aws_secret_access_key`: *Optional. Default `"""`.* The secret access key to
+  use for authenticating with ECR.
+
+* `aws_region`: *Optional. Default `"`.* The region to use for accessing ECR.
+
+* `aws_role_arn`: *Optional. Default `"`.* If set, then this role will be
+  assumed before authenticating to ECR.
 
 * `debug`: *Optional. Default `false`.* If set, progress bars will be disabled
   and debugging output will be printed instead.

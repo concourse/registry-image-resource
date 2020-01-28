@@ -68,6 +68,13 @@ func main() {
 
 	dest := os.Args[1]
 
+	if req.Source.AwsAccessKeyId != "" && req.Source.AwsSecretAccessKey != "" && req.Source.AwsRegion != "" {
+		if !req.Source.AuthenticateToECR() {
+			os.Exit(1)
+			return
+		}
+	}
+
 	ref, err := name.ParseReference(req.Source.Repository+"@"+req.Version.Digest, name.WeakValidation)
 	if err != nil {
 		logrus.Errorf("failed to resolve name: %s", err)
