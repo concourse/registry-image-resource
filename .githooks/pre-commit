@@ -1,0 +1,36 @@
+#!/bin/bash
+
+declare -a patterns=(
+  "\b[A-Z0-9]{20}\b"
+  "\b[A-Za-z0-9\/+=]{40}\b"
+  "\b[0-9]{12}\b"
+  "\b[a-z0-9]{32}\b"
+  "\b[A-Z]{2}[0-9]{6}[A-Z]{1}\b"
+  "\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b"
+  "PRIVATE KEY-----"
+)
+
+declare -a descriptions=(
+  "AWS access key ID"
+  "40 character random (e.g. AWS secret access key, PAT)"
+  "AWS account number"
+  "16 byte hex (e.g. S3 bucket name)"
+  "NINO"
+  "IP address"
+  "Private key (e.g. rsa private key, openssh private key)"
+)
+
+match=0
+for i in "${!patterns[@]}"
+do
+  git diff-index -p -M --cached HEAD -- |
+  grep '^+[^+]' | grep -Eq "${patterns[$i]}" &&
+  echo "Blocking commit: ${descriptions[$i]} detected in patch" &&
+  ((match++))
+done
+
+if (( match > 0 )); then
+  echo "If the above are false positives then you can use the --no-verify flag to skip checks"
+  echo "git commit --no-verify"
+  exit 1
+fi
