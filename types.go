@@ -32,6 +32,7 @@ type Source struct {
 	AwsSecretAccessKey string `json:"aws_secret_access_key,omitempty"`
 	AwsRegion          string `json:"aws_region,omitempty"`
 	AwsRoleArn         string `json:"aws_role_arn,omitempty"`
+	AwsUseEC2RoleCreds bool   `json:"aws_use_ec2_role_creds,omitempty"`
 
 	Debug bool `json:"debug,omitempty"`
 }
@@ -150,14 +151,23 @@ func (source *Source) MetadataWithAdditionalTags(tags []string) []MetadataField 
 	}
 }
 
+func (source *Source) ShouldAuthenticateToECR() bool {
+	hasStaticCreds := source.AwsAccessKeyId != "" && source.AwsSecretAccessKey != ""
+	return (hasStaticCreds || source.AwsUseEC2RoleCreds) && source.AwsRegion != ""
+}
+
 func (source *Source) AuthenticateToECR() bool {
 	logrus.Warnln("ECR integration is experimental and untested")
-	mySession := session.Must(session.NewSession(&aws.Config{
-		Region:      aws.String(source.AwsRegion),
-		Credentials: credentials.NewStaticCredentials(source.AwsAccessKeyId, source.AwsSecretAccessKey, ""),
-	}))
 
-	var config aws.Config
+	config := aws.Config{Region: aws.String(source.AwsRegion)}
+
+	if source.AwsAccessKeyId != "" && source.AwsSecretAccessKey != "" {
+		config.Credentials = credentials.NewStaticCredentials(source.AwsAccessKeyId, source.AwsSecretAccessKey, "")
+	} else if source.AwsUseEC2RoleCreds {
+		logrus.Info("using default credential chain")
+	}
+
+	mySession := session.Must(session.NewSession(&config))
 
 	// If a role arn has been supplied, then assume role and get a new session
 	if source.AwsRoleArn != "" {

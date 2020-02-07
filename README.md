@@ -48,6 +48,10 @@ differences:
 * `aws_role_arn`: *Optional. Default `"`.* If set, then this role will be
   assumed before authenticating to ECR.
 
+* `aws_use_ec2_role_creds`: *Optional. Default `"`.* If set, then the role of the
+  current EC2 instance will be used to authenticate to ECR. Use this when running
+  concourse on EC2.
+
 * `debug`: *Optional. Default `false`.* If set, progress bars will be disabled
   and debugging output will be printed instead.
 
