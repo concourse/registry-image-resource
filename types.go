@@ -152,10 +152,19 @@ func (source *Source) MetadataWithAdditionalTags(tags []string) []MetadataField 
 
 func (source *Source) AuthenticateToECR() bool {
 	logrus.Warnln("ECR integration is experimental and untested")
-	mySession := session.Must(session.NewSession(&aws.Config{
-		Region:      aws.String(source.AwsRegion),
-		Credentials: credentials.NewStaticCredentials(source.AwsAccessKeyId, source.AwsSecretAccessKey, ""),
-	}))
+
+	var sessionConfig aws.Config
+	if source.AwsAccessKeyId != "" && source.AwsSecretAccessKey != "" {
+ 		sessionConfig = aws.Config{
+			Region:      aws.String(source.AwsRegion),
+			Credentials: credentials.NewStaticCredentials(source.AwsAccessKeyId, source.AwsSecretAccessKey, ""),
+		}
+	} else {
+		sessionConfig = aws.Config{
+			Region:      aws.String(source.AwsRegion),
+		}
+	}
+	mySession := session.Must(session.NewSession(&sessionConfig))
 
 	var config aws.Config
 
