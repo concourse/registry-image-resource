@@ -42,7 +42,7 @@ func main() {
 		return
 	}
 
-	if req.Source.AwsAccessKeyId != "" && req.Source.AwsSecretAccessKey != "" && req.Source.AwsRegion != "" {
+	if req.Source.AwsRegion != "" {
 		if !req.Source.AuthenticateToECR() {
 			os.Exit(1)
 			return
