@@ -60,37 +60,42 @@ func main() {
 		logrus.SetLevel(logrus.DebugLevel)
 	}
 
-	if len(os.Args) < 2 {
-		logrus.Errorf("destination path not specified")
-		os.Exit(1)
-		return
-	}
+	if req.Params.Download() == true {
 
-	dest := os.Args[1]
-
-	if req.Source.AwsAccessKeyId != "" && req.Source.AwsSecretAccessKey != "" && req.Source.AwsRegion != "" {
-		if !req.Source.AuthenticateToECR() {
+		if len(os.Args) < 2 {
+			logrus.Errorf("destination path not specified")
 			os.Exit(1)
 			return
 		}
-	}
 
-	ref, err := name.ParseReference(req.Source.Repository+"@"+req.Version.Digest, name.WeakValidation)
-	if err != nil {
-		logrus.Errorf("failed to resolve name: %s", err)
-		os.Exit(1)
-		return
-	}
+		dest := os.Args[1]
 
-	fmt.Fprintf(os.Stderr, "fetching %s@%s\n", color.GreenString(req.Source.Repository), color.YellowString(req.Version.Digest))
+		if req.Source.AwsAccessKeyId != "" && req.Source.AwsSecretAccessKey != "" && req.Source.AwsRegion != "" {
+			if !req.Source.AuthenticateToECR() {
+				os.Exit(1)
+				return
+			}
+		}
 
-	err = resource.RetryOnRateLimit(func() error {
-		return get(req, ref, dest)
-	})
-	if err != nil {
-		logrus.Errorf("fetching image failed: %s", err)
-		os.Exit(1)
-		return
+		ref, err := name.ParseReference(req.Source.Repository+"@"+req.Version.Digest, name.WeakValidation)
+		if err != nil {
+			logrus.Errorf("failed to resolve name: %s", err)
+			os.Exit(1)
+			return
+		}
+
+		fmt.Fprintf(os.Stderr, "fetching %s@%s\n", color.GreenString(req.Source.Repository), color.YellowString(req.Version.Digest))
+
+		err = resource.RetryOnRateLimit(func() error {
+			return get(req, ref, dest)
+		})
+		if err != nil {
+			logrus.Errorf("fetching image failed: %s", err)
+			os.Exit(1)
+			return
+		}
+	} else {
+		logrus.Info("Skipping download because `skip_donwload` is set to `true``")
 	}
 
 	json.NewEncoder(os.Stdout).Encode(InResponse{
