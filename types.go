@@ -205,11 +205,17 @@ type Tag string
 func (tag *Tag) UnmarshalJSON(b []byte) error {
 	var n json.Number
 	err := json.Unmarshal(b, &n)
+	if err == nil {
+		*tag = Tag(n.String())
+		return nil
+	}
+
+	var s string
+	err = json.Unmarshal(b, &s)
 	if err != nil {
 		return err
 	}
-
-	*tag = Tag(n.String())
+	*tag = Tag(s)
 
 	return nil
 }
