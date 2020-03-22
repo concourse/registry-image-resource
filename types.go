@@ -202,16 +202,17 @@ func (source *Source) AuthenticateToECR() bool {
 type Tag string
 
 // UnmarshalJSON accepts numeric and string values.
-func (tag *Tag) UnmarshalJSON(b []byte) error {
-	var n json.Number
-	err := json.Unmarshal(b, &n)
-	if err != nil {
-		return err
+func (tag *Tag) UnmarshalJSON(b []byte) (err error) {
+	var s string
+	if err = json.Unmarshal(b, &s); err == nil {
+		*tag = Tag(s)
+	} else {
+		var n json.RawMessage
+		if err = json.Unmarshal(b, &n); err == nil {
+			*tag = Tag(n)
+		}
 	}
-
-	*tag = Tag(n.String())
-
-	return nil
+	return err
 }
 
 type Version struct {
