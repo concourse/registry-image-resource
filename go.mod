@@ -5,7 +5,7 @@ require (
 	github.com/aws/aws-sdk-go v1.19.1
 	github.com/cenkalti/backoff v2.2.1+incompatible
 	github.com/concourse/go-archive v1.0.1
-	github.com/fatih/color v1.7.0
+	github.com/fatih/color v1.9.0
 	github.com/google/go-containerregistry v0.0.0-20191018211754-b77a90c667af
 	github.com/mattn/go-colorable v0.0.9 // indirect
 	github.com/mattn/go-isatty v0.0.4 // indirect
