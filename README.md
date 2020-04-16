@@ -59,6 +59,44 @@ differences:
   * `tls_key`: *Optional. Default `""`* TLS key for the notary server.
   * `tls_cert`: *Optional. Default `""`* TLS certificate for the notary server.
 
+### Signing with Docker Hub 
+
+Configure Docker Content Trust for use with the [Docker Hub](https:/hub.docker.io) and Notary service by specifying the above source parameters as follows:
+
+* `repository_key` should be set to the contents of the DCT key file located in your ~/.docker/trust/private directory.
+* `repository_key_id` should be set to the full key itself, which is also the filename of the key file mentioned above, without the .key extension.
+
+Consider the following resource:
+
+```yaml
+resources:
+- name: trusted-image
+  type: registry-image
+  source:
+    repository: docker.io/foo/bar
+    username: ((registry_user))
+    password: ((registry_pass))
+    content_trust:
+      repository_key_id: ((registry_key_id))
+      repository_key: ((registry_key))
+      repository_passphrase: ((registry_passphrase))
+```
+
+Specify the values for these variables as shown in the following static variable file, or preferrably in a configured [credential manager](https://concourse-ci.org/creds.html):
+
+```yaml
+registry_user: jertel
+registry_pass: my_docker_hub_token
+registry_passphrase: my_dct_key_passphrase
+registry_key_id: 1452a842871e529ffc2be29a012618e1b2a0e6984a89e92e34b5a0fc21a04cd
+registry_key: |
+  -----BEGIN ENCRYPTED PRIVATE KEY-----
+  role: jertel
+
+  MIhsj2sd41fwaa...
+  -----END ENCRYPTED PRIVATE KEY-----
+```
+
 ## Behavior
 
 ### `check`: Discover new digests.
