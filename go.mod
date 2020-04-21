@@ -2,7 +2,7 @@ module github.com/concourse/registry-image-resource
 
 require (
 	github.com/VividCortex/ewma v1.1.1 // indirect
-	github.com/aws/aws-sdk-go v1.30.9
+	github.com/aws/aws-sdk-go v1.30.10
 	github.com/cenkalti/backoff v2.2.1+incompatible
 	github.com/concourse/go-archive v1.0.1
 	github.com/fatih/color v1.9.0
