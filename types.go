@@ -193,7 +193,7 @@ func (source *Source) AuthenticateToECR() bool {
 
 	// Update username and repository
 	source.Username = "AWS"
-	source.Repository = strings.Join([]string{strings.TrimPrefix(*result.AuthorizationData[0].ProxyEndpoint, "https://"), source.Repository}, "/")
+	// source.Repository = strings.Join([]string{strings.TrimPrefix(*result.AuthorizationData[0].ProxyEndpoint, "https://"), source.Repository}, "/")
 
 	return true
 }
