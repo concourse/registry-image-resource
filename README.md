@@ -37,15 +37,18 @@ differences:
   authenticating to the registry. Must be specified for private repos or when
   using `put`.
 
-* `aws_access_key_id`: *Optional. Default `"""`.* The access key ID to use for
+* `aws_access_key_id`: *Optional. Default `""`.* The access key ID to use for
   authenticating with ECR.
 
-* `aws_secret_access_key`: *Optional. Default `"""`.* The secret access key to
+* `aws_secret_access_key`: *Optional. Default `""`.* The secret access key to
   use for authenticating with ECR.
 
-* `aws_region`: *Optional. Default `"`.* The region to use for accessing ECR.
+* `aws_session_token`: *Optional. Default `""`.* The session token to use
+  for authenticating with STS credentials with ECR.
 
-* `aws_role_arn`: *Optional. Default `"`.* If set, then this role will be
+* `aws_region`: *Optional. Default `""`.* The region to use for accessing ECR.
+
+* `aws_role_arn`: *Optional. Default `""`.* If set, then this role will be
   assumed before authenticating to ECR.
 
 * `debug`: *Optional. Default `false`.* If set, progress bars will be disabled
