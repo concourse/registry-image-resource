@@ -16,7 +16,7 @@ import (
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/google/go-containerregistry/pkg/v1/tarball"
-	gcr "github.com/simonshyu/notary-gcr/pkg/gcr"
+	gcr "github.com/autonomic-ai/notary-gcr/pkg/gcr"
 	"github.com/sirupsen/logrus"
 )
 
