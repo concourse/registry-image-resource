@@ -10,7 +10,7 @@ require (
 	github.com/mattn/go-colorable v0.0.9 // indirect
 	github.com/mattn/go-isatty v0.0.4 // indirect
 	github.com/onsi/ginkgo v1.12.0
-	github.com/onsi/gomega v1.9.0
+	github.com/onsi/gomega v1.10.0
 	github.com/simonshyu/notary-gcr v0.0.0-20191008014436-475bb0dafd9a
 	github.com/sirupsen/logrus v1.6.0
 	github.com/vbauerster/mpb v3.4.0+incompatible
