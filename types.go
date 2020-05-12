@@ -30,6 +30,7 @@ type Source struct {
 
 	AwsAccessKeyId     string `json:"aws_access_key_id,omitempty"`
 	AwsSecretAccessKey string `json:"aws_secret_access_key,omitempty"`
+	AwsSessionToken    string `json:"aws_session_token,omitempty"`
 	AwsRegion          string `json:"aws_region,omitempty"`
 	AwsRoleArn         string `json:"aws_role_arn,omitempty"`
 
@@ -154,7 +155,7 @@ func (source *Source) AuthenticateToECR() bool {
 	logrus.Warnln("ECR integration is experimental and untested")
 	mySession := session.Must(session.NewSession(&aws.Config{
 		Region:      aws.String(source.AwsRegion),
-		Credentials: credentials.NewStaticCredentials(source.AwsAccessKeyId, source.AwsSecretAccessKey, ""),
+		Credentials: credentials.NewStaticCredentials(source.AwsAccessKeyId, source.AwsSecretAccessKey, source.AwsSessionToken),
 	}))
 
 	var config aws.Config
@@ -202,16 +203,17 @@ func (source *Source) AuthenticateToECR() bool {
 type Tag string
 
 // UnmarshalJSON accepts numeric and string values.
-func (tag *Tag) UnmarshalJSON(b []byte) error {
-	var n json.Number
-	err := json.Unmarshal(b, &n)
-	if err != nil {
-		return err
+func (tag *Tag) UnmarshalJSON(b []byte) (err error) {
+	var s string
+	if err = json.Unmarshal(b, &s); err == nil {
+		*tag = Tag(s)
+	} else {
+		var n json.RawMessage
+		if err = json.Unmarshal(b, &n); err == nil {
+			*tag = Tag(n)
+		}
 	}
-
-	*tag = Tag(n.String())
-
-	return nil
+	return err
 }
 
 type Version struct {
