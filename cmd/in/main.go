@@ -60,6 +60,15 @@ func main() {
 		logrus.SetLevel(logrus.DebugLevel)
 	}
 
+	if req.Params.SkipDownload {
+		logrus.Info("Skipping download because `skip_download` is set to `true``")
+		json.NewEncoder(os.Stdout).Encode(InResponse{
+			Version:  req.Version,
+			Metadata: req.Source.Metadata(),
+		})
+		return
+	}
+
 	if len(os.Args) < 2 {
 		logrus.Errorf("destination path not specified")
 		os.Exit(1)

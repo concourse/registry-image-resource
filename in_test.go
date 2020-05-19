@@ -317,6 +317,31 @@ var _ = Describe("In", func() {
 		})
 	})
 
+	Describe("skips the download", func() {
+		BeforeEach(func() {
+			req.Source.Repository = "concourse/test-image-static"
+			req.Params.SkipDownload = true
+			req.Version.Digest = LATEST_STATIC_DIGEST
+		})
+
+		It("does not save any files", func() {
+			_, err := os.Stat(filepath.Join(destDir, "rootfs"))
+			Expect(os.IsNotExist(err)).To(BeTrue())
+
+			_, err = os.Stat(filepath.Join(destDir, "manifest.json"))
+			Expect(os.IsNotExist(err)).To(BeTrue())
+
+			_, err = os.Stat(filepath.Join(destDir, "digest"))
+			Expect(os.IsNotExist(err)).To(BeTrue())
+
+			_, err = os.Stat(filepath.Join(destDir, "tag"))
+			Expect(os.IsNotExist(err)).To(BeTrue())
+
+			_, err = os.Stat(filepath.Join(destDir, "image.tar"))
+			Expect(os.IsNotExist(err)).To(BeTrue())
+		})
+	})
+
 	Context("when the registry returns 429 Too Many Requests", func() {
 		var registry *ghttp.Server
 
