@@ -226,7 +226,8 @@ type MetadataField struct {
 }
 
 type GetParams struct {
-	RawFormat string `json:"format"`
+	RawFormat    string `json:"format"`
+	SkipDownload bool   `json:"skip_download"`
 }
 
 func (p GetParams) Format() string {
