@@ -23,6 +23,7 @@ const DefaultTag = "latest"
 type Source struct {
 	Repository string `json:"repository"`
 	RawTag     Tag    `json:"tag,omitempty"`
+	TagFilter  string `json:"tag_filter,omitempty"`
 
 	Username     string        `json:"username,omitempty"`
 	Password     string        `json:"password,omitempty"`

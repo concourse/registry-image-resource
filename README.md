@@ -33,6 +33,10 @@ differences:
 * `tag`: *Optional. Default `latest`.* The name of the tag to monitor and
   publish to.
 
+* `tag_filter`: *Optional.* A regular expression that matches tags on the repository.
+  The regex must have exactly one capture group and that group must capture valid
+  semantic versions. `tag` is still required if you want to push images.
+
 * `username` and `password`: *Optional.* A username and password to use when
   authenticating to the registry. Must be specified for private repos or when
   using `put`.
@@ -164,6 +168,10 @@ docker build . -t registry-image-resource -f dockerfiles/alpine/Dockerfile \
   --build-arg DOCKER_PRIVATE_USERNAME="some-username" \
   --build-arg DOCKER_PRIVATE_PASSWORD="some-password" \
   --build-arg DOCKER_PRIVATE_REPO="some/repo" \
+  --build-arg DOCKER_TAG_FILTER_PRIVATE_USERNAME="some-username" \
+  --build-arg DOCKER_TAG_FILTER_PRIVATE_PASSWORD="some-password" \
+  --build-arg DOCKER_TAG_FILTER_PRIVATE_REPO="some/repo" \
+  --build-arg DOCKER_TAG_FILTER_EXPECTED_DIGEST="some-digest" \
   --build-arg DOCKER_PUSH_USERNAME="some-username" \
   --build-arg DOCKER_PUSH_PASSWORD="some-password" \
   --build-arg DOCKER_PUSH_REPO="some/repo"
@@ -172,6 +180,10 @@ docker build . -t registry-image-resource -f dockerfiles/ubuntu/Dockerfile \
   --build-arg DOCKER_PRIVATE_USERNAME="some-username" \
   --build-arg DOCKER_PRIVATE_PASSWORD="some-password" \
   --build-arg DOCKER_PRIVATE_REPO="some/repo" \
+  --build-arg DOCKER_TAG_FILTER_PRIVATE_USERNAME="some-username" \
+  --build-arg DOCKER_TAG_FILTER_PRIVATE_PASSWORD="some-password" \
+  --build-arg DOCKER_TAG_FILTER_PRIVATE_REPO="some/repo" \
+  --build-arg DOCKER_TAG_FILTER_EXPECTED_DIGEST="some-digest" \
   --build-arg DOCKER_PUSH_USERNAME="some-username" \
   --build-arg DOCKER_PUSH_PASSWORD="some-password" \
   --build-arg DOCKER_PUSH_REPO="some/repo"

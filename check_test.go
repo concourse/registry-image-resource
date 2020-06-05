@@ -128,6 +128,58 @@ var _ = Describe("Check", func() {
 		})
 	})
 
+	Context("when invoked with a tag filter", func() {
+		concourse423digest := "sha256:652b3a898fd409fd814bc1671e383977ace633601277d2548854a22a42640b83"
+		BeforeEach(func() {
+			req.Source = resource.Source{
+				Repository: "concourse/concourse",
+				TagFilter:  `(4\.\d+\.\d+)`,
+			}
+
+			req.Version = nil
+		})
+
+		It("returns the digest of the latest matching tag", func() {
+			Expect(res).To(Equal([]resource.Version{
+				{Digest: concourse423digest},
+			}))
+		})
+	})
+
+	Context("when invoked with a tag filter that doesn't match anything", func() {
+		BeforeEach(func() {
+			req.Source = resource.Source{
+				Repository: "concourse/concourse",
+				TagFilter:  `(93\.\d+\.\d+)`,
+			}
+
+			req.Version = nil
+		})
+
+		It("returns the nothing", func() {
+			Expect(res).To(Equal([]resource.Version{}))
+		})
+	})
+
+	Context("when invoked on an internal repo", func() {
+		BeforeEach(func() {
+			req.Source = resource.Source{
+				Repository: dockerTagFilterPrivateRepo,
+				Username:   dockerTagFilterPrivateUsername,
+				Password:   dockerTagFilterPrivatePassword,
+				TagFilter:  `v?(\d+\.\d+\.\d)`,
+			}
+
+			checkDockerTagFilterPrivateUserConfigured()
+		})
+
+		It("returns the correct digest", func() {
+			Expect(res).To(Equal([]resource.Version{
+				{Digest: dockerTagFilterExpectedDigest},
+			}))
+		})
+	})
+
 	Context("when invoked with a valid but out-of-date cursor version", func() {
 		BeforeEach(func() {
 			req.Source = resource.Source{

@@ -32,6 +32,12 @@ var dockerPrivateRepo = os.Getenv("DOCKER_PRIVATE_REPO")
 var dockerPrivateUsername = os.Getenv("DOCKER_PRIVATE_USERNAME")
 var dockerPrivatePassword = os.Getenv("DOCKER_PRIVATE_PASSWORD")
 
+// a pre-configured, private repo used for tag filtering
+var dockerTagFilterPrivateRepo = os.Getenv("DOCKER_TAG_FILTER_PRIVATE_REPO")
+var dockerTagFilterPrivateUsername = os.Getenv("DOCKER_TAG_FILTER_PRIVATE_USERNAME")
+var dockerTagFilterPrivatePassword = os.Getenv("DOCKER_TAG_FILTER_PRIVATE_PASSWORD")
+var dockerTagFilterExpectedDigest = os.Getenv("DOCKER_TAG_FILTER_EXPECTED_DIGEST")
+
 // testdata/static/Dockerfile, but pushed again (twice; old + latest) to the above private repo
 const PRIVATE_OLDER_STATIC_DIGEST = "sha256:4003f4c3fad6024467f7e59d8153c4c1ef3e2a749d0f234a326cd0ea6bd31359"
 const PRIVATE_LATEST_STATIC_DIGEST = "sha256:2374201198a54c35ad03124f1218bb553eaa97368ce8d2359b43e0bc3b17e06f"
@@ -44,6 +50,12 @@ var dockerPushPassword = os.Getenv("DOCKER_PUSH_PASSWORD")
 func checkDockerPrivateUserConfigured() {
 	if dockerPrivateRepo == "" || dockerPrivateUsername == "" || dockerPrivatePassword == "" {
 		Skip("must specify $DOCKER_PRIVATE_REPO, $DOCKER_PRIVATE_USERNAME, and $DOCKER_PRIVATE_PASSWORD")
+	}
+}
+
+func checkDockerTagFilterPrivateUserConfigured() {
+	if dockerTagFilterPrivateRepo == "" || dockerTagFilterPrivateUsername == "" || dockerTagFilterPrivatePassword == "" {
+		Skip("must specify $DOCKER_TAG_FILTER_PRIVATE_REPO, $DOCKER_TAG_FILTER_PRIVATE_USERNAME, $DOCKER_TAG_FILTER_PRIVATE_PASSWORD, and $DOCKER_TAG_FILTER_EXPECTED_DIGEST")
 	}
 }
 

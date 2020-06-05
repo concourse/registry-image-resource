@@ -5,7 +5,10 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"regexp"
+	"sort"
 
+	"github.com/blang/semver"
 	resource "github.com/concourse/registry-image-resource"
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/logs"
@@ -49,7 +52,7 @@ func main() {
 		}
 	}
 
-	ref, err := name.ParseReference(req.Source.Name(), name.WeakValidation)
+	ref, err := getReference(req)
 	if err != nil {
 		logrus.Errorf("could not resolve repository/tag reference: %s", err)
 		os.Exit(1)
@@ -72,6 +75,10 @@ func main() {
 }
 
 func check(req CheckRequest, ref name.Reference) (CheckResponse, error) {
+	if ref == nil {
+		return CheckResponse{}, nil
+	}
+
 	auth := &authn.Basic{
 		Username: req.Source.Username,
 		Password: req.Source.Password,
@@ -146,4 +153,53 @@ func checkMissingManifest(err error) bool {
 		}
 	}
 	return missing
+}
+
+func getReference(req CheckRequest) (name.Reference, error) {
+	if req.Source.TagFilter == "" {
+		return name.ParseReference(req.Source.Name(), name.WeakValidation)
+	}
+
+	re := regexp.MustCompile(req.Source.TagFilter)
+
+	auth := &authn.Basic{
+		Username: req.Source.Username,
+		Password: req.Source.Password,
+	}
+
+	imageOpts := []remote.Option{}
+
+	if auth.Username != "" && auth.Password != "" {
+		imageOpts = append(imageOpts, remote.WithAuth(auth))
+	}
+
+	repo, err := name.NewRepository(req.Source.Repository)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	tags, err := remote.List(repo, imageOpts...)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	filteredTags := [][]string{}
+	for _, tag := range tags {
+		matches := re.FindStringSubmatch(tag)
+		if matches != nil {
+			filteredTags = append(filteredTags, matches)
+		}
+	}
+
+	sort.Slice(filteredTags, func(i, j int) bool {
+		v1, v2 := semver.MustParse(filteredTags[i][1]), semver.MustParse(filteredTags[j][1])
+		return v1.GT(v2)
+	})
+
+	if len(filteredTags) == 0 {
+		return nil, nil
+	}
+
+	nameRef := fmt.Sprintf("%s:%s", req.Source.Repository, filteredTags[0][0])
+	return name.ParseReference(nameRef, name.WeakValidation)
 }
