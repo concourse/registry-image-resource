@@ -14,6 +14,10 @@ FROM alpine:edge AS resource
 RUN apk add --no-cache bash tzdata ca-certificates unzip zip gzip tar
 COPY --from=builder assets/ /opt/resource/
 RUN chmod +x /opt/resource/*
+# Ensure /etc/hosts is honored
+# https://github.com/golang/go/issues/22846
+# https://github.com/gliderlabs/docker-alpine/issues/367
+RUN echo "hosts: files dns" > /etc/nsswitch.conf
 
 FROM resource AS tests
 COPY --from=builder /tests /tests
