@@ -100,6 +100,8 @@ registry_key: |
   -----END ENCRYPTED PRIVATE KEY-----
 ```
 
+**NOTE** This configuration only applices to the `out` action. `check` & `in` aren't impacted. Hence, it would be possible to `check` or use `in` to get un-signed images.
+
 ## Behavior
 
 ### `check`: Discover new digests.
