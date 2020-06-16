@@ -20,19 +20,35 @@ import (
 
 const DefaultTag = "latest"
 
-type Source struct {
-	Repository string `json:"repository"`
-	RawTag     Tag    `json:"tag,omitempty"`
-
-	Username     string        `json:"username,omitempty"`
-	Password     string        `json:"password,omitempty"`
-	ContentTrust *ContentTrust `json:"content_trust,omitempty"`
-
+type AwsCredentials struct {
 	AwsAccessKeyId     string `json:"aws_access_key_id,omitempty"`
 	AwsSecretAccessKey string `json:"aws_secret_access_key,omitempty"`
 	AwsSessionToken    string `json:"aws_session_token,omitempty"`
 	AwsRegion          string `json:"aws_region,omitempty"`
 	AwsRoleArn         string `json:"aws_role_arn,omitempty"`
+}
+
+type BasicCredentials struct {
+	Username string `json:"username,omitempty"`
+	Password string `json:"password,omitempty"`
+}
+
+type RegistryMirror struct {
+	Host string `json:"host,omitempty"`
+
+	BasicCredentials
+}
+
+type Source struct {
+	Repository string `json:"repository"`
+	RawTag     Tag    `json:"tag,omitempty"`
+
+	BasicCredentials
+	AwsCredentials
+
+	RegistryMirror *RegistryMirror `json:"registry_mirror,omitempty"`
+
+	ContentTrust *ContentTrust `json:"content_trust,omitempty"`
 
 	Debug bool `json:"debug,omitempty"`
 }
@@ -127,11 +143,11 @@ func (source *Source) Tag() string {
 
 func (source *Source) Metadata() []MetadataField {
 	return []MetadataField{
-		MetadataField{
+		{
 			Name:  "repository",
 			Value: source.Repository,
 		},
-		MetadataField{
+		{
 			Name:  "tag",
 			Value: source.Tag(),
 		},
@@ -140,11 +156,11 @@ func (source *Source) Metadata() []MetadataField {
 
 func (source *Source) MetadataWithAdditionalTags(tags []string) []MetadataField {
 	return []MetadataField{
-		MetadataField{
+		{
 			Name:  "repository",
 			Value: source.Repository,
 		},
-		MetadataField{
+		{
 			Name:  "tags",
 			Value: strings.Join(append(tags, source.Tag()), " "),
 		},

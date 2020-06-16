@@ -14,6 +14,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/logs"
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
+	"github.com/google/go-containerregistry/pkg/v1/empty"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/google/go-containerregistry/pkg/v1/tarball"
 	"github.com/sirupsen/logrus"
@@ -84,20 +85,50 @@ func main() {
 		}
 	}
 
-	ref, err := name.ParseReference(req.Source.Repository+"@"+req.Version.Digest, name.WeakValidation)
+	repo, err := name.NewRepository(req.Source.Repository, name.WeakValidation)
 	if err != nil {
-		logrus.Errorf("failed to resolve name: %s", err)
+		logrus.Errorf("failed to resolve repository: %s", err)
 		os.Exit(1)
 		return
 	}
 
 	fmt.Fprintf(os.Stderr, "fetching %s@%s\n", color.GreenString(req.Source.Repository), color.YellowString(req.Version.Digest))
 
-	err = resource.RetryOnRateLimit(func() error {
-		return get(req, ref, dest)
-	})
+	var image v1.Image
+
+	origin := repo.Digest(req.Version.Digest)
+
+	if req.Source.RegistryMirror != nil {
+		registry, err := name.NewRegistry(req.Source.RegistryMirror.Host, name.WeakValidation)
+		if err != nil {
+			logrus.Errorf("could not resolve registry reference: %s", err)
+			os.Exit(1)
+			return
+		}
+
+		repo.Registry = registry
+		mirror := repo.Digest(req.Version.Digest)
+
+		image, err = getWithRetry(req.Source.RegistryMirror.BasicCredentials, mirror)
+		if err != nil {
+			logrus.Warnf("fetching mirror %s failed: %s", mirror.RegistryStr(), err)
+		}
+	}
+
+	if image == nil {
+		image, err = getWithRetry(req.Source.BasicCredentials, origin)
+	}
 	if err != nil {
-		logrus.Errorf("fetching image failed: %s", err)
+		logrus.Errorf("fetching origin %s failed: %s", origin.RegistryStr(), err)
+		os.Exit(1)
+		return
+	}
+
+	tag := repo.Tag(req.Source.Tag())
+
+	err = saveWithRetry(dest, tag, image, req.Params.Format(), req.Source.Debug)
+	if err != nil {
+		logrus.Errorf("saving image: %s", err)
 		os.Exit(1)
 		return
 	}
@@ -108,10 +139,20 @@ func main() {
 	})
 }
 
-func get(req InRequest, ref name.Reference, dest string) error {
+func getWithRetry(principal resource.BasicCredentials, digest name.Digest) (v1.Image, error) {
+	var image v1.Image
+	err := resource.RetryOnRateLimit(func() error {
+		var err error
+		image, err = get(principal, digest)
+		return err
+	})
+	return image, err
+}
+
+func get(principal resource.BasicCredentials, digest name.Digest) (v1.Image, error) {
 	auth := &authn.Basic{
-		Username: req.Source.Username,
-		Password: req.Source.Password,
+		Username: principal.Username,
+		Password: principal.Password,
 	}
 
 	imageOpts := []remote.Option{}
@@ -120,25 +161,38 @@ func get(req InRequest, ref name.Reference, dest string) error {
 		imageOpts = append(imageOpts, remote.WithAuth(auth))
 	}
 
-	image, err := remote.Image(ref, imageOpts...)
+	image, err := remote.Image(digest, imageOpts...)
 	if err != nil {
-		return fmt.Errorf("locate remote image: %w", err)
+		return nil, fmt.Errorf("locate remote image: %w", err)
+	}
+	if image == empty.Image {
+		return nil, fmt.Errorf("download image")
 	}
 
-	switch req.Params.Format() {
+	return image, err
+}
+
+func saveWithRetry(dest string, tag name.Tag, image v1.Image, format string, debug bool) error {
+	return resource.RetryOnRateLimit(func() error {
+		return save(dest, tag, image, format, debug)
+	})
+}
+
+func save(dest string, tag name.Tag, image v1.Image, format string, debug bool) error {
+	switch format {
 	case "oci":
-		err := ociFormat(dest, req, image)
+		err := ociFormat(dest, tag, image)
 		if err != nil {
 			return fmt.Errorf("write oci image: %w", err)
 		}
 	case "rootfs":
-		err := rootfsFormat(dest, req, image)
+		err := rootfsFormat(dest, image, debug)
 		if err != nil {
 			return fmt.Errorf("write rootfs: %w", err)
 		}
 	}
 
-	err = ioutil.WriteFile(filepath.Join(dest, "tag"), []byte(req.Source.Tag()), 0644)
+	err := ioutil.WriteFile(filepath.Join(dest, "tag"), []byte(tag.TagStr()), 0644)
 	if err != nil {
 		return fmt.Errorf("save image tag: %w", err)
 	}
@@ -161,13 +215,8 @@ func saveDigest(dest string, image v1.Image) error {
 	return ioutil.WriteFile(digestDest, []byte(digest.String()), 0644)
 }
 
-func ociFormat(dest string, req InRequest, image v1.Image) error {
-	tag, err := name.NewTag(req.Source.Name(), name.WeakValidation)
-	if err != nil {
-		return fmt.Errorf("construct tag reference: %w", err)
-	}
-
-	err = tarball.WriteToFile(filepath.Join(dest, "image.tar"), tag, image)
+func ociFormat(dest string, tag name.Tag, image v1.Image) error {
+	err := tarball.WriteToFile(filepath.Join(dest, "image.tar"), tag, image)
 	if err != nil {
 		return fmt.Errorf("write OCI image: %s", err)
 	}
@@ -175,8 +224,8 @@ func ociFormat(dest string, req InRequest, image v1.Image) error {
 	return nil
 }
 
-func rootfsFormat(dest string, req InRequest, image v1.Image) error {
-	err := unpackImage(filepath.Join(dest, "rootfs"), image, req.Source.Debug)
+func rootfsFormat(dest string, image v1.Image, debug bool) error {
+	err := unpackImage(filepath.Join(dest, "rootfs"), image, debug)
 	if err != nil {
 		return fmt.Errorf("extract image: %w", err)
 	}
