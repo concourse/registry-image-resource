@@ -87,8 +87,10 @@ var _ = Describe("Out", func() {
 				Repository: dockerPushRepo,
 				RawTag:     resource.Tag(parallelTag("latest")),
 
-				Username: dockerPushUsername,
-				Password: dockerPushPassword,
+				BasicCredentials: resource.BasicCredentials{
+					Username: dockerPrivateUsername,
+					Password: dockerPrivatePassword,
+				},
 			}
 
 			checkDockerPushUserConfigured()

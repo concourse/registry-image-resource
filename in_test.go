@@ -112,11 +112,11 @@ var _ = Describe("In", func() {
 		It("returns metadata", func() {
 			Expect(res.Version).To(Equal(req.Version))
 			Expect(res.Metadata).To(Equal([]resource.MetadataField{
-				resource.MetadataField{
+				{
 					Name:  "repository",
 					Value: "concourse/test-image-metadata",
 				},
-				resource.MetadataField{
+				{
 					Name:  "tag",
 					Value: "latest",
 				},
@@ -222,8 +222,10 @@ var _ = Describe("In", func() {
 				Repository: dockerPrivateRepo,
 				RawTag:     "latest",
 
-				Username: dockerPrivateUsername,
-				Password: dockerPrivatePassword,
+				BasicCredentials: resource.BasicCredentials{
+					Username: dockerPrivateUsername,
+					Password: dockerPrivatePassword,
+				},
 			}
 
 			checkDockerPrivateUserConfigured()
@@ -393,15 +395,7 @@ var _ = Describe("In", func() {
 					ghttp.RespondWith(http.StatusTooManyRequests, "calm down"),
 				),
 
-				// successful sequence
-				ghttp.CombineHandlers(
-					ghttp.VerifyRequest("GET", "/v2/"),
-					ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
-				),
-				ghttp.CombineHandlers(
-					ghttp.VerifyRequest("GET", "/v2/fake-image/manifests/"+digest.String()),
-					ghttp.RespondWith(http.StatusOK, manifest),
-				),
+				// successful sequence following a pseudo-checkpoint
 				ghttp.CombineHandlers(
 					ghttp.VerifyRequest("GET", "/v2/fake-image/blobs/"+configDigest.String()),
 					ghttp.RespondWith(http.StatusOK, config),
@@ -421,6 +415,52 @@ var _ = Describe("In", func() {
 
 		It("retries", func() {
 			Expect(res.Version).To(Equal(req.Version))
+		})
+	})
+
+	Describe("uses a mirror", func() {
+		Context("which has the image", func() {
+			BeforeEach(func() {
+				req.Source.Repository = "fakeserver.foo:5000/concourse/test-image-static"
+				req.Source.RegistryMirror = &resource.RegistryMirror{
+					Host: name.DefaultRegistry,
+				}
+
+				req.Version.Digest = LATEST_STATIC_DIGEST
+			})
+
+			It("saves the rootfs and metadata", func() {
+				_, err := os.Stat(rootfsPath("Dockerfile"))
+				Expect(err).ToNot(HaveOccurred())
+
+				_, err = ioutil.ReadFile(filepath.Join(destDir, "digest"))
+				Expect(err).ToNot(HaveOccurred())
+
+				_, err = ioutil.ReadFile(filepath.Join(destDir, "tag"))
+				Expect(err).ToNot(HaveOccurred())
+			})
+		})
+
+		Context("which is missing the image", func() {
+			BeforeEach(func() {
+				req.Source.Repository = "concourse/test-image-static"
+				req.Source.RegistryMirror = &resource.RegistryMirror{
+					Host: "fakeserver.foo:5000",
+				}
+
+				req.Version.Digest = LATEST_STATIC_DIGEST
+			})
+
+			It("saves the rootfs and metadata", func() {
+				_, err := os.Stat(rootfsPath("Dockerfile"))
+				Expect(err).ToNot(HaveOccurred())
+
+				_, err = ioutil.ReadFile(filepath.Join(destDir, "digest"))
+				Expect(err).ToNot(HaveOccurred())
+
+				_, err = ioutil.ReadFile(filepath.Join(destDir, "tag"))
+				Expect(err).ToNot(HaveOccurred())
+			})
 		})
 	})
 })

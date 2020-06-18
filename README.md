@@ -54,6 +54,11 @@ differences:
 * `debug`: *Optional. Default `false`.* If set, progress bars will be disabled
   and debugging output will be printed instead.
 
+* `registry_mirror`: *Optional.*
+  * `host`: *Required.* A hostname pointing to a Docker registry mirror service.
+  * `username` and `password`: *Optional.* A username and password to use when
+  authenticating to the mirror.
+
 * `content_trust`: *Optional.* Configuration about content trust.
   * `server`: *Optional.* URL for the notary server. (equal to `DOCKER_CONTENT_TRUST_SERVER`)
   * `repository_key_id`: *Required.* Target key's ID used to sign the trusted collection, could be retrieved by `notary key list`

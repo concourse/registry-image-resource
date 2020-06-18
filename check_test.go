@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os/exec"
 
+	"github.com/google/go-containerregistry/pkg/name"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/ghttp"
@@ -70,8 +71,10 @@ var _ = Describe("Check", func() {
 					Repository: dockerPrivateRepo,
 					RawTag:     "latest",
 
-					Username: dockerPrivateUsername,
-					Password: dockerPrivatePassword,
+					BasicCredentials: resource.BasicCredentials{
+						Username: dockerPrivateUsername,
+						Password: dockerPrivatePassword,
+					},
 				}
 
 				checkDockerPrivateUserConfigured()
@@ -81,6 +84,46 @@ var _ = Describe("Check", func() {
 				Expect(res).To(Equal([]resource.Version{
 					{Digest: PRIVATE_LATEST_STATIC_DIGEST},
 				}))
+			})
+		})
+
+		Context("against a mirror", func() {
+			Context("which has the image", func() {
+				BeforeEach(func() {
+					req.Source = resource.Source{
+						Repository: "fakeserver.foo:5000/concourse/test-image-static",
+						RawTag:     "latest",
+
+						RegistryMirror: &resource.RegistryMirror{
+							Host: name.DefaultRegistry,
+						},
+					}
+				})
+
+				It("returns the current digest", func() {
+					Expect(res).To(Equal([]resource.Version{
+						{Digest: LATEST_STATIC_DIGEST},
+					}))
+				})
+			})
+
+			Context("which is missing the image", func() {
+				BeforeEach(func() {
+					req.Source = resource.Source{
+						Repository: "concourse/test-image-static",
+						RawTag:     "latest",
+
+						RegistryMirror: &resource.RegistryMirror{
+							Host: "fakeserver.foo:5000",
+						},
+					}
+				})
+
+				It("returns the current digest", func() {
+					Expect(res).To(Equal([]resource.Version{
+						{Digest: LATEST_STATIC_DIGEST},
+					}))
+				})
 			})
 		})
 	})
@@ -109,8 +152,10 @@ var _ = Describe("Check", func() {
 					Repository: dockerPrivateRepo,
 					RawTag:     "latest",
 
-					Username: dockerPrivateUsername,
-					Password: dockerPrivatePassword,
+					BasicCredentials: resource.BasicCredentials{
+						Username: dockerPrivateUsername,
+						Password: dockerPrivatePassword,
+					},
 				}
 
 				checkDockerPrivateUserConfigured()
@@ -124,6 +169,54 @@ var _ = Describe("Check", func() {
 				Expect(res).To(Equal([]resource.Version{
 					{Digest: PRIVATE_LATEST_STATIC_DIGEST},
 				}))
+			})
+		})
+
+		Context("against a mirror", func() {
+			Context("which has the image", func() {
+				BeforeEach(func() {
+					req.Source = resource.Source{
+						Repository: "fakeserver.foo:5000/concourse/test-image-static",
+						RawTag:     "latest",
+
+						RegistryMirror: &resource.RegistryMirror{
+							Host: name.DefaultRegistry,
+						},
+					}
+
+					req.Version = &resource.Version{
+						Digest: LATEST_STATIC_DIGEST,
+					}
+				})
+
+				It("returns the current digest", func() {
+					Expect(res).To(Equal([]resource.Version{
+						{Digest: LATEST_STATIC_DIGEST},
+					}))
+				})
+			})
+
+			Context("which is missing the image", func() {
+				BeforeEach(func() {
+					req.Source = resource.Source{
+						Repository: "concourse/test-image-static",
+						RawTag:     "latest",
+
+						RegistryMirror: &resource.RegistryMirror{
+							Host: "fakeserver.foo:5000",
+						},
+					}
+
+					req.Version = &resource.Version{
+						Digest: LATEST_STATIC_DIGEST,
+					}
+				})
+
+				It("returns the current digest", func() {
+					Expect(res).To(Equal([]resource.Version{
+						{Digest: LATEST_STATIC_DIGEST},
+					}))
+				})
 			})
 		})
 	})
@@ -154,8 +247,10 @@ var _ = Describe("Check", func() {
 					Repository: dockerPrivateRepo,
 					RawTag:     "latest",
 
-					Username: dockerPrivateUsername,
-					Password: dockerPrivatePassword,
+					BasicCredentials: resource.BasicCredentials{
+						Username: dockerPrivateUsername,
+						Password: dockerPrivatePassword,
+					},
 				}
 
 				checkDockerPrivateUserConfigured()
@@ -171,6 +266,58 @@ var _ = Describe("Check", func() {
 					{Digest: PRIVATE_OLDER_STATIC_DIGEST},
 					{Digest: PRIVATE_LATEST_STATIC_DIGEST},
 				}))
+			})
+		})
+
+		Context("against a mirror", func() {
+			Context("which has the image", func() {
+				BeforeEach(func() {
+					req.Source = resource.Source{
+						Repository: "fakeserver.foo:5000/concourse/test-image-static",
+						RawTag:     "latest",
+
+						RegistryMirror: &resource.RegistryMirror{
+							Host: name.DefaultRegistry,
+						},
+					}
+
+					req.Version = &resource.Version{
+						// this was previously pushed to the 'latest' tag
+						Digest: OLDER_STATIC_DIGEST,
+					}
+				})
+
+				It("returns the current digest", func() {
+					Expect(res).To(Equal([]resource.Version{
+						{Digest: OLDER_STATIC_DIGEST},
+						{Digest: LATEST_STATIC_DIGEST},
+					}))
+				})
+			})
+
+			Context("which is missing the image", func() {
+				BeforeEach(func() {
+					req.Source = resource.Source{
+						Repository: "concourse/test-image-static",
+						RawTag:     "latest",
+
+						RegistryMirror: &resource.RegistryMirror{
+							Host: "fakeserver.foo:5000",
+						},
+					}
+
+					req.Version = &resource.Version{
+						// this was previously pushed to the 'latest' tag
+						Digest: OLDER_STATIC_DIGEST,
+					}
+				})
+
+				It("returns the current digest", func() {
+					Expect(res).To(Equal([]resource.Version{
+						{Digest: OLDER_STATIC_DIGEST},
+						{Digest: LATEST_STATIC_DIGEST},
+					}))
+				})
 			})
 		})
 	})
@@ -199,8 +346,10 @@ var _ = Describe("Check", func() {
 					Repository: dockerPrivateRepo,
 					RawTag:     "latest",
 
-					Username: dockerPrivateUsername,
-					Password: dockerPrivatePassword,
+					BasicCredentials: resource.BasicCredentials{
+						Username: dockerPrivateUsername,
+						Password: dockerPrivatePassword,
+					},
 				}
 
 				checkDockerPrivateUserConfigured()
@@ -210,6 +359,46 @@ var _ = Describe("Check", func() {
 				Expect(res).To(Equal([]resource.Version{
 					{Digest: PRIVATE_LATEST_STATIC_DIGEST},
 				}))
+			})
+		})
+
+		Context("against a mirror", func() {
+			Context("which has the image", func() {
+				BeforeEach(func() {
+					req.Source = resource.Source{
+						Repository: "fakeserver.foo:5000/concourse/test-image-static",
+						RawTag:     "latest",
+
+						RegistryMirror: &resource.RegistryMirror{
+							Host: name.DefaultRegistry,
+						},
+					}
+				})
+
+				It("returns the current digest", func() {
+					Expect(res).To(Equal([]resource.Version{
+						{Digest: LATEST_STATIC_DIGEST},
+					}))
+				})
+			})
+
+			Context("which is missing the image", func() {
+				BeforeEach(func() {
+					req.Source = resource.Source{
+						Repository: "concourse/test-image-static",
+						RawTag:     "latest",
+
+						RegistryMirror: &resource.RegistryMirror{
+							Host: "fakeserver.foo:5000",
+						},
+					}
+				})
+
+				It("returns the current digest", func() {
+					Expect(res).To(Equal([]resource.Version{
+						{Digest: LATEST_STATIC_DIGEST},
+					}))
+				})
 			})
 		})
 	})
@@ -233,8 +422,10 @@ var _ = Describe("Check", func() {
 					Repository: dockerPrivateRepo,
 					RawTag:     "not-exist-image",
 
-					Username: dockerPrivateUsername,
-					Password: dockerPrivatePassword,
+					BasicCredentials: resource.BasicCredentials{
+						Username: dockerPrivateUsername,
+						Password: dockerPrivatePassword,
+					},
 				}
 
 				checkDockerPrivateUserConfigured()

@@ -49,21 +49,45 @@ func main() {
 		}
 	}
 
-	ref, err := name.ParseReference(req.Source.Name(), name.WeakValidation)
+	repo, err := name.NewRepository(req.Source.Repository, name.WeakValidation)
 	if err != nil {
-		logrus.Errorf("could not resolve repository/tag reference: %s", err)
+		logrus.Errorf("failed to resolve repository: %s", err)
 		os.Exit(1)
 		return
 	}
 
 	var response CheckResponse
-	err = resource.RetryOnRateLimit(func() error {
-		var err error
-		response, err = check(req, ref)
-		return err
-	})
+	tag := new(name.Tag)
+
+	if req.Source.RegistryMirror != nil {
+		origin := repo.Registry
+
+		mirror, err := name.NewRegistry(req.Source.RegistryMirror.Host, name.WeakValidation)
+		if err != nil {
+			logrus.Errorf("could not resolve registry: %s", err)
+			os.Exit(1)
+			return
+		}
+
+		repo.Registry = mirror
+		*tag = repo.Tag(req.Source.Tag())
+
+		response, err = checkWithRetry(req.Source.RegistryMirror.BasicCredentials, req.Version, *tag)
+		if err != nil {
+			logrus.Warnf("checking mirror %s failed: %s", mirror.RegistryStr(), err)
+		} else if len(response) == 0 {
+			logrus.Warnf("checking mirror %s failed: tag not found", mirror.RegistryStr())
+		}
+
+		repo.Registry = origin
+	}
+
+	if len(response) == 0 {
+		*tag = repo.Tag(req.Source.Tag())
+		response, err = checkWithRetry(req.Source.BasicCredentials, req.Version, *tag)
+	}
 	if err != nil {
-		logrus.Errorf("check failed: %s", err)
+		logrus.Errorf("checking origin %s failed: %s", tag.RegistryStr(), err)
 		os.Exit(1)
 		return
 	}
@@ -71,10 +95,20 @@ func main() {
 	json.NewEncoder(os.Stdout).Encode(response)
 }
 
-func check(req CheckRequest, ref name.Reference) (CheckResponse, error) {
+func checkWithRetry(principal resource.BasicCredentials, version *resource.Version, ref name.Tag) (CheckResponse, error) {
+	var response CheckResponse
+	err := resource.RetryOnRateLimit(func() error {
+		var err error
+		response, err = check(principal, version, ref)
+		return err
+	})
+	return response, err
+}
+
+func check(principal resource.BasicCredentials, version *resource.Version, ref name.Tag) (CheckResponse, error) {
 	auth := &authn.Basic{
-		Username: req.Source.Username,
-		Password: req.Source.Password,
+		Username: principal.Username,
+		Password: principal.Password,
 	}
 
 	imageOpts := []remote.Option{}
@@ -101,11 +135,8 @@ func check(req CheckRequest, ref name.Reference) (CheckResponse, error) {
 	}
 
 	response := CheckResponse{}
-	if req.Version != nil && !missingTag && req.Version.Digest != digest.String() {
-		digestRef, err := name.ParseReference(req.Source.Repository+"@"+req.Version.Digest, name.WeakValidation)
-		if err != nil {
-			return CheckResponse{}, fmt.Errorf("resolve repository/digest reference: %w", err)
-		}
+	if version != nil && !missingTag && version.Digest != digest.String() {
+		digestRef := ref.Repository.Digest(version.Digest)
 
 		digestImage, err := remote.Image(digestRef, imageOpts...)
 		var missingDigest bool
@@ -122,7 +153,7 @@ func check(req CheckRequest, ref name.Reference) (CheckResponse, error) {
 				return CheckResponse{}, fmt.Errorf("get cursor image digest: %w", err)
 			}
 
-			response = append(response, *req.Version)
+			response = append(response, *version)
 		}
 	}
 
