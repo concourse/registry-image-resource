@@ -95,31 +95,35 @@ func main() {
 	fmt.Fprintf(os.Stderr, "fetching %s@%s\n", color.GreenString(req.Source.Repository), color.YellowString(req.Version.Digest))
 
 	var image v1.Image
-
-	origin := repo.Digest(req.Version.Digest)
+	digest := new(name.Digest)
 
 	if req.Source.RegistryMirror != nil {
-		registry, err := name.NewRegistry(req.Source.RegistryMirror.Host, name.WeakValidation)
+		origin := repo.Registry
+
+		mirror, err := name.NewRegistry(req.Source.RegistryMirror.Host, name.WeakValidation)
 		if err != nil {
 			logrus.Errorf("could not resolve registry reference: %s", err)
 			os.Exit(1)
 			return
 		}
 
-		repo.Registry = registry
-		mirror := repo.Digest(req.Version.Digest)
+		repo.Registry = mirror
+		*digest = repo.Digest(req.Version.Digest)
 
-		image, err = getWithRetry(req.Source.RegistryMirror.BasicCredentials, mirror)
+		image, err = getWithRetry(req.Source.RegistryMirror.BasicCredentials, *digest)
 		if err != nil {
-			logrus.Warnf("fetching mirror %s failed: %s", mirror.RegistryStr(), err)
+			logrus.Warnf("fetching mirror %s failed: %s", digest.RegistryStr(), err)
 		}
+
+		repo.Registry = origin
 	}
 
 	if image == nil {
-		image, err = getWithRetry(req.Source.BasicCredentials, origin)
+		*digest = repo.Digest(req.Version.Digest)
+		image, err = getWithRetry(req.Source.BasicCredentials, *digest)
 	}
 	if err != nil {
-		logrus.Errorf("fetching origin %s failed: %s", origin.RegistryStr(), err)
+		logrus.Errorf("fetching origin %s failed: %s", digest.RegistryStr(), err)
 		os.Exit(1)
 		return
 	}

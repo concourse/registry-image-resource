@@ -57,33 +57,37 @@ func main() {
 	}
 
 	var response CheckResponse
-
-	origin := repo.Tag(req.Source.Tag())
+	tag := new(name.Tag)
 
 	if req.Source.RegistryMirror != nil {
-		registry, err := name.NewRegistry(req.Source.RegistryMirror.Host, name.WeakValidation)
+		origin := repo.Registry
+
+		mirror, err := name.NewRegistry(req.Source.RegistryMirror.Host, name.WeakValidation)
 		if err != nil {
 			logrus.Errorf("could not resolve registry: %s", err)
 			os.Exit(1)
 			return
 		}
 
-		repo.Registry = registry
-		mirror := repo.Tag(req.Source.Tag())
+		repo.Registry = mirror
+		*tag = repo.Tag(req.Source.Tag())
 
-		response, err = checkWithRetry(req.Source.RegistryMirror.BasicCredentials, req.Version, mirror)
+		response, err = checkWithRetry(req.Source.RegistryMirror.BasicCredentials, req.Version, *tag)
 		if err != nil {
 			logrus.Warnf("checking mirror %s failed: %s", mirror.RegistryStr(), err)
 		} else if len(response) == 0 {
 			logrus.Warnf("checking mirror %s failed: tag not found", mirror.RegistryStr())
 		}
+
+		repo.Registry = origin
 	}
 
-	if response == nil || len(response) == 0 {
-		response, err = checkWithRetry(req.Source.BasicCredentials, req.Version, origin)
+	if len(response) == 0 {
+		*tag = repo.Tag(req.Source.Tag())
+		response, err = checkWithRetry(req.Source.BasicCredentials, req.Version, *tag)
 	}
 	if err != nil {
-		logrus.Errorf("checking origin %s failed: %s", origin.RegistryStr(), err)
+		logrus.Errorf("checking origin %s failed: %s", tag.RegistryStr(), err)
 		os.Exit(1)
 		return
 	}
