@@ -33,7 +33,6 @@ function latest_digest() {
 
 consts=()
 for df in $(find . -maxdepth 2 -name Dockerfile | grep "$filter"); do
-  break
   dir=$(dirname $df)
   name=concourse/test-image-$(basename $dir | tr . :)
 
