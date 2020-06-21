@@ -18,8 +18,6 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-const DefaultTag = "latest"
-
 type AwsCredentials struct {
 	AwsAccessKeyId     string `json:"aws_access_key_id,omitempty"`
 	AwsSecretAccessKey string `json:"aws_secret_access_key,omitempty"`
@@ -41,7 +39,7 @@ type RegistryMirror struct {
 
 type Source struct {
 	Repository string `json:"repository"`
-	RawTag     Tag    `json:"tag,omitempty"`
+	Tag        Tag    `json:"tag,omitempty"`
 
 	BasicCredentials
 	AwsCredentials
@@ -130,15 +128,11 @@ func (ct *ContentTrust) PrepareConfigDir() (string, error) {
 }
 
 func (source *Source) Name() string {
-	return fmt.Sprintf("%s:%s", source.Repository, source.Tag())
-}
-
-func (source *Source) Tag() string {
-	if source.RawTag != "" {
-		return string(source.RawTag)
+	if source.Tag == "" {
+		return source.Repository
 	}
 
-	return DefaultTag
+	return fmt.Sprintf("%s:%s", source.Repository, source.Tag)
 }
 
 func (source *Source) Metadata() []MetadataField {
@@ -146,23 +140,6 @@ func (source *Source) Metadata() []MetadataField {
 		{
 			Name:  "repository",
 			Value: source.Repository,
-		},
-		{
-			Name:  "tag",
-			Value: source.Tag(),
-		},
-	}
-}
-
-func (source *Source) MetadataWithAdditionalTags(tags []string) []MetadataField {
-	return []MetadataField{
-		{
-			Name:  "repository",
-			Value: source.Repository,
-		},
-		{
-			Name:  "tags",
-			Value: strings.Join(append(tags, source.Tag()), " "),
 		},
 	}
 }
@@ -232,7 +209,12 @@ func (tag *Tag) UnmarshalJSON(b []byte) (err error) {
 	return err
 }
 
+func (tag Tag) String() string {
+	return string(tag)
+}
+
 type Version struct {
+	Tag    string `json:"tag"`
 	Digest string `json:"digest"`
 }
 

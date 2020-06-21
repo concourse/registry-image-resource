@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 
 	resource "github.com/concourse/registry-image-resource"
 	"github.com/fatih/color"
@@ -70,7 +70,7 @@ func main() {
 		}
 	}
 
-	ref, err := name.ParseReference(req.Source.Name(), name.WeakValidation)
+	ref, err := name.NewTag(req.Source.Name())
 	if err != nil {
 		logrus.Errorf("could not resolve repository/tag reference: %s", err)
 		os.Exit(1)
@@ -84,18 +84,18 @@ func main() {
 		return
 	}
 
-	var extraRefs []name.Reference
+	tagsToPush := []name.Tag{ref}
 	for _, tag := range tags {
 		n := fmt.Sprintf("%s:%s", req.Source.Repository, tag)
 
-		extraRef, err := name.ParseReference(n, name.WeakValidation)
+		extraRef, err := name.NewTag(n, name.WeakValidation)
 		if err != nil {
 			logrus.Errorf("could not resolve repository/tag reference: %s", err)
 			os.Exit(1)
 			return
 		}
 
-		extraRefs = append(extraRefs, extraRef)
+		tagsToPush = append(tagsToPush, extraRef)
 	}
 
 	imagePath := filepath.Join(src, req.Params.Image)
@@ -130,10 +130,8 @@ func main() {
 		return
 	}
 
-	logrus.Infof("pushing %s to %s", digest, ref.Name())
-
 	err = resource.RetryOnRateLimit(func() error {
-		return put(req, img, ref, extraRefs)
+		return put(req, img, tagsToPush)
 	})
 	if err != nil {
 		logrus.Errorf("pushing image failed: %s", err)
@@ -141,54 +139,46 @@ func main() {
 		return
 	}
 
+	pushedTags := []string{}
+	for _, tag := range tagsToPush {
+		pushedTags = append(pushedTags, tag.TagStr())
+	}
+
 	json.NewEncoder(os.Stdout).Encode(OutResponse{
 		Version: resource.Version{
 			Digest: digest.String(),
 		},
-		Metadata: req.Source.MetadataWithAdditionalTags(tags),
+		Metadata: append(req.Source.Metadata(), resource.MetadataField{
+			Name:  "tags",
+			Value: strings.Join(pushedTags, " "),
+		}),
 	})
 }
 
-func put(req OutRequest, img v1.Image, ref name.Reference, extraRefs []name.Reference) error {
+func put(req OutRequest, img v1.Image, refs []name.Tag) error {
 	auth := &authn.Basic{
 		Username: req.Source.Username,
 		Password: req.Source.Password,
 	}
 
-	err := remote.Write(ref, img, remote.WithAuth(auth))
-	if err != nil {
-		return fmt.Errorf("upload image: %w", err)
-	}
-
-	logrus.Info("pushed")
-
 	var notaryConfigDir string
+	var err error
 	if req.Source.ContentTrust != nil {
 		notaryConfigDir, err = req.Source.ContentTrust.PrepareConfigDir()
 		if err != nil {
 			return fmt.Errorf("prepare notary-config-dir: %w", err)
 		}
-
-		trustedRepo, err := gcr.NewTrustedGcrRepository(notaryConfigDir, ref, auth)
-		if err != nil {
-			return fmt.Errorf("create TrustedGcrRepository: %w", err)
-		}
-
-		err = trustedRepo.SignImage(img)
-		if err != nil {
-			logrus.Errorf("failed to sign image: %s", err)
-		}
 	}
 
-	for _, extraRef := range extraRefs {
-		logrus.Infof("pushing as tag %s", extraRef.Identifier())
+	for _, extraRef := range refs {
+		logrus.Infof("pushing to tag %s", extraRef.Identifier())
 
-		err = remote.Write(extraRef, img, remote.WithAuth(auth), remote.WithTransport(http.DefaultTransport))
+		err = remote.Write(extraRef, img, remote.WithAuth(auth))
 		if err != nil {
 			return fmt.Errorf("tag image: %w", err)
 		}
 
-		logrus.Info("tagged")
+		logrus.Info("pushed")
 
 		if notaryConfigDir != "" {
 			trustedRepo, err := gcr.NewTrustedGcrRepository(notaryConfigDir, extraRef, auth)

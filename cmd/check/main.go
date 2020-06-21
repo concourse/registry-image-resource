@@ -5,7 +5,10 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"sort"
+	"strings"
 
+	"github.com/Masterminds/semver/v3"
 	resource "github.com/concourse/registry-image-resource"
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/logs"
@@ -57,55 +60,207 @@ func main() {
 	}
 
 	var response CheckResponse
-	tag := new(name.Tag)
 
-	if req.Source.RegistryMirror != nil {
-		origin := repo.Registry
+	if req.Source.Tag != "" {
+		if req.Source.RegistryMirror != nil {
+			origin := repo.Registry
 
-		mirror, err := name.NewRegistry(req.Source.RegistryMirror.Host, name.WeakValidation)
-		if err != nil {
-			logrus.Errorf("could not resolve registry: %s", err)
-			os.Exit(1)
-			return
+			mirror, err := name.NewRegistry(req.Source.RegistryMirror.Host, name.WeakValidation)
+			if err != nil {
+				logrus.Errorf("could not resolve registry: %s", err)
+				os.Exit(1)
+				return
+			}
+
+			repo.Registry = mirror
+
+			response, err = checkTagWithRetry(req.Source.RegistryMirror.BasicCredentials, req.Version, repo.Tag(req.Source.Tag.String()))
+			if err != nil {
+				logrus.Warnf("checking mirror %s failed: %s", repo, err)
+			} else if len(response) == 0 {
+				logrus.Warnf("checking mirror %s failed: tag not found", repo)
+			}
+
+			repo.Registry = origin
 		}
 
-		repo.Registry = mirror
-		*tag = repo.Tag(req.Source.Tag())
+		if len(response) == 0 {
+			response, err = checkTagWithRetry(req.Source.BasicCredentials, req.Version, repo.Tag(req.Source.Tag.String()))
+			if err != nil {
+				logrus.Errorf("checking origin %s failed: %s", repo, err)
+				os.Exit(1)
+				return
+			}
+		}
+	} else {
+		if req.Source.RegistryMirror != nil {
+			origin := repo.Registry
 
-		response, err = checkWithRetry(req.Source.RegistryMirror.BasicCredentials, req.Version, *tag)
-		if err != nil {
-			logrus.Warnf("checking mirror %s failed: %s", mirror.RegistryStr(), err)
-		} else if len(response) == 0 {
-			logrus.Warnf("checking mirror %s failed: tag not found", mirror.RegistryStr())
+			mirror, err := name.NewRegistry(req.Source.RegistryMirror.Host, name.WeakValidation)
+			if err != nil {
+				logrus.Errorf("could not resolve registry: %s", err)
+				os.Exit(1)
+				return
+			}
+
+			repo.Registry = mirror
+
+			response, err = checkRepositoryWithRetry(req.Source.RegistryMirror.BasicCredentials, req.Version, repo)
+			if err != nil {
+				logrus.Warnf("checking mirror %s failed: %s", mirror.RegistryStr(), err)
+			} else if len(response) == 0 {
+				logrus.Warnf("checking mirror %s failed: no tags found", mirror.RegistryStr())
+			}
+
+			repo.Registry = origin
 		}
 
-		repo.Registry = origin
-	}
-
-	if len(response) == 0 {
-		*tag = repo.Tag(req.Source.Tag())
-		response, err = checkWithRetry(req.Source.BasicCredentials, req.Version, *tag)
-	}
-	if err != nil {
-		logrus.Errorf("checking origin %s failed: %s", tag.RegistryStr(), err)
-		os.Exit(1)
-		return
+		if len(response) == 0 {
+			response, err = checkRepositoryWithRetry(req.Source.BasicCredentials, req.Version, repo)
+			if err != nil {
+				logrus.Errorf("checking origin failed: %s", err)
+				os.Exit(1)
+				return
+			}
+		}
 	}
 
 	json.NewEncoder(os.Stdout).Encode(response)
 }
 
-func checkWithRetry(principal resource.BasicCredentials, version *resource.Version, ref name.Tag) (CheckResponse, error) {
+func checkRepositoryWithRetry(principal resource.BasicCredentials, version *resource.Version, ref name.Repository) (CheckResponse, error) {
 	var response CheckResponse
 	err := resource.RetryOnRateLimit(func() error {
 		var err error
-		response, err = check(principal, version, ref)
+		response, err = checkRepository(principal, version, ref)
 		return err
 	})
 	return response, err
 }
 
-func check(principal resource.BasicCredentials, version *resource.Version, ref name.Tag) (CheckResponse, error) {
+func checkTagWithRetry(principal resource.BasicCredentials, version *resource.Version, ref name.Tag) (CheckResponse, error) {
+	var response CheckResponse
+	err := resource.RetryOnRateLimit(func() error {
+		var err error
+		response, err = checkTag(principal, version, ref)
+		return err
+	})
+	return response, err
+}
+
+func checkRepository(principal resource.BasicCredentials, version *resource.Version, ref name.Repository) (CheckResponse, error) {
+	auth := &authn.Basic{
+		Username: principal.Username,
+		Password: principal.Password,
+	}
+
+	imageOpts := []remote.Option{}
+
+	if auth.Username != "" && auth.Password != "" {
+		imageOpts = append(imageOpts, remote.WithAuth(auth))
+	}
+
+	tags, err := remote.List(ref, imageOpts...)
+	if err != nil {
+		return CheckResponse{}, fmt.Errorf("list repository tags: %w", err)
+	}
+
+	var latestTag string
+
+	versions := []*semver.Version{}
+	versionTags := map[*semver.Version]name.Tag{}
+	tagDigests := map[string]string{}
+	digestVersions := map[string]*semver.Version{}
+	for _, identifier := range tags {
+		var ver *semver.Version
+		if identifier == "latest" {
+			// TODO: handle variants, e.g. 'alpine' is latest for
+			// 'x.x.x-alpine'
+			latestTag = identifier
+		} else {
+			ver, err = semver.NewVersion(identifier)
+			if err != nil {
+				// not a version
+				continue
+			}
+		}
+
+		tagRef := ref.Tag(identifier)
+
+		digestImage, err := remote.Image(tagRef, imageOpts...)
+		if err != nil {
+			return CheckResponse{}, fmt.Errorf("get tag digest: %w", err)
+		}
+
+		digest, err := digestImage.Digest()
+		if err != nil {
+			return CheckResponse{}, fmt.Errorf("get cursor image digest: %w", err)
+		}
+
+		tagDigests[identifier] = digest.String()
+
+		if ver != nil {
+			versionTags[ver] = tagRef
+
+			existing, found := digestVersions[digest.String()]
+			if !found || strings.Count(ver.Original(), ".") > strings.Count(existing.Original(), ".") {
+				digestVersions[digest.String()] = ver
+			}
+
+			versions = append(versions, ver)
+		}
+	}
+
+	sort.Sort(semver.Collection(versions))
+
+	var tagVersions TagVersions
+	for digest, version := range digestVersions {
+		tagVersions = append(tagVersions, TagVersion{
+			TagName: versionTags[version].TagStr(),
+			Digest:  digest,
+			Version: version,
+		})
+	}
+
+	sort.Sort(tagVersions)
+
+	response := CheckResponse{}
+
+	for _, ver := range tagVersions {
+		response = append(response, resource.Version{
+			Tag:    ver.TagName,
+			Digest: ver.Digest,
+		})
+	}
+
+	if latestTag != "" {
+		digest := tagDigests[latestTag]
+
+		_, existsAsSemver := digestVersions[digest]
+		if !existsAsSemver {
+			response = append(response, resource.Version{
+				Tag:    latestTag,
+				Digest: digest,
+			})
+		}
+	}
+
+	return response, nil
+}
+
+type TagVersion struct {
+	TagName string
+	Digest  string
+	Version *semver.Version
+}
+
+type TagVersions []TagVersion
+
+func (vs TagVersions) Len() int           { return len(vs) }
+func (vs TagVersions) Less(i, j int) bool { return vs[i].Version.LessThan(vs[j].Version) }
+func (vs TagVersions) Swap(i, j int)      { vs[i], vs[j] = vs[j], vs[i] }
+
+func checkTag(principal resource.BasicCredentials, version *resource.Version, ref name.Tag) (CheckResponse, error) {
 	auth := &authn.Basic{
 		Username: principal.Username,
 		Password: principal.Password,

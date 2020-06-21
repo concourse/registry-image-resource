@@ -85,7 +85,7 @@ var _ = Describe("Out", func() {
 		BeforeEach(func() {
 			req.Source = resource.Source{
 				Repository: dockerPushRepo,
-				RawTag:     resource.Tag(parallelTag("latest")),
+				Tag:        resource.Tag(parallelTag("latest")),
 
 				BasicCredentials: resource.BasicCredentials{
 					Username: dockerPrivateUsername,
@@ -95,7 +95,7 @@ var _ = Describe("Out", func() {
 
 			checkDockerPushUserConfigured()
 
-			tag, err := name.NewTag(req.Source.Name(), name.WeakValidation)
+			tag, err := name.NewTag(req.Source.Name())
 			Expect(err).ToNot(HaveOccurred())
 
 			randomImage, err = random.Image(1024, 1)
@@ -134,11 +134,11 @@ var _ = Describe("Out", func() {
 			Expect(actualErr).ToNot(HaveOccurred())
 
 			Expect(res.Metadata).To(Equal([]resource.MetadataField{
-				resource.MetadataField{
+				{
 					Name:  "repository",
 					Value: dockerPushRepo,
 				},
-				resource.MetadataField{
+				{
 					Name:  "tags",
 					Value: parallelTag("latest"),
 				},

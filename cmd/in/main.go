@@ -61,15 +61,6 @@ func main() {
 		logrus.SetLevel(logrus.DebugLevel)
 	}
 
-	if req.Params.SkipDownload {
-		logrus.Info("Skipping download because `skip_download` is set to `true``")
-		json.NewEncoder(os.Stdout).Encode(InResponse{
-			Version:  req.Version,
-			Metadata: req.Source.Metadata(),
-		})
-		return
-	}
-
 	if len(os.Args) < 2 {
 		logrus.Errorf("destination path not specified")
 		os.Exit(1)
@@ -92,54 +83,59 @@ func main() {
 		return
 	}
 
-	fmt.Fprintf(os.Stderr, "fetching %s@%s\n", color.GreenString(req.Source.Repository), color.YellowString(req.Version.Digest))
+	tag := repo.Tag(req.Version.Tag)
 
-	var image v1.Image
-	digest := new(name.Digest)
+	if !req.Params.SkipDownload {
+		fmt.Fprintf(os.Stderr, "fetching %s@%s\n", color.GreenString(req.Source.Repository), color.YellowString(req.Version.Digest))
 
-	if req.Source.RegistryMirror != nil {
-		origin := repo.Registry
+		var image v1.Image
+		digest := new(name.Digest)
 
-		mirror, err := name.NewRegistry(req.Source.RegistryMirror.Host, name.WeakValidation)
+		if req.Source.RegistryMirror != nil {
+			origin := repo.Registry
+
+			mirror, err := name.NewRegistry(req.Source.RegistryMirror.Host, name.WeakValidation)
+			if err != nil {
+				logrus.Errorf("could not resolve registry reference: %s", err)
+				os.Exit(1)
+				return
+			}
+
+			repo.Registry = mirror
+			*digest = repo.Digest(req.Version.Digest)
+
+			image, err = getWithRetry(req.Source.RegistryMirror.BasicCredentials, *digest)
+			if err != nil {
+				logrus.Warnf("fetching mirror %s failed: %s", digest.RegistryStr(), err)
+			}
+
+			repo.Registry = origin
+		}
+
+		if image == nil {
+			*digest = repo.Digest(req.Version.Digest)
+			image, err = getWithRetry(req.Source.BasicCredentials, *digest)
+			if err != nil {
+				logrus.Errorf("fetching origin %s failed: %s", digest.RegistryStr(), err)
+				os.Exit(1)
+				return
+			}
+		}
+
+		err = saveWithRetry(dest, tag, image, req.Params.Format(), req.Source.Debug)
 		if err != nil {
-			logrus.Errorf("could not resolve registry reference: %s", err)
+			logrus.Errorf("saving image: %s", err)
 			os.Exit(1)
 			return
 		}
-
-		repo.Registry = mirror
-		*digest = repo.Digest(req.Version.Digest)
-
-		image, err = getWithRetry(req.Source.RegistryMirror.BasicCredentials, *digest)
-		if err != nil {
-			logrus.Warnf("fetching mirror %s failed: %s", digest.RegistryStr(), err)
-		}
-
-		repo.Registry = origin
-	}
-
-	if image == nil {
-		*digest = repo.Digest(req.Version.Digest)
-		image, err = getWithRetry(req.Source.BasicCredentials, *digest)
-	}
-	if err != nil {
-		logrus.Errorf("fetching origin %s failed: %s", digest.RegistryStr(), err)
-		os.Exit(1)
-		return
-	}
-
-	tag := repo.Tag(req.Source.Tag())
-
-	err = saveWithRetry(dest, tag, image, req.Params.Format(), req.Source.Debug)
-	if err != nil {
-		logrus.Errorf("saving image: %s", err)
-		os.Exit(1)
-		return
 	}
 
 	json.NewEncoder(os.Stdout).Encode(InResponse{
-		Version:  req.Version,
-		Metadata: req.Source.Metadata(),
+		Version: req.Version,
+		Metadata: append(req.Source.Metadata(), resource.MetadataField{
+			Name:  "tag",
+			Value: tag.TagStr(),
+		}),
 	})
 }
 

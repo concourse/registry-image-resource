@@ -3,11 +3,15 @@ package resource_test
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"os/exec"
 
 	"github.com/google/go-containerregistry/pkg/name"
+	v1 "github.com/google/go-containerregistry/pkg/v1"
+	"github.com/google/go-containerregistry/pkg/v1/random"
 	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/ghttp"
 
@@ -29,7 +33,7 @@ var _ = Describe("Check", func() {
 		res = nil
 	})
 
-	JustBeforeEach(func() {
+	check := func() {
 		cmd := exec.Command(bins.Check)
 		cmd.Env = []string{"TEST=true"}
 
@@ -47,439 +51,600 @@ var _ = Describe("Check", func() {
 
 		err = json.Unmarshal(outBuf.Bytes(), &res)
 		Expect(err).ToNot(HaveOccurred())
-	})
+	}
 
-	Context("when invoked with no cursor version", func() {
+	Describe("tracking semver tags", func() {
+		var registryServer *ghttp.Server
+		var repo name.Repository
+
 		BeforeEach(func() {
+			registryServer = ghttp.NewServer()
+
+			registryServer.RouteToHandler(
+				"GET",
+				"/v2/",
+				ghttp.RespondWith(http.StatusOK, ""),
+			)
+
+			var err error
+			repo, err = name.NewRepository(fmt.Sprintf("%s/test-image", registryServer.Addr()))
+			Expect(err).ToNot(HaveOccurred())
+
 			req.Source = resource.Source{
-				Repository: "concourse/test-image-static",
-				RawTag:     "latest",
+				Repository: repo.Name(),
 			}
 
 			req.Version = nil
 		})
 
-		It("returns the current digest", func() {
-			Expect(res).To(Equal([]resource.Version{
-				{Digest: LATEST_STATIC_DIGEST},
-			}))
+		AfterEach(func() {
+			registryServer.Close()
 		})
 
-		Context("against a private repo with credentials", func() {
-			BeforeEach(func() {
-				req.Source = resource.Source{
-					Repository: dockerPrivateRepo,
-					RawTag:     "latest",
+		type tagsResponse struct {
+			Name string   `json:"name"`
+			Tags []string `json:"tags"`
+		}
 
-					BasicCredentials: resource.BasicCredentials{
-						Username: dockerPrivateUsername,
-						Password: dockerPrivatePassword,
-					},
+		DescribeTable("tracking semver tags",
+			func(tags map[string]string, versions []string) {
+
+				tagNames := []string{}
+				for name := range tags {
+					tagNames = append(tagNames, name)
 				}
 
-				checkDockerPrivateUserConfigured()
+				registryServer.RouteToHandler(
+					"GET",
+					"/v2/"+repo.RepositoryStr()+"/tags/list",
+					ghttp.RespondWithJSONEncoded(http.StatusOK, tagsResponse{
+						Name: "some-name",
+						Tags: tagNames,
+					}),
+				)
+
+				images := map[string]v1.Image{}
+
+				tagVersions := map[string]resource.Version{}
+				for name, imageName := range tags {
+					image, found := images[imageName]
+					if !found {
+						var err error
+						image, err = random.Image(1024, 1)
+						Expect(err).ToNot(HaveOccurred())
+
+						images[imageName] = image
+					}
+
+					manifest, err := image.RawManifest()
+					Expect(err).ToNot(HaveOccurred())
+
+					mediaType, err := image.MediaType()
+					Expect(err).ToNot(HaveOccurred())
+
+					registryServer.RouteToHandler(
+						"GET",
+						"/v2/"+repo.RepositoryStr()+"/manifests/"+name,
+						ghttp.RespondWith(http.StatusOK, manifest, http.Header{"Content-Type": []string{string(mediaType)}}),
+					)
+
+					digest, err := image.Digest()
+					Expect(err).ToNot(HaveOccurred())
+
+					tagVersions[name] = resource.Version{
+						Tag:    name,
+						Digest: digest.String(),
+					}
+				}
+
+				check()
+
+				expectedVersions := make([]resource.Version, len(versions))
+				for i, ver := range versions {
+					expectedVersions[i] = tagVersions[ver]
+				}
+
+				Expect(res).To(Equal(expectedVersions))
+			},
+			Entry("no semver tags",
+				map[string]string{"non-semver-tag": "random-1"},
+				[]string{},
+			),
+			Entry("latest tag",
+				map[string]string{
+					"non-semver-tag": "random-1",
+					"latest":         "random-2",
+				},
+				[]string{"latest"},
+			),
+			Entry("semver and non-semver tags",
+				map[string]string{
+					"1.0.0":          "random-1",
+					"non-semver-tag": "random-2",
+				},
+				[]string{"1.0.0"},
+			),
+			Entry("mixed specificity semver tags",
+				map[string]string{
+					"1":      "random-1",
+					"2":      "random-2",
+					"2.1":    "random-2",
+					"latest": "random-3",
+					"3":      "random-3",
+					"3.2":    "random-3",
+					"3.2.1":  "random-3",
+					"3.1":    "random-4",
+					"3.1.0":  "random-4",
+					"3.0":    "random-5",
+					"3.0.0":  "random-5",
+				},
+				[]string{"1", "2.1", "3.0.0", "3.1.0", "3.2.1"},
+			),
+			Entry("semver tags with latest tag having unique digest",
+				map[string]string{
+					"1.0.0":          "random-1",
+					"non-semver-tag": "random-2",
+					"latest":         "random-3",
+				},
+				[]string{"1.0.0", "latest"},
+			),
+			Entry("latest tag pointing to latest version",
+				map[string]string{
+					"1":      "random-1",
+					"2":      "random-2",
+					"3":      "random-3",
+					"latest": "random-3",
+				},
+				[]string{"1", "2", "3"},
+			),
+			Entry("latest tag pointing to older version",
+				map[string]string{
+					"1":      "random-1",
+					"2":      "random-2",
+					"latest": "random-2",
+					"3":      "random-3",
+				},
+				[]string{"1", "2", "3"},
+			),
+		)
+	})
+
+	Describe("tracking a single tag", func() {
+		JustBeforeEach(check)
+
+		Context("when invoked with no cursor version", func() {
+			BeforeEach(func() {
+				req.Source = resource.Source{
+					Repository: "concourse/test-image-static",
+					Tag:        "latest",
+				}
+
+				req.Version = nil
 			})
 
 			It("returns the current digest", func() {
 				Expect(res).To(Equal([]resource.Version{
-					{Digest: PRIVATE_LATEST_STATIC_DIGEST},
+					{Digest: LATEST_STATIC_DIGEST},
 				}))
 			})
-		})
 
-		Context("against a mirror", func() {
-			Context("which has the image", func() {
+			Context("against a private repo with credentials", func() {
 				BeforeEach(func() {
 					req.Source = resource.Source{
-						Repository: "fakeserver.foo:5000/concourse/test-image-static",
-						RawTag:     "latest",
+						Repository: dockerPrivateRepo,
+						Tag:        "latest",
 
-						RegistryMirror: &resource.RegistryMirror{
-							Host: name.DefaultRegistry,
+						BasicCredentials: resource.BasicCredentials{
+							Username: dockerPrivateUsername,
+							Password: dockerPrivatePassword,
 						},
 					}
+
+					checkDockerPrivateUserConfigured()
 				})
 
 				It("returns the current digest", func() {
 					Expect(res).To(Equal([]resource.Version{
-						{Digest: LATEST_STATIC_DIGEST},
+						{Digest: PRIVATE_LATEST_STATIC_DIGEST},
 					}))
 				})
 			})
 
-			Context("which is missing the image", func() {
-				BeforeEach(func() {
-					req.Source = resource.Source{
-						Repository: "concourse/test-image-static",
-						RawTag:     "latest",
+			Context("against a mirror", func() {
+				Context("which has the image", func() {
+					BeforeEach(func() {
+						req.Source = resource.Source{
+							Repository: "fakeserver.foo:5000/concourse/test-image-static",
+							Tag:        "latest",
 
-						RegistryMirror: &resource.RegistryMirror{
-							Host: "fakeserver.foo:5000",
-						},
-					}
+							RegistryMirror: &resource.RegistryMirror{
+								Host: name.DefaultRegistry,
+							},
+						}
+					})
+
+					It("returns the current digest", func() {
+						Expect(res).To(Equal([]resource.Version{
+							{Digest: LATEST_STATIC_DIGEST},
+						}))
+					})
 				})
 
-				It("returns the current digest", func() {
-					Expect(res).To(Equal([]resource.Version{
-						{Digest: LATEST_STATIC_DIGEST},
-					}))
+				Context("which is missing the image", func() {
+					BeforeEach(func() {
+						req.Source = resource.Source{
+							Repository: "concourse/test-image-static",
+							Tag:        "latest",
+
+							RegistryMirror: &resource.RegistryMirror{
+								Host: "fakeserver.foo:5000",
+							},
+						}
+					})
+
+					It("returns the current digest", func() {
+						Expect(res).To(Equal([]resource.Version{
+							{Digest: LATEST_STATIC_DIGEST},
+						}))
+					})
 				})
 			})
 		})
-	})
 
-	Context("when invoked with an up-to-date cursor version", func() {
-		BeforeEach(func() {
-			req.Source = resource.Source{
-				Repository: "concourse/test-image-static",
-				RawTag:     "latest",
-			}
-
-			req.Version = &resource.Version{
-				Digest: LATEST_STATIC_DIGEST,
-			}
-		})
-
-		It("returns the given digest", func() {
-			Expect(res).To(Equal([]resource.Version{
-				{Digest: LATEST_STATIC_DIGEST},
-			}))
-		})
-
-		Context("against a private repo with credentials", func() {
+		Context("when invoked with an up-to-date cursor version", func() {
 			BeforeEach(func() {
 				req.Source = resource.Source{
-					Repository: dockerPrivateRepo,
-					RawTag:     "latest",
-
-					BasicCredentials: resource.BasicCredentials{
-						Username: dockerPrivateUsername,
-						Password: dockerPrivatePassword,
-					},
+					Repository: "concourse/test-image-static",
+					Tag:        "latest",
 				}
-
-				checkDockerPrivateUserConfigured()
 
 				req.Version = &resource.Version{
-					Digest: PRIVATE_LATEST_STATIC_DIGEST,
+					Digest: LATEST_STATIC_DIGEST,
 				}
 			})
 
-			It("returns the current digest", func() {
+			It("returns the given digest", func() {
 				Expect(res).To(Equal([]resource.Version{
-					{Digest: PRIVATE_LATEST_STATIC_DIGEST},
+					{Digest: LATEST_STATIC_DIGEST},
 				}))
 			})
-		})
 
-		Context("against a mirror", func() {
-			Context("which has the image", func() {
+			Context("against a private repo with credentials", func() {
 				BeforeEach(func() {
 					req.Source = resource.Source{
-						Repository: "fakeserver.foo:5000/concourse/test-image-static",
-						RawTag:     "latest",
+						Repository: dockerPrivateRepo,
+						Tag:        "latest",
 
-						RegistryMirror: &resource.RegistryMirror{
-							Host: name.DefaultRegistry,
+						BasicCredentials: resource.BasicCredentials{
+							Username: dockerPrivateUsername,
+							Password: dockerPrivatePassword,
 						},
 					}
 
+					checkDockerPrivateUserConfigured()
+
 					req.Version = &resource.Version{
-						Digest: LATEST_STATIC_DIGEST,
+						Digest: PRIVATE_LATEST_STATIC_DIGEST,
 					}
 				})
 
 				It("returns the current digest", func() {
 					Expect(res).To(Equal([]resource.Version{
-						{Digest: LATEST_STATIC_DIGEST},
+						{Digest: PRIVATE_LATEST_STATIC_DIGEST},
 					}))
 				})
 			})
 
-			Context("which is missing the image", func() {
-				BeforeEach(func() {
-					req.Source = resource.Source{
-						Repository: "concourse/test-image-static",
-						RawTag:     "latest",
+			Context("against a mirror", func() {
+				Context("which has the image", func() {
+					BeforeEach(func() {
+						req.Source = resource.Source{
+							Repository: "fakeserver.foo:5000/concourse/test-image-static",
+							Tag:        "latest",
 
-						RegistryMirror: &resource.RegistryMirror{
-							Host: "fakeserver.foo:5000",
-						},
-					}
+							RegistryMirror: &resource.RegistryMirror{
+								Host: name.DefaultRegistry,
+							},
+						}
 
-					req.Version = &resource.Version{
-						Digest: LATEST_STATIC_DIGEST,
-					}
+						req.Version = &resource.Version{
+							Digest: LATEST_STATIC_DIGEST,
+						}
+					})
+
+					It("returns the current digest", func() {
+						Expect(res).To(Equal([]resource.Version{
+							{Digest: LATEST_STATIC_DIGEST},
+						}))
+					})
 				})
 
-				It("returns the current digest", func() {
-					Expect(res).To(Equal([]resource.Version{
-						{Digest: LATEST_STATIC_DIGEST},
-					}))
+				Context("which is missing the image", func() {
+					BeforeEach(func() {
+						req.Source = resource.Source{
+							Repository: "concourse/test-image-static",
+							Tag:        "latest",
+
+							RegistryMirror: &resource.RegistryMirror{
+								Host: "fakeserver.foo:5000",
+							},
+						}
+
+						req.Version = &resource.Version{
+							Digest: LATEST_STATIC_DIGEST,
+						}
+					})
+
+					It("returns the current digest", func() {
+						Expect(res).To(Equal([]resource.Version{
+							{Digest: LATEST_STATIC_DIGEST},
+						}))
+					})
 				})
 			})
 		})
-	})
 
-	Context("when invoked with a valid but out-of-date cursor version", func() {
-		BeforeEach(func() {
-			req.Source = resource.Source{
-				Repository: "concourse/test-image-static",
-				RawTag:     "latest",
-			}
-
-			req.Version = &resource.Version{
-				// this was previously pushed to the 'latest' tag
-				Digest: OLDER_STATIC_DIGEST,
-			}
-		})
-
-		It("returns the previous digest and the current digest", func() {
-			Expect(res).To(Equal([]resource.Version{
-				{Digest: OLDER_STATIC_DIGEST},
-				{Digest: LATEST_STATIC_DIGEST},
-			}))
-		})
-
-		Context("against a private repo with credentials", func() {
+		Context("when invoked with a valid but out-of-date cursor version", func() {
 			BeforeEach(func() {
 				req.Source = resource.Source{
-					Repository: dockerPrivateRepo,
-					RawTag:     "latest",
-
-					BasicCredentials: resource.BasicCredentials{
-						Username: dockerPrivateUsername,
-						Password: dockerPrivatePassword,
-					},
+					Repository: "concourse/test-image-static",
+					Tag:        "latest",
 				}
-
-				checkDockerPrivateUserConfigured()
 
 				req.Version = &resource.Version{
 					// this was previously pushed to the 'latest' tag
-					Digest: PRIVATE_OLDER_STATIC_DIGEST,
+					Digest: OLDER_STATIC_DIGEST,
 				}
 			})
 
-			It("returns the current digest", func() {
+			It("returns the previous digest and the current digest", func() {
 				Expect(res).To(Equal([]resource.Version{
-					{Digest: PRIVATE_OLDER_STATIC_DIGEST},
-					{Digest: PRIVATE_LATEST_STATIC_DIGEST},
+					{Digest: OLDER_STATIC_DIGEST},
+					{Digest: LATEST_STATIC_DIGEST},
 				}))
 			})
-		})
 
-		Context("against a mirror", func() {
-			Context("which has the image", func() {
+			Context("against a private repo with credentials", func() {
 				BeforeEach(func() {
 					req.Source = resource.Source{
-						Repository: "fakeserver.foo:5000/concourse/test-image-static",
-						RawTag:     "latest",
+						Repository: dockerPrivateRepo,
+						Tag:        "latest",
 
-						RegistryMirror: &resource.RegistryMirror{
-							Host: name.DefaultRegistry,
+						BasicCredentials: resource.BasicCredentials{
+							Username: dockerPrivateUsername,
+							Password: dockerPrivatePassword,
 						},
 					}
+
+					checkDockerPrivateUserConfigured()
 
 					req.Version = &resource.Version{
 						// this was previously pushed to the 'latest' tag
-						Digest: OLDER_STATIC_DIGEST,
+						Digest: PRIVATE_OLDER_STATIC_DIGEST,
 					}
 				})
 
 				It("returns the current digest", func() {
 					Expect(res).To(Equal([]resource.Version{
-						{Digest: OLDER_STATIC_DIGEST},
-						{Digest: LATEST_STATIC_DIGEST},
+						{Digest: PRIVATE_OLDER_STATIC_DIGEST},
+						{Digest: PRIVATE_LATEST_STATIC_DIGEST},
 					}))
 				})
 			})
 
-			Context("which is missing the image", func() {
-				BeforeEach(func() {
-					req.Source = resource.Source{
-						Repository: "concourse/test-image-static",
-						RawTag:     "latest",
+			Context("against a mirror", func() {
+				Context("which has the image", func() {
+					BeforeEach(func() {
+						req.Source = resource.Source{
+							Repository: "fakeserver.foo:5000/concourse/test-image-static",
+							Tag:        "latest",
 
-						RegistryMirror: &resource.RegistryMirror{
-							Host: "fakeserver.foo:5000",
-						},
-					}
+							RegistryMirror: &resource.RegistryMirror{
+								Host: name.DefaultRegistry,
+							},
+						}
 
-					req.Version = &resource.Version{
-						// this was previously pushed to the 'latest' tag
-						Digest: OLDER_STATIC_DIGEST,
-					}
+						req.Version = &resource.Version{
+							// this was previously pushed to the 'latest' tag
+							Digest: OLDER_STATIC_DIGEST,
+						}
+					})
+
+					It("returns the current digest", func() {
+						Expect(res).To(Equal([]resource.Version{
+							{Digest: OLDER_STATIC_DIGEST},
+							{Digest: LATEST_STATIC_DIGEST},
+						}))
+					})
 				})
 
-				It("returns the current digest", func() {
-					Expect(res).To(Equal([]resource.Version{
-						{Digest: OLDER_STATIC_DIGEST},
-						{Digest: LATEST_STATIC_DIGEST},
-					}))
+				Context("which is missing the image", func() {
+					BeforeEach(func() {
+						req.Source = resource.Source{
+							Repository: "concourse/test-image-static",
+							Tag:        "latest",
+
+							RegistryMirror: &resource.RegistryMirror{
+								Host: "fakeserver.foo:5000",
+							},
+						}
+
+						req.Version = &resource.Version{
+							// this was previously pushed to the 'latest' tag
+							Digest: OLDER_STATIC_DIGEST,
+						}
+					})
+
+					It("returns the current digest", func() {
+						Expect(res).To(Equal([]resource.Version{
+							{Digest: OLDER_STATIC_DIGEST},
+							{Digest: LATEST_STATIC_DIGEST},
+						}))
+					})
 				})
 			})
 		})
-	})
 
-	Context("when invoked with an invalid cursor version", func() {
-		BeforeEach(func() {
-			req.Source = resource.Source{
-				Repository: "concourse/test-image-static",
-				RawTag:     "latest",
-			}
-
-			req.Version = &resource.Version{
-				Digest: "sha256:deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
-			}
-		})
-
-		It("returns only the current digest", func() {
-			Expect(res).To(Equal([]resource.Version{
-				{Digest: LATEST_STATIC_DIGEST},
-			}))
-		})
-
-		Context("against a private repo with credentials", func() {
+		Context("when invoked with an invalid cursor version", func() {
 			BeforeEach(func() {
 				req.Source = resource.Source{
-					Repository: dockerPrivateRepo,
-					RawTag:     "latest",
-
-					BasicCredentials: resource.BasicCredentials{
-						Username: dockerPrivateUsername,
-						Password: dockerPrivatePassword,
-					},
+					Repository: "concourse/test-image-static",
+					Tag:        "latest",
 				}
 
-				checkDockerPrivateUserConfigured()
+				req.Version = &resource.Version{
+					Digest: "sha256:deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+				}
 			})
 
-			It("returns the current digest", func() {
+			It("returns only the current digest", func() {
 				Expect(res).To(Equal([]resource.Version{
-					{Digest: PRIVATE_LATEST_STATIC_DIGEST},
+					{Digest: LATEST_STATIC_DIGEST},
 				}))
 			})
-		})
 
-		Context("against a mirror", func() {
-			Context("which has the image", func() {
+			Context("against a private repo with credentials", func() {
 				BeforeEach(func() {
 					req.Source = resource.Source{
-						Repository: "fakeserver.foo:5000/concourse/test-image-static",
-						RawTag:     "latest",
+						Repository: dockerPrivateRepo,
+						Tag:        "latest",
 
-						RegistryMirror: &resource.RegistryMirror{
-							Host: name.DefaultRegistry,
+						BasicCredentials: resource.BasicCredentials{
+							Username: dockerPrivateUsername,
+							Password: dockerPrivatePassword,
 						},
 					}
+
+					checkDockerPrivateUserConfigured()
 				})
 
 				It("returns the current digest", func() {
 					Expect(res).To(Equal([]resource.Version{
-						{Digest: LATEST_STATIC_DIGEST},
+						{Digest: PRIVATE_LATEST_STATIC_DIGEST},
 					}))
 				})
 			})
 
-			Context("which is missing the image", func() {
-				BeforeEach(func() {
-					req.Source = resource.Source{
-						Repository: "concourse/test-image-static",
-						RawTag:     "latest",
+			Context("against a mirror", func() {
+				Context("which has the image", func() {
+					BeforeEach(func() {
+						req.Source = resource.Source{
+							Repository: "fakeserver.foo:5000/concourse/test-image-static",
+							Tag:        "latest",
 
-						RegistryMirror: &resource.RegistryMirror{
-							Host: "fakeserver.foo:5000",
-						},
-					}
+							RegistryMirror: &resource.RegistryMirror{
+								Host: name.DefaultRegistry,
+							},
+						}
+					})
+
+					It("returns the current digest", func() {
+						Expect(res).To(Equal([]resource.Version{
+							{Digest: LATEST_STATIC_DIGEST},
+						}))
+					})
 				})
 
-				It("returns the current digest", func() {
-					Expect(res).To(Equal([]resource.Version{
-						{Digest: LATEST_STATIC_DIGEST},
-					}))
+				Context("which is missing the image", func() {
+					BeforeEach(func() {
+						req.Source = resource.Source{
+							Repository: "concourse/test-image-static",
+							Tag:        "latest",
+
+							RegistryMirror: &resource.RegistryMirror{
+								Host: "fakeserver.foo:5000",
+							},
+						}
+					})
+
+					It("returns the current digest", func() {
+						Expect(res).To(Equal([]resource.Version{
+							{Digest: LATEST_STATIC_DIGEST},
+						}))
+					})
 				})
 			})
 		})
-	})
 
-	Context("when invoked with not exist image", func() {
-		BeforeEach(func() {
-			req.Source = resource.Source{
-				Repository: "concourse/test-image-static",
-				RawTag:     "not-exist-image",
-			}
-			req.Version = nil
-		})
-
-		It("returns empty digest", func() {
-			Expect(res).To(Equal([]resource.Version{}))
-		})
-
-		Context("against a private repo with credentials", func() {
+		Context("when invoked with not exist image", func() {
 			BeforeEach(func() {
 				req.Source = resource.Source{
-					Repository: dockerPrivateRepo,
-					RawTag:     "not-exist-image",
-
-					BasicCredentials: resource.BasicCredentials{
-						Username: dockerPrivateUsername,
-						Password: dockerPrivatePassword,
-					},
+					Repository: "concourse/test-image-static",
+					Tag:        "not-exist-image",
 				}
-
-				checkDockerPrivateUserConfigured()
+				req.Version = nil
 			})
 
 			It("returns empty digest", func() {
 				Expect(res).To(Equal([]resource.Version{}))
 			})
-		})
-	})
 
-	Context("when the registry returns 429 Too Many Requests", func() {
-		var registry *ghttp.Server
+			Context("against a private repo with credentials", func() {
+				BeforeEach(func() {
+					req.Source = resource.Source{
+						Repository: dockerPrivateRepo,
+						Tag:        "not-exist-image",
 
-		BeforeEach(func() {
-			registry = ghttp.NewServer()
+						BasicCredentials: resource.BasicCredentials{
+							Username: dockerPrivateUsername,
+							Password: dockerPrivatePassword,
+						},
+					}
 
-			registry.AppendHandlers(
-				ghttp.CombineHandlers(
-					ghttp.VerifyRequest("GET", "/v2/"),
-					ghttp.RespondWith(http.StatusTooManyRequests, "calm down"),
-				),
-				ghttp.CombineHandlers(
-					ghttp.VerifyRequest("GET", "/v2/"),
-					ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
-				),
-				ghttp.CombineHandlers(
-					ghttp.VerifyRequest("GET", "/v2/fake-image/manifests/latest"),
-					ghttp.RespondWith(http.StatusTooManyRequests, "calm down"),
-				),
-				ghttp.CombineHandlers(
-					ghttp.VerifyRequest("GET", "/v2/"),
-					ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
-				),
-				ghttp.CombineHandlers(
-					ghttp.VerifyRequest("GET", "/v2/fake-image/manifests/latest"),
-					ghttp.RespondWith(http.StatusOK, `{"fake":"manifest"}`),
-				),
-			)
+					checkDockerPrivateUserConfigured()
+				})
 
-			req.Source = resource.Source{
-				Repository: registry.Addr() + "/fake-image",
-			}
+				It("returns empty digest", func() {
+					Expect(res).To(Equal([]resource.Version{}))
+				})
+			})
 		})
 
-		AfterEach(func() {
-			registry.Close()
-		})
+		Context("when the registry returns 429 Too Many Requests", func() {
+			var registry *ghttp.Server
 
-		It("retries", func() {
-			Expect(res).To(Equal([]resource.Version{
-				// sha256 of {"fake":"Manifest"}
-				{Digest: "sha256:c4c25c2cd70e3071f08cf124c4b5c656c061dd38247d166d97098d58eeea8aa6"},
-			}))
+			BeforeEach(func() {
+				registry = ghttp.NewServer()
+
+				registry.AppendHandlers(
+					ghttp.CombineHandlers(
+						ghttp.VerifyRequest("GET", "/v2/"),
+						ghttp.RespondWith(http.StatusTooManyRequests, "calm down"),
+					),
+					ghttp.CombineHandlers(
+						ghttp.VerifyRequest("GET", "/v2/"),
+						ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
+					),
+					ghttp.CombineHandlers(
+						ghttp.VerifyRequest("GET", "/v2/fake-image/manifests/latest"),
+						ghttp.RespondWith(http.StatusTooManyRequests, "calm down"),
+					),
+					ghttp.CombineHandlers(
+						ghttp.VerifyRequest("GET", "/v2/"),
+						ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
+					),
+					ghttp.CombineHandlers(
+						ghttp.VerifyRequest("GET", "/v2/fake-image/manifests/latest"),
+						ghttp.RespondWith(http.StatusOK, `{"fake":"manifest"}`),
+					),
+				)
+
+				req.Source = resource.Source{
+					Repository: registry.Addr() + "/fake-image",
+					Tag:        "latest",
+				}
+			})
+
+			AfterEach(func() {
+				registry.Close()
+			})
+
+			It("retries", func() {
+				Expect(res).To(Equal([]resource.Version{
+					// sha256 of {"fake":"manifest"}
+					{Digest: "sha256:c4c25c2cd70e3071f08cf124c4b5c656c061dd38247d166d97098d58eeea8aa6"},
+				}))
+			})
 		})
 	})
 })

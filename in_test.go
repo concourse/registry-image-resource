@@ -80,7 +80,10 @@ var _ = Describe("In", func() {
 	Describe("image metadata", func() {
 		BeforeEach(func() {
 			req.Source.Repository = "concourse/test-image-metadata"
-			req.Version.Digest = latestDigest(req.Source.Repository)
+			req.Version = resource.Version{
+				Tag:    "latest",
+				Digest: latestDigest(req.Source.Repository),
+			}
 		})
 
 		It("captures the env and user", func() {
@@ -106,7 +109,10 @@ var _ = Describe("In", func() {
 	Describe("response metadata", func() {
 		BeforeEach(func() {
 			req.Source.Repository = "concourse/test-image-metadata"
-			req.Version.Digest = latestDigest(req.Source.Repository)
+			req.Version = resource.Version{
+				Tag:    "latest",
+				Digest: latestDigest(req.Source.Repository),
+			}
 		})
 
 		It("returns metadata", func() {
@@ -127,7 +133,10 @@ var _ = Describe("In", func() {
 	Describe("file attributes", func() {
 		BeforeEach(func() {
 			req.Source.Repository = "concourse/test-image-file-perms-mtime"
-			req.Version.Digest = latestDigest(req.Source.Repository)
+			req.Version = resource.Version{
+				Tag:    "latest",
+				Digest: latestDigest(req.Source.Repository),
+			}
 		})
 
 		It("keeps file ownership, permissions, and modified times", func() {
@@ -147,7 +156,10 @@ var _ = Describe("In", func() {
 	Describe("removed files in layers", func() {
 		BeforeEach(func() {
 			req.Source.Repository = "concourse/test-image-whiteout"
-			req.Version.Digest = latestDigest(req.Source.Repository)
+			req.Version = resource.Version{
+				Tag:    "latest",
+				Digest: latestDigest(req.Source.Repository),
+			}
 		})
 
 		It("does not restore files that were removed in later layers", func() {
@@ -190,7 +202,10 @@ var _ = Describe("In", func() {
 	Describe("a hardlink that is later removed", func() {
 		BeforeEach(func() {
 			req.Source.Repository = "concourse/test-image-removed-hardlinks"
-			req.Version.Digest = latestDigest(req.Source.Repository)
+			req.Version = resource.Version{
+				Tag:    "latest",
+				Digest: latestDigest(req.Source.Repository),
+			}
 		})
 
 		It("works", func() {
@@ -207,7 +222,10 @@ var _ = Describe("In", func() {
 	Describe("layers that replace symlinks with regular files", func() {
 		BeforeEach(func() {
 			req.Source.Repository = "concourse/test-image-symlinks"
-			req.Version.Digest = latestDigest(req.Source.Repository)
+			req.Version = resource.Version{
+				Tag:    "latest",
+				Digest: latestDigest(req.Source.Repository),
+			}
 		})
 
 		It("removes the symlink and writes to a new file rather than trying to open and write to it (thereby overwriting its target)", func() {
@@ -220,7 +238,7 @@ var _ = Describe("In", func() {
 		BeforeEach(func() {
 			req.Source = resource.Source{
 				Repository: dockerPrivateRepo,
-				RawTag:     "latest",
+				Tag:        "latest",
 
 				BasicCredentials: resource.BasicCredentials{
 					Username: dockerPrivateUsername,
@@ -290,32 +308,16 @@ var _ = Describe("In", func() {
 	Describe("saving the tag", func() {
 		BeforeEach(func() {
 			req.Source.Repository = "concourse/test-image-static"
-			req.Version.Digest = LATEST_STATIC_DIGEST
+			req.Version = resource.Version{
+				Tag:    "tagged",
+				Digest: LATEST_STATIC_DIGEST,
+			}
 		})
 
-		Context("with no tag specified", func() {
-			BeforeEach(func() {
-				req.Source.RawTag = ""
-			})
-
-			It("assumes 'latest' and saves the tag to a file", func() {
-				digest, err := ioutil.ReadFile(filepath.Join(destDir, "tag"))
-				Expect(err).ToNot(HaveOccurred())
-				Expect(string(digest)).To(Equal("latest"))
-			})
-		})
-
-		Context("with a tag specified", func() {
-			BeforeEach(func() {
-				req.Source.RawTag = "tagged"
-				req.Version.Digest = LATEST_TAGGED_STATIC_DIGEST
-			})
-
-			It("saves the tag to a file", func() {
-				tag, err := ioutil.ReadFile(filepath.Join(destDir, "tag"))
-				Expect(err).ToNot(HaveOccurred())
-				Expect(string(tag)).To(Equal("tagged"))
-			})
+		It("saves the tag to a file", func() {
+			tag, err := ioutil.ReadFile(filepath.Join(destDir, "tag"))
+			Expect(err).ToNot(HaveOccurred())
+			Expect(string(tag)).To(Equal("tagged"))
 		})
 	})
 
