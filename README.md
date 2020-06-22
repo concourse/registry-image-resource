@@ -174,6 +174,29 @@ The currently encouraged way to build these images is by using the
   list of tag values to tag the image with (in addition to the tag configured
   in `source`).
 
+### Use in tasks
+
+Images used as
+[image resources](https://concourse-ci.org/tasks.html#schema.task.image_resource)
+in tasks are called
+[anonymous resources](https://concourse-ci.org/tasks.html#schema.anonymous_resource).
+Anonymous resources can specify
+[a version](https://concourse-ci.org/tasks.html#schema.anonymous_resource.version),
+which is the image digest. For example:
+
+
+```
+image_resource:
+  type: docker-image
+  source:
+    repository: golang
+  version:
+    digest: 'sha256:5f640aeb8b78e9876546a9d06b928d2ad0c6e51900bcba10ff4e12dc57f6f265'
+```
+
+This is useful when the registry image does not have tags, or when the tags are
+going to be re-used.
+
 ## Development
 
 ### Prerequisites
