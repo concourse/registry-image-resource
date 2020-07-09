@@ -521,6 +521,44 @@ var _ = DescribeTable("tracking semver tags",
 			Versions: []string{"1.0.0"},
 		},
 	),
+	Entry("semver tag ordering",
+		SemverTagExample{
+			Tags: map[string]string{
+				"1.0.0": "random-1",
+				"1.2.1": "random-3",
+				"2.0.0": "random-5",
+			},
+			Versions: []string{"1.0.0", "1.2.1", "2.0.0"},
+		},
+	),
+	Entry("semver tag ordering with cursor",
+		SemverTagExample{
+			Tags: map[string]string{
+				"1.0.0": "random-1",
+				"1.2.1": "random-3",
+				"2.0.0": "random-5",
+			},
+			From: &resource.Version{
+				Tag:    "1.2.1",
+				Digest: "random-3",
+			},
+			Versions: []string{"1.2.1", "2.0.0"},
+		},
+	),
+	Entry("semver tag ordering with cursor with different digest",
+		SemverTagExample{
+			Tags: map[string]string{
+				"1.0.0": "random-1",
+				"1.2.1": "random-3",
+				"2.0.0": "random-5",
+			},
+			From: &resource.Version{
+				Tag:    "1.2.1",
+				Digest: "bogus",
+			},
+			Versions: []string{"1.0.0", "1.2.1", "2.0.0"},
+		},
+	),
 	Entry("prereleases ignored by default",
 		SemverTagExample{
 			Tags: map[string]string{
@@ -685,6 +723,8 @@ type SemverTagExample struct {
 	PreReleases bool
 	Variant     string
 
+	From *resource.Version
+
 	Versions []string
 }
 
@@ -760,6 +800,23 @@ func (example SemverTagExample) Run() {
 		tagVersions[name] = resource.Version{
 			Tag:    name,
 			Digest: digest.String(),
+		}
+	}
+
+	if example.From != nil {
+		req.Version = &resource.Version{
+			Tag: example.From.Tag,
+		}
+
+		image, found := images[example.From.Digest]
+		if found {
+			digest, err := image.Digest()
+			Expect(err).ToNot(HaveOccurred())
+
+			req.Version.Digest = digest.String()
+		} else {
+			// intentionally bogus digest
+			req.Version.Digest = example.From.Digest
 		}
 	}
 

@@ -141,7 +141,7 @@ func checkTagWithRetry(principal resource.BasicCredentials, version *resource.Ve
 	return response, err
 }
 
-func checkRepository(principal resource.BasicCredentials, variant string, preReleases bool, version *resource.Version, ref name.Repository) (resource.CheckResponse, error) {
+func checkRepository(principal resource.BasicCredentials, variant string, preReleases bool, from *resource.Version, ref name.Repository) (resource.CheckResponse, error) {
 	auth := &authn.Basic{
 		Username: principal.Username,
 		Password: principal.Password,
@@ -252,6 +252,11 @@ func checkRepository(principal resource.BasicCredentials, variant string, preRel
 	response := resource.CheckResponse{}
 
 	for _, ver := range tagVersions {
+		if from != nil && ver.TagName == from.Tag && ver.Digest == from.Digest {
+			// only include versions after
+			response = resource.CheckResponse{}
+		}
+
 		response = append(response, resource.Version{
 			Tag:    ver.TagName,
 			Digest: ver.Digest,
