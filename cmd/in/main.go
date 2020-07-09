@@ -20,17 +20,6 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-type InRequest struct {
-	Source  resource.Source    `json:"source"`
-	Params  resource.GetParams `json:"params"`
-	Version resource.Version   `json:"version"`
-}
-
-type InResponse struct {
-	Version  resource.Version         `json:"version"`
-	Metadata []resource.MetadataField `json:"metadata"`
-}
-
 type ImageMetadata struct {
 	Env  []string `json:"env"`
 	User string   `json:"user"`
@@ -47,7 +36,7 @@ func main() {
 
 	color.NoColor = false
 
-	var req InRequest
+	var req resource.InRequest
 	decoder := json.NewDecoder(os.Stdin)
 	decoder.DisallowUnknownFields()
 	err := decoder.Decode(&req)
@@ -130,7 +119,7 @@ func main() {
 		}
 	}
 
-	json.NewEncoder(os.Stdout).Encode(InResponse{
+	json.NewEncoder(os.Stdout).Encode(resource.InResponse{
 		Version: req.Version,
 		Metadata: append(req.Source.Metadata(), resource.MetadataField{
 			Name:  "tag",

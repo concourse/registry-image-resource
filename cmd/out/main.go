@@ -20,16 +20,6 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-type OutRequest struct {
-	Source resource.Source    `json:"source"`
-	Params resource.PutParams `json:"params"`
-}
-
-type OutResponse struct {
-	Version  resource.Version         `json:"version"`
-	Metadata []resource.MetadataField `json:"metadata"`
-}
-
 func main() {
 	logrus.SetOutput(os.Stderr)
 	logrus.SetFormatter(&logrus.TextFormatter{
@@ -41,7 +31,7 @@ func main() {
 
 	color.NoColor = false
 
-	var req OutRequest
+	var req resource.OutRequest
 	decoder := json.NewDecoder(os.Stdin)
 	decoder.DisallowUnknownFields()
 	err := decoder.Decode(&req)
@@ -144,7 +134,7 @@ func main() {
 		pushedTags = append(pushedTags, tag.TagStr())
 	}
 
-	json.NewEncoder(os.Stdout).Encode(OutResponse{
+	json.NewEncoder(os.Stdout).Encode(resource.OutResponse{
 		Version: resource.Version{
 			Digest: digest.String(),
 		},
@@ -155,7 +145,7 @@ func main() {
 	})
 }
 
-func put(req OutRequest, img v1.Image, refs []name.Tag) error {
+func put(req resource.OutRequest, img v1.Image, refs []name.Tag) error {
 	auth := &authn.Basic{
 		Username: req.Source.Username,
 		Password: req.Source.Password,

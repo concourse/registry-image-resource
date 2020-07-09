@@ -25,6 +25,27 @@ type CheckRequest struct {
 
 type CheckResponse []Version
 
+type InRequest struct {
+	Source  Source    `json:"source"`
+	Params  GetParams `json:"params"`
+	Version Version   `json:"version"`
+}
+
+type InResponse struct {
+	Version  Version         `json:"version"`
+	Metadata []MetadataField `json:"metadata"`
+}
+
+type OutRequest struct {
+	Source Source    `json:"source"`
+	Params PutParams `json:"params"`
+}
+
+type OutResponse struct {
+	Version  Version         `json:"version"`
+	Metadata []MetadataField `json:"metadata"`
+}
+
 type AwsCredentials struct {
 	AwsAccessKeyId     string `json:"aws_access_key_id,omitempty"`
 	AwsSecretAccessKey string `json:"aws_secret_access_key,omitempty"`
