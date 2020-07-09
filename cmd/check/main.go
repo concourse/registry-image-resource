@@ -45,71 +45,64 @@ func main() {
 		}
 	}
 
-	repo, err := name.NewRepository(req.Source.Repository, name.WeakValidation)
-	if err != nil {
-		logrus.Errorf("failed to resolve repository: %s", err)
-		os.Exit(1)
-		return
+	var mirrorSource *resource.Source
+	if req.Source.RegistryMirror != nil {
+		mirror, err := name.NewRegistry(req.Source.RegistryMirror.Host, name.WeakValidation)
+		if err != nil {
+			logrus.Errorf("could not resolve registry: %s", err)
+			os.Exit(1)
+			return
+		}
+
+		repo, err := name.NewRepository(req.Source.Repository)
+		if err != nil {
+			logrus.Errorf("could not resolve repository: %s", err)
+			os.Exit(1)
+			return
+		}
+
+		repo.Registry = mirror
+
+		copy := req.Source
+		copy.Repository = repo.String()
+		copy.BasicCredentials = req.Source.RegistryMirror.BasicCredentials
+		copy.RegistryMirror = nil
+
+		mirrorSource = &copy
 	}
 
 	var response resource.CheckResponse
 
 	if req.Source.Tag != "" {
-		if req.Source.RegistryMirror != nil {
-			origin := repo.Registry
-
-			mirror, err := name.NewRegistry(req.Source.RegistryMirror.Host, name.WeakValidation)
+		if mirrorSource != nil {
+			response, err = checkTagWithRetry(*mirrorSource, req.Version)
 			if err != nil {
-				logrus.Errorf("could not resolve registry: %s", err)
-				os.Exit(1)
-				return
-			}
-
-			repo.Registry = mirror
-
-			response, err = checkTagWithRetry(req.Source.RegistryMirror.BasicCredentials, req.Version, repo.Tag(req.Source.Tag.String()))
-			if err != nil {
-				logrus.Warnf("checking mirror %s failed: %s", repo, err)
+				logrus.Warnf("checking mirror %s failed: %s", mirrorSource.Repository, err)
 			} else if len(response) == 0 {
-				logrus.Warnf("checking mirror %s failed: tag not found", repo)
+				logrus.Warnf("checking mirror %s failed: tag not found", mirrorSource.Repository)
 			}
-
-			repo.Registry = origin
 		}
 
 		if len(response) == 0 {
-			response, err = checkTagWithRetry(req.Source.BasicCredentials, req.Version, repo.Tag(req.Source.Tag.String()))
+			response, err = checkTagWithRetry(req.Source, req.Version)
 			if err != nil {
-				logrus.Errorf("checking origin %s failed: %s", repo, err)
+				logrus.Errorf("checking origin %s failed: %s", req.Source.Repository, err)
 				os.Exit(1)
 				return
 			}
 		}
 	} else {
-		if req.Source.RegistryMirror != nil {
-			origin := repo.Registry
-
-			mirror, err := name.NewRegistry(req.Source.RegistryMirror.Host, name.WeakValidation)
+		if mirrorSource != nil {
+			response, err = checkRepositoryWithRetry(*mirrorSource, req.Version)
 			if err != nil {
-				logrus.Errorf("could not resolve registry: %s", err)
-				os.Exit(1)
-				return
-			}
-
-			repo.Registry = mirror
-
-			response, err = checkRepositoryWithRetry(req.Source.RegistryMirror.BasicCredentials, req.Source.Variant, req.Source.PreReleases, req.Version, repo)
-			if err != nil {
-				logrus.Warnf("checking mirror %s failed: %s", mirror.RegistryStr(), err)
+				logrus.Warnf("checking mirror %s failed: %s", mirrorSource.Repository, err)
 			} else if len(response) == 0 {
-				logrus.Warnf("checking mirror %s failed: no tags found", mirror.RegistryStr())
+				logrus.Warnf("checking mirror %s failed: no tags found", mirrorSource.Repository)
 			}
-
-			repo.Registry = origin
 		}
 
 		if len(response) == 0 {
-			response, err = checkRepositoryWithRetry(req.Source.BasicCredentials, req.Source.Variant, req.Source.PreReleases, req.Version, repo)
+			response, err = checkRepositoryWithRetry(req.Source, req.Version)
 			if err != nil {
 				logrus.Errorf("checking origin failed: %s", err)
 				os.Exit(1)
@@ -121,30 +114,35 @@ func main() {
 	json.NewEncoder(os.Stdout).Encode(response)
 }
 
-func checkRepositoryWithRetry(principal resource.BasicCredentials, variant string, pre bool, version *resource.Version, ref name.Repository) (resource.CheckResponse, error) {
+func checkRepositoryWithRetry(source resource.Source, version *resource.Version) (resource.CheckResponse, error) {
 	var response resource.CheckResponse
 	err := resource.RetryOnRateLimit(func() error {
 		var err error
-		response, err = checkRepository(principal, variant, pre, version, ref)
+		response, err = checkRepository(source, version)
 		return err
 	})
 	return response, err
 }
 
-func checkTagWithRetry(principal resource.BasicCredentials, version *resource.Version, ref name.Tag) (resource.CheckResponse, error) {
+func checkTagWithRetry(source resource.Source, version *resource.Version) (resource.CheckResponse, error) {
 	var response resource.CheckResponse
 	err := resource.RetryOnRateLimit(func() error {
 		var err error
-		response, err = checkTag(principal, version, ref)
+		response, err = checkTag(source, version)
 		return err
 	})
 	return response, err
 }
 
-func checkRepository(principal resource.BasicCredentials, variant string, preReleases bool, from *resource.Version, ref name.Repository) (resource.CheckResponse, error) {
+func checkRepository(source resource.Source, from *resource.Version) (resource.CheckResponse, error) {
+	repo, err := name.NewRepository(source.Repository, name.WeakValidation)
+	if err != nil {
+		return resource.CheckResponse{}, fmt.Errorf("resolve repository: %w", err)
+	}
+
 	auth := &authn.Basic{
-		Username: principal.Username,
-		Password: principal.Password,
+		Username: source.Username,
+		Password: source.Password,
 	}
 
 	imageOpts := []remote.Option{}
@@ -153,14 +151,14 @@ func checkRepository(principal resource.BasicCredentials, variant string, preRel
 		imageOpts = append(imageOpts, remote.WithAuth(auth))
 	}
 
-	tags, err := remote.List(ref, imageOpts...)
+	tags, err := remote.List(repo, imageOpts...)
 	if err != nil {
 		return resource.CheckResponse{}, fmt.Errorf("list repository tags: %w", err)
 	}
 
 	bareTag := "latest"
-	if variant != "" {
-		bareTag = variant
+	if source.Variant != "" {
+		bareTag = source.Variant
 	}
 
 	var latestTag string
@@ -175,12 +173,12 @@ func checkRepository(principal resource.BasicCredentials, variant string, preRel
 			latestTag = identifier
 		} else {
 			verStr := identifier
-			if variant != "" {
-				if !strings.HasSuffix(identifier, "-"+variant) {
+			if source.Variant != "" {
+				if !strings.HasSuffix(identifier, "-"+source.Variant) {
 					continue
 				}
 
-				verStr = strings.TrimSuffix(identifier, "-"+variant)
+				verStr = strings.TrimSuffix(identifier, "-"+source.Variant)
 			}
 
 			ver, err = semver.NewVersion(verStr)
@@ -192,7 +190,7 @@ func checkRepository(principal resource.BasicCredentials, variant string, preRel
 			pre := ver.Prerelease()
 			if pre != "" {
 				// pre-releases not enabled; skip
-				if !preReleases {
+				if !source.PreReleases {
 					continue
 				}
 
@@ -210,7 +208,7 @@ func checkRepository(principal resource.BasicCredentials, variant string, preRel
 			}
 		}
 
-		tagRef := ref.Tag(identifier)
+		tagRef := repo.Tag(identifier)
 
 		digestImage, err := remote.Image(tagRef, imageOpts...)
 		if err != nil {
@@ -290,10 +288,17 @@ func (vs TagVersions) Len() int           { return len(vs) }
 func (vs TagVersions) Less(i, j int) bool { return vs[i].Version.LessThan(vs[j].Version) }
 func (vs TagVersions) Swap(i, j int)      { vs[i], vs[j] = vs[j], vs[i] }
 
-func checkTag(principal resource.BasicCredentials, version *resource.Version, ref name.Tag) (resource.CheckResponse, error) {
+func checkTag(source resource.Source, version *resource.Version) (resource.CheckResponse, error) {
+	repo, err := name.NewRepository(source.Repository, name.WeakValidation)
+	if err != nil {
+		return resource.CheckResponse{}, fmt.Errorf("resolve repository: %w", err)
+	}
+
+	ref := repo.Tag(source.Tag.String())
+
 	auth := &authn.Basic{
-		Username: principal.Username,
-		Password: principal.Password,
+		Username: source.Username,
+		Password: source.Password,
 	}
 
 	imageOpts := []remote.Option{}
