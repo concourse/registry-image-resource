@@ -10,14 +10,17 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
+	"github.com/google/go-containerregistry/pkg/v1/partial"
 	"github.com/google/go-containerregistry/pkg/v1/random"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/google/go-containerregistry/pkg/v1/tarball"
 	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/ghttp"
 
@@ -353,4 +356,158 @@ var _ = Describe("Out", func() {
 
 func parallelTag(tag string) string {
 	return fmt.Sprintf("%s-%d", tag, GinkgoParallelNode())
+}
+
+var _ = DescribeTable("pushing semver tags",
+	(SemverTagPushExample).Run,
+	Entry("semver tag with no variant",
+		SemverTagPushExample{
+			Variant: "",
+			Version: "1.2.3",
+
+			PushedTags: []string{"1.2.3"},
+		},
+	),
+	Entry("semver tag with variant",
+		SemverTagPushExample{
+			Variant: "ubuntu",
+			Version: "1.2.3",
+
+			PushedTags: []string{"1.2.3-ubuntu"},
+		},
+	),
+)
+
+type SemverTagPushExample struct {
+	Variant string
+
+	ImageDigest string
+	Version     string
+
+	PushedTags []string
+}
+
+func (example SemverTagPushExample) Run() {
+	registry := ghttp.NewServer()
+	defer registry.Close()
+
+	repo, err := name.NewRepository(fmt.Sprintf("%s/test-image", registry.Addr()))
+	Expect(err).ToNot(HaveOccurred())
+
+	digestNames := map[string]string{}
+
+	image, err := random.Image(1024, 1)
+	Expect(err).ToNot(HaveOccurred())
+
+	cfgDigest, err := partial.ConfigName(image)
+	Expect(err).ToNot(HaveOccurred())
+
+	digest, err := image.Digest()
+	Expect(err).ToNot(HaveOccurred())
+
+	layers, err := image.Layers()
+	Expect(err).ToNot(HaveOccurred())
+
+	imageDir, err := ioutil.TempDir("", "put-dir")
+	Expect(err).ToNot(HaveOccurred())
+
+	defer os.RemoveAll(imageDir)
+
+	imagePath := filepath.Join(imageDir, "image.tar")
+
+	err = tarball.WriteToFile(imagePath, repo.Tag("doesnt-matter"), image)
+	Expect(err).ToNot(HaveOccurred())
+
+	digestNames[digest.String()] = example.ImageDigest
+
+	registry.RouteToHandler(
+		"GET",
+		"/v2/",
+		ghttp.RespondWith(http.StatusOK, ""),
+	)
+
+	registry.RouteToHandler("HEAD", "/v2/test-image/blobs/"+digest.String(), func(w http.ResponseWriter, r *http.Request) {
+		ghttp.RespondWith(http.StatusOK, "blob totally exists")(w, r)
+	})
+
+	registry.RouteToHandler("HEAD", "/v2/test-image/blobs/"+cfgDigest.String(), func(w http.ResponseWriter, r *http.Request) {
+		ghttp.RespondWith(http.StatusOK, "blob totally exists")(w, r)
+	})
+
+	for _, l := range layers {
+		layerDigest, err := l.Digest()
+		Expect(err).ToNot(HaveOccurred())
+
+		registry.RouteToHandler("HEAD", "/v2/test-image/blobs/"+layerDigest.String(), func(w http.ResponseWriter, r *http.Request) {
+			ghttp.RespondWith(http.StatusNotFound, "needs upload")(w, r)
+		})
+	}
+
+	registry.RouteToHandler("POST", "/v2/test-image/blobs/uploads/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Add("Location", "/upload/some-blob")
+		w.WriteHeader(http.StatusAccepted)
+	})
+
+	registry.RouteToHandler("PATCH", "/upload/some-blob", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Add("Location", "/commit/some-blob")
+		w.WriteHeader(http.StatusAccepted)
+	})
+
+	registry.RouteToHandler("PUT", "/commit/some-blob", func(w http.ResponseWriter, r *http.Request) {
+		ghttp.RespondWith(http.StatusCreated, "upload complete")(w, r)
+	})
+
+	actualTags := []string{}
+	registry.RouteToHandler("PUT", regexp.MustCompile("/v2/test-image/manifests/.*"), func(w http.ResponseWriter, r *http.Request) {
+		tag := filepath.Base(r.URL.Path)
+
+		actualDigest, _, err := v1.SHA256(r.Body)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(actualDigest.String()).To(Equal(digest.String()))
+
+		actualTags = append(actualTags, tag)
+
+		ghttp.RespondWith(http.StatusOK, "manifest updated")(w, r)
+	})
+
+	req := resource.OutRequest{
+		Source: resource.Source{
+			Repository: repo.Name(),
+			Variant:    example.Variant,
+		},
+		Params: resource.PutParams{
+			Image:   filepath.Base(imagePath),
+			Version: example.Version,
+		},
+	}
+
+	res := example.put(req, imageDir)
+
+	Expect(res.Version.Tag).To(Equal(actualTags[0]))
+	Expect(res.Version.Digest).To(Equal(digest.String()))
+
+	Expect(actualTags).To(ConsistOf(example.PushedTags))
+}
+
+func (example SemverTagPushExample) put(req resource.OutRequest, dir string) resource.OutResponse {
+	cmd := exec.Command(bins.Out, dir)
+	cmd.Env = []string{"TEST=true"}
+
+	payload, err := json.Marshal(req)
+	Expect(err).ToNot(HaveOccurred())
+
+	outBuf := new(bytes.Buffer)
+
+	cmd.Stdin = bytes.NewBuffer(payload)
+	cmd.Stdout = outBuf
+	cmd.Stderr = GinkgoWriter
+
+	err = cmd.Run()
+	Expect(err).ToNot(HaveOccurred())
+
+	var res resource.OutResponse
+	err = json.Unmarshal(outBuf.Bytes(), &res)
+	Expect(err).ToNot(HaveOccurred())
+
+	return res
 }

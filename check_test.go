@@ -494,9 +494,9 @@ var _ = Describe("Check", func() {
 })
 
 var _ = DescribeTable("tracking semver tags",
-	(SemverTagExample).Run,
+	(SemverTagCheckExample).Run,
 	Entry("no semver tags",
-		SemverTagExample{
+		SemverTagCheckExample{
 			Tags: map[string]string{
 				"non-semver-tag": "random-1",
 			},
@@ -504,7 +504,7 @@ var _ = DescribeTable("tracking semver tags",
 		},
 	),
 	Entry("latest tag",
-		SemverTagExample{
+		SemverTagCheckExample{
 			Tags: map[string]string{
 				"non-semver-tag": "random-1",
 				"latest":         "random-2",
@@ -513,7 +513,7 @@ var _ = DescribeTable("tracking semver tags",
 		},
 	),
 	Entry("semver and non-semver tags",
-		SemverTagExample{
+		SemverTagCheckExample{
 			Tags: map[string]string{
 				"1.0.0":          "random-1",
 				"non-semver-tag": "random-2",
@@ -522,7 +522,7 @@ var _ = DescribeTable("tracking semver tags",
 		},
 	),
 	Entry("semver tag ordering",
-		SemverTagExample{
+		SemverTagCheckExample{
 			Tags: map[string]string{
 				"1.0.0": "random-1",
 				"1.2.1": "random-3",
@@ -532,7 +532,7 @@ var _ = DescribeTable("tracking semver tags",
 		},
 	),
 	Entry("semver tag ordering with cursor",
-		SemverTagExample{
+		SemverTagCheckExample{
 			Tags: map[string]string{
 				"1.0.0": "random-1",
 				"1.2.1": "random-3",
@@ -546,7 +546,7 @@ var _ = DescribeTable("tracking semver tags",
 		},
 	),
 	Entry("semver tag ordering with cursor with different digest",
-		SemverTagExample{
+		SemverTagCheckExample{
 			Tags: map[string]string{
 				"1.0.0": "random-1",
 				"1.2.1": "random-3",
@@ -560,7 +560,7 @@ var _ = DescribeTable("tracking semver tags",
 		},
 	),
 	Entry("prereleases ignored by default",
-		SemverTagExample{
+		SemverTagCheckExample{
 			Tags: map[string]string{
 				"1.0.0-alpha.1": "random-0",
 				"1.0.0":         "random-1",
@@ -573,7 +573,7 @@ var _ = DescribeTable("tracking semver tags",
 		},
 	),
 	Entry("prereleases opted in",
-		SemverTagExample{
+		SemverTagCheckExample{
 			Tags: map[string]string{
 				"1.0.0-alpha.1": "random-0",
 				"1.0.0":         "random-1",
@@ -594,7 +594,7 @@ var _ = DescribeTable("tracking semver tags",
 		},
 	),
 	Entry("prereleases do not include 'variants'",
-		SemverTagExample{
+		SemverTagCheckExample{
 			Tags: map[string]string{
 				"1.0.0-alpha.1": "random-0",
 				"1.0.0":         "random-1",
@@ -605,7 +605,7 @@ var _ = DescribeTable("tracking semver tags",
 		},
 	),
 	Entry("mixed specificity semver tags",
-		SemverTagExample{
+		SemverTagCheckExample{
 			Tags: map[string]string{
 				"1":      "random-1",
 				"2":      "random-2",
@@ -623,7 +623,7 @@ var _ = DescribeTable("tracking semver tags",
 		},
 	),
 	Entry("semver tags with latest tag having unique digest",
-		SemverTagExample{
+		SemverTagCheckExample{
 			Tags: map[string]string{
 				"1.0.0":          "random-1",
 				"non-semver-tag": "random-2",
@@ -633,7 +633,7 @@ var _ = DescribeTable("tracking semver tags",
 		},
 	),
 	Entry("latest tag pointing to latest version",
-		SemverTagExample{
+		SemverTagCheckExample{
 			Tags: map[string]string{
 				"1":      "random-1",
 				"2":      "random-2",
@@ -644,7 +644,7 @@ var _ = DescribeTable("tracking semver tags",
 		},
 	),
 	Entry("latest tag pointing to older version",
-		SemverTagExample{
+		SemverTagCheckExample{
 			Tags: map[string]string{
 				"1":      "random-1",
 				"2":      "random-2",
@@ -655,7 +655,7 @@ var _ = DescribeTable("tracking semver tags",
 		},
 	),
 	Entry("variants",
-		SemverTagExample{
+		SemverTagCheckExample{
 			Tags: map[string]string{
 				"latest":    "random-1",
 				"1.0.0":     "random-1",
@@ -674,7 +674,7 @@ var _ = DescribeTable("tracking semver tags",
 		},
 	),
 	Entry("variant with bare variant tag pointing to unique digest",
-		SemverTagExample{
+		SemverTagCheckExample{
 			Tags: map[string]string{
 				"latest":    "random-1",
 				"1.0.0":     "random-1",
@@ -692,7 +692,7 @@ var _ = DescribeTable("tracking semver tags",
 		},
 	),
 	Entry("distinguishing additional variants from prereleases",
-		SemverTagExample{
+		SemverTagCheckExample{
 			Tags: map[string]string{
 				"1.0.0-foo":             "random-1",
 				"1.0.0-rc.1-foo":        "random-2",
@@ -716,7 +716,7 @@ var _ = DescribeTable("tracking semver tags",
 		},
 	),
 	Entry("tries mirror and falls back on original repository",
-		SemverTagExample{
+		SemverTagCheckExample{
 			Tags: map[string]string{
 				"1.0.0": "random-1",
 				"1.2.1": "random-3",
@@ -729,7 +729,7 @@ var _ = DescribeTable("tracking semver tags",
 		},
 	),
 	Entry("uses mirror and ignores failing repository",
-		SemverTagExample{
+		SemverTagCheckExample{
 			Tags: map[string]string{
 				"1.0.0": "random-1",
 				"1.2.1": "random-3",
@@ -744,7 +744,7 @@ var _ = DescribeTable("tracking semver tags",
 	),
 )
 
-type SemverTagExample struct {
+type SemverTagCheckExample struct {
 	Tags map[string]string
 
 	PreReleases bool
@@ -759,12 +759,7 @@ type SemverTagExample struct {
 	Versions []string
 }
 
-type registryTagsResponse struct {
-	Name string   `json:"name"`
-	Tags []string `json:"tags"`
-}
-
-func (example SemverTagExample) Run() {
+func (example SemverTagCheckExample) Run() {
 	registryServer := ghttp.NewServer()
 	defer registryServer.Close()
 
@@ -875,7 +870,7 @@ func (example SemverTagExample) Run() {
 	Expect(res).To(Equal(expectedVersions))
 }
 
-func (example SemverTagExample) check(req resource.CheckRequest) resource.CheckResponse {
+func (example SemverTagCheckExample) check(req resource.CheckRequest) resource.CheckResponse {
 	cmd := exec.Command(bins.Check)
 	cmd.Env = []string{"TEST=true"}
 

@@ -60,13 +60,6 @@ func main() {
 		}
 	}
 
-	ref, err := name.NewTag(req.Source.Name())
-	if err != nil {
-		logrus.Errorf("could not resolve repository/tag reference: %s", err)
-		os.Exit(1)
-		return
-	}
-
 	tags, err := req.Params.ParseTags(src)
 	if err != nil {
 		logrus.Errorf("could not parse additional tags: %s", err)
@@ -74,7 +67,28 @@ func main() {
 		return
 	}
 
-	tagsToPush := []name.Tag{ref}
+	tagsToPush := []name.Tag{}
+
+	repo, err := name.NewRepository(req.Source.Repository)
+	if err != nil {
+		logrus.Errorf("could not resolve repository: %s", err)
+		os.Exit(1)
+		return
+	}
+
+	if req.Source.Tag != "" {
+		tagsToPush = append(tagsToPush, repo.Tag(req.Source.Tag.String()))
+	}
+
+	if req.Params.Version != "" {
+		tag := req.Params.Version
+		if req.Source.Variant != "" {
+			tag += "-" + req.Source.Variant
+		}
+
+		tagsToPush = append(tagsToPush, repo.Tag(tag))
+	}
+
 	for _, tag := range tags {
 		n := fmt.Sprintf("%s:%s", req.Source.Repository, tag)
 
@@ -86,6 +100,10 @@ func main() {
 		}
 
 		tagsToPush = append(tagsToPush, extraRef)
+	}
+
+	if len(tagsToPush) == 0 {
+		panic("TODO: at least one tag must be specified")
 	}
 
 	imagePath := filepath.Join(src, req.Params.Image)
@@ -136,6 +154,7 @@ func main() {
 
 	json.NewEncoder(os.Stdout).Encode(resource.OutResponse{
 		Version: resource.Version{
+			Tag:    tagsToPush[0].TagStr(),
 			Digest: digest.String(),
 		},
 		Metadata: append(req.Source.Metadata(), resource.MetadataField{

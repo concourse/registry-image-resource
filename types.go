@@ -269,7 +269,14 @@ func (p GetParams) Format() string {
 }
 
 type PutParams struct {
-	Image          string `json:"image"`
+	// Path to an OCI image tarball to push.
+	Image string `json:"image"`
+
+	// Version number to publish. If a variant is configured, it will be
+	// appended to this value to form the tag.
+	Version string `json:"version"`
+
+	// Path to a file containing line-separated tags to push.
 	AdditionalTags string `json:"additional_tags"`
 }
 

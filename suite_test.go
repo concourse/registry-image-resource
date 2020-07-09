@@ -132,3 +132,8 @@ func cat(path string) string {
 	Expect(err).ToNot(HaveOccurred())
 	return string(bytes)
 }
+
+type registryTagsResponse struct {
+	Name string   `json:"name"`
+	Tags []string `json:"tags"`
+}

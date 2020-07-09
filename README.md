@@ -26,12 +26,14 @@ differences:
 
 ## Source Configuration
 
-* `repository`: *Required.* The name of the repository, e.g. `alpine`. If using ecr
-    you only need the repository name, not the full URI e.g. `alpine` not
-    `012345678910.dkr.ecr.us-east-1.amazonaws.com/alpine`
+* `repository`: *Required.* The name of the repository, e.g. `alpine` or
+  `concourse/concourse`.
 
-* `tag`: *Optional. Default `latest`.* The name of the tag to monitor and
-  publish to.
+  *Note: If using ecr you only need the repository name, not the full URI e.g.
+  `alpine` not `012345678910.dkr.ecr.us-east-1.amazonaws.com/alpine`*
+
+* `tag`: *Optional.* Instead of monitoring semver tags, monitor a single tag
+  for changes (based on digest).
 
 * `username` and `password`: *Optional.* A username and password to use when
   authenticating to the registry. Must be specified for private repos or when
