@@ -715,6 +715,33 @@ var _ = DescribeTable("tracking semver tags",
 			},
 		},
 	),
+	Entry("tries mirror and falls back on original repository",
+		SemverTagExample{
+			Tags: map[string]string{
+				"1.0.0": "random-1",
+				"1.2.1": "random-3",
+				"2.0.0": "random-5",
+			},
+
+			RegistryMirror: "fakeserver.foo:5000",
+
+			Versions: []string{"1.0.0", "1.2.1", "2.0.0"},
+		},
+	),
+	Entry("uses mirror and ignores failing repository",
+		SemverTagExample{
+			Tags: map[string]string{
+				"1.0.0": "random-1",
+				"1.2.1": "random-3",
+				"2.0.0": "random-5",
+			},
+
+			Repository:    "fakeserver.foo:5000/test-image",
+			WorkingMirror: true,
+
+			Versions: []string{"1.0.0", "1.2.1", "2.0.0"},
+		},
+	),
 )
 
 type SemverTagExample struct {
@@ -722,6 +749,10 @@ type SemverTagExample struct {
 
 	PreReleases bool
 	Variant     string
+
+	Repository     string
+	RegistryMirror string
+	WorkingMirror  bool
 
 	From *resource.Version
 
@@ -753,6 +784,20 @@ func (example SemverTagExample) Run() {
 			PreReleases: example.PreReleases,
 			Variant:     example.Variant,
 		},
+	}
+
+	if example.Repository != "" {
+		req.Source.Repository = example.Repository
+	}
+
+	if example.RegistryMirror != "" {
+		req.Source.RegistryMirror = &resource.RegistryMirror{
+			Host: example.RegistryMirror,
+		}
+	} else if example.WorkingMirror {
+		req.Source.RegistryMirror = &resource.RegistryMirror{
+			Host: repo.RegistryStr(),
+		}
 	}
 
 	tagNames := []string{}
