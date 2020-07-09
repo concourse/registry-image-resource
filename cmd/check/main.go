@@ -73,62 +73,36 @@ func main() {
 
 	var response resource.CheckResponse
 
-	if req.Source.Tag != "" {
-		if mirrorSource != nil {
-			response, err = checkTagWithRetry(*mirrorSource, req.Version)
-			if err != nil {
-				logrus.Warnf("checking mirror %s failed: %s", mirrorSource.Repository, err)
-			} else if len(response) == 0 {
-				logrus.Warnf("checking mirror %s failed: tag not found", mirrorSource.Repository)
-			}
+	if mirrorSource != nil {
+		response, err = checkWithRetry(*mirrorSource, req.Version)
+		if err != nil {
+			logrus.Warnf("checking mirror %s failed: %s", mirrorSource.Repository, err)
+		} else if len(response) == 0 {
+			logrus.Warnf("checking mirror %s failed: tag not found", mirrorSource.Repository)
 		}
+	}
 
-		if len(response) == 0 {
-			response, err = checkTagWithRetry(req.Source, req.Version)
-			if err != nil {
-				logrus.Errorf("checking origin %s failed: %s", req.Source.Repository, err)
-				os.Exit(1)
-				return
-			}
-		}
-	} else {
-		if mirrorSource != nil {
-			response, err = checkRepositoryWithRetry(*mirrorSource, req.Version)
-			if err != nil {
-				logrus.Warnf("checking mirror %s failed: %s", mirrorSource.Repository, err)
-			} else if len(response) == 0 {
-				logrus.Warnf("checking mirror %s failed: no tags found", mirrorSource.Repository)
-			}
-		}
-
-		if len(response) == 0 {
-			response, err = checkRepositoryWithRetry(req.Source, req.Version)
-			if err != nil {
-				logrus.Errorf("checking origin failed: %s", err)
-				os.Exit(1)
-				return
-			}
+	if len(response) == 0 {
+		response, err = checkWithRetry(req.Source, req.Version)
+		if err != nil {
+			logrus.Errorf("checking origin %s failed: %s", req.Source.Repository, err)
+			os.Exit(1)
+			return
 		}
 	}
 
 	json.NewEncoder(os.Stdout).Encode(response)
 }
 
-func checkRepositoryWithRetry(source resource.Source, version *resource.Version) (resource.CheckResponse, error) {
+func checkWithRetry(source resource.Source, version *resource.Version) (resource.CheckResponse, error) {
 	var response resource.CheckResponse
 	err := resource.RetryOnRateLimit(func() error {
 		var err error
-		response, err = checkRepository(source, version)
-		return err
-	})
-	return response, err
-}
-
-func checkTagWithRetry(source resource.Source, version *resource.Version) (resource.CheckResponse, error) {
-	var response resource.CheckResponse
-	err := resource.RetryOnRateLimit(func() error {
-		var err error
-		response, err = checkTag(source, version)
+		if source.Tag != "" {
+			response, err = checkTag(source, version)
+		} else {
+			response, err = checkRepository(source, version)
+		}
 		return err
 	})
 	return response, err
