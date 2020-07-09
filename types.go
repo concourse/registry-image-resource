@@ -18,6 +18,13 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+type CheckRequest struct {
+	Source  Source   `json:"source"`
+	Version *Version `json:"version"`
+}
+
+type CheckResponse []Version
+
 type AwsCredentials struct {
 	AwsAccessKeyId     string `json:"aws_access_key_id,omitempty"`
 	AwsSecretAccessKey string `json:"aws_secret_access_key,omitempty"`

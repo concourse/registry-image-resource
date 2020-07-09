@@ -19,13 +19,6 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-type CheckRequest struct {
-	Source  resource.Source   `json:"source"`
-	Version *resource.Version `json:"version"`
-}
-
-type CheckResponse []resource.Version
-
 func main() {
 	logrus.SetOutput(os.Stderr)
 	logrus.SetFormatter(&logrus.TextFormatter{
@@ -35,7 +28,7 @@ func main() {
 	logs.Progress = log.New(os.Stderr, "", log.LstdFlags)
 	logs.Warn = log.New(os.Stderr, "", log.LstdFlags)
 
-	var req CheckRequest
+	var req resource.CheckRequest
 	decoder := json.NewDecoder(os.Stdin)
 	decoder.DisallowUnknownFields()
 	err := decoder.Decode(&req)
@@ -59,7 +52,7 @@ func main() {
 		return
 	}
 
-	var response CheckResponse
+	var response resource.CheckResponse
 
 	if req.Source.Tag != "" {
 		if req.Source.RegistryMirror != nil {
@@ -128,8 +121,8 @@ func main() {
 	json.NewEncoder(os.Stdout).Encode(response)
 }
 
-func checkRepositoryWithRetry(principal resource.BasicCredentials, version *resource.Version, ref name.Repository) (CheckResponse, error) {
-	var response CheckResponse
+func checkRepositoryWithRetry(principal resource.BasicCredentials, version *resource.Version, ref name.Repository) (resource.CheckResponse, error) {
+	var response resource.CheckResponse
 	err := resource.RetryOnRateLimit(func() error {
 		var err error
 		response, err = checkRepository(principal, version, ref)
@@ -138,8 +131,8 @@ func checkRepositoryWithRetry(principal resource.BasicCredentials, version *reso
 	return response, err
 }
 
-func checkTagWithRetry(principal resource.BasicCredentials, version *resource.Version, ref name.Tag) (CheckResponse, error) {
-	var response CheckResponse
+func checkTagWithRetry(principal resource.BasicCredentials, version *resource.Version, ref name.Tag) (resource.CheckResponse, error) {
+	var response resource.CheckResponse
 	err := resource.RetryOnRateLimit(func() error {
 		var err error
 		response, err = checkTag(principal, version, ref)
@@ -148,7 +141,7 @@ func checkTagWithRetry(principal resource.BasicCredentials, version *resource.Ve
 	return response, err
 }
 
-func checkRepository(principal resource.BasicCredentials, version *resource.Version, ref name.Repository) (CheckResponse, error) {
+func checkRepository(principal resource.BasicCredentials, version *resource.Version, ref name.Repository) (resource.CheckResponse, error) {
 	auth := &authn.Basic{
 		Username: principal.Username,
 		Password: principal.Password,
@@ -162,7 +155,7 @@ func checkRepository(principal resource.BasicCredentials, version *resource.Vers
 
 	tags, err := remote.List(ref, imageOpts...)
 	if err != nil {
-		return CheckResponse{}, fmt.Errorf("list repository tags: %w", err)
+		return resource.CheckResponse{}, fmt.Errorf("list repository tags: %w", err)
 	}
 
 	var latestTag string
@@ -189,12 +182,12 @@ func checkRepository(principal resource.BasicCredentials, version *resource.Vers
 
 		digestImage, err := remote.Image(tagRef, imageOpts...)
 		if err != nil {
-			return CheckResponse{}, fmt.Errorf("get tag digest: %w", err)
+			return resource.CheckResponse{}, fmt.Errorf("get tag digest: %w", err)
 		}
 
 		digest, err := digestImage.Digest()
 		if err != nil {
-			return CheckResponse{}, fmt.Errorf("get cursor image digest: %w", err)
+			return resource.CheckResponse{}, fmt.Errorf("get cursor image digest: %w", err)
 		}
 
 		tagDigests[identifier] = digest.String()
@@ -224,7 +217,7 @@ func checkRepository(principal resource.BasicCredentials, version *resource.Vers
 
 	sort.Sort(tagVersions)
 
-	response := CheckResponse{}
+	response := resource.CheckResponse{}
 
 	for _, ver := range tagVersions {
 		response = append(response, resource.Version{
@@ -260,7 +253,7 @@ func (vs TagVersions) Len() int           { return len(vs) }
 func (vs TagVersions) Less(i, j int) bool { return vs[i].Version.LessThan(vs[j].Version) }
 func (vs TagVersions) Swap(i, j int)      { vs[i], vs[j] = vs[j], vs[i] }
 
-func checkTag(principal resource.BasicCredentials, version *resource.Version, ref name.Tag) (CheckResponse, error) {
+func checkTag(principal resource.BasicCredentials, version *resource.Version, ref name.Tag) (resource.CheckResponse, error) {
 	auth := &authn.Basic{
 		Username: principal.Username,
 		Password: principal.Password,
@@ -277,7 +270,7 @@ func checkTag(principal resource.BasicCredentials, version *resource.Version, re
 	if err != nil {
 		missingTag = checkMissingManifest(err)
 		if !missingTag {
-			return CheckResponse{}, fmt.Errorf("get remote image: %w", err)
+			return resource.CheckResponse{}, fmt.Errorf("get remote image: %w", err)
 		}
 	}
 
@@ -285,11 +278,11 @@ func checkTag(principal resource.BasicCredentials, version *resource.Version, re
 	if !missingTag {
 		digest, err = image.Digest()
 		if err != nil {
-			return CheckResponse{}, fmt.Errorf("get cursor image digest: %w", err)
+			return resource.CheckResponse{}, fmt.Errorf("get cursor image digest: %w", err)
 		}
 	}
 
-	response := CheckResponse{}
+	response := resource.CheckResponse{}
 	if version != nil && !missingTag && version.Digest != digest.String() {
 		digestRef := ref.Repository.Digest(version.Digest)
 
@@ -298,14 +291,14 @@ func checkTag(principal resource.BasicCredentials, version *resource.Version, re
 		if err != nil {
 			missingDigest = checkMissingManifest(err)
 			if !missingDigest {
-				return CheckResponse{}, fmt.Errorf("get remote image: %w", err)
+				return resource.CheckResponse{}, fmt.Errorf("get remote image: %w", err)
 			}
 		}
 
 		if !missingDigest {
 			_, err = digestImage.Digest()
 			if err != nil {
-				return CheckResponse{}, fmt.Errorf("get cursor image digest: %w", err)
+				return resource.CheckResponse{}, fmt.Errorf("get cursor image digest: %w", err)
 			}
 
 			response = append(response, *version)

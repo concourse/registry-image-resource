@@ -53,162 +53,6 @@ var _ = Describe("Check", func() {
 		Expect(err).ToNot(HaveOccurred())
 	}
 
-	Describe("tracking semver tags", func() {
-		var registryServer *ghttp.Server
-		var repo name.Repository
-
-		BeforeEach(func() {
-			registryServer = ghttp.NewServer()
-
-			registryServer.RouteToHandler(
-				"GET",
-				"/v2/",
-				ghttp.RespondWith(http.StatusOK, ""),
-			)
-
-			var err error
-			repo, err = name.NewRepository(fmt.Sprintf("%s/test-image", registryServer.Addr()))
-			Expect(err).ToNot(HaveOccurred())
-
-			req.Source = resource.Source{
-				Repository: repo.Name(),
-			}
-
-			req.Version = nil
-		})
-
-		AfterEach(func() {
-			registryServer.Close()
-		})
-
-		type tagsResponse struct {
-			Name string   `json:"name"`
-			Tags []string `json:"tags"`
-		}
-
-		DescribeTable("tracking semver tags",
-			func(tags map[string]string, versions []string) {
-
-				tagNames := []string{}
-				for name := range tags {
-					tagNames = append(tagNames, name)
-				}
-
-				registryServer.RouteToHandler(
-					"GET",
-					"/v2/"+repo.RepositoryStr()+"/tags/list",
-					ghttp.RespondWithJSONEncoded(http.StatusOK, tagsResponse{
-						Name: "some-name",
-						Tags: tagNames,
-					}),
-				)
-
-				images := map[string]v1.Image{}
-
-				tagVersions := map[string]resource.Version{}
-				for name, imageName := range tags {
-					image, found := images[imageName]
-					if !found {
-						var err error
-						image, err = random.Image(1024, 1)
-						Expect(err).ToNot(HaveOccurred())
-
-						images[imageName] = image
-					}
-
-					manifest, err := image.RawManifest()
-					Expect(err).ToNot(HaveOccurred())
-
-					mediaType, err := image.MediaType()
-					Expect(err).ToNot(HaveOccurred())
-
-					registryServer.RouteToHandler(
-						"GET",
-						"/v2/"+repo.RepositoryStr()+"/manifests/"+name,
-						ghttp.RespondWith(http.StatusOK, manifest, http.Header{"Content-Type": []string{string(mediaType)}}),
-					)
-
-					digest, err := image.Digest()
-					Expect(err).ToNot(HaveOccurred())
-
-					tagVersions[name] = resource.Version{
-						Tag:    name,
-						Digest: digest.String(),
-					}
-				}
-
-				check()
-
-				expectedVersions := make([]resource.Version, len(versions))
-				for i, ver := range versions {
-					expectedVersions[i] = tagVersions[ver]
-				}
-
-				Expect(res).To(Equal(expectedVersions))
-			},
-			Entry("no semver tags",
-				map[string]string{"non-semver-tag": "random-1"},
-				[]string{},
-			),
-			Entry("latest tag",
-				map[string]string{
-					"non-semver-tag": "random-1",
-					"latest":         "random-2",
-				},
-				[]string{"latest"},
-			),
-			Entry("semver and non-semver tags",
-				map[string]string{
-					"1.0.0":          "random-1",
-					"non-semver-tag": "random-2",
-				},
-				[]string{"1.0.0"},
-			),
-			Entry("mixed specificity semver tags",
-				map[string]string{
-					"1":      "random-1",
-					"2":      "random-2",
-					"2.1":    "random-2",
-					"latest": "random-3",
-					"3":      "random-3",
-					"3.2":    "random-3",
-					"3.2.1":  "random-3",
-					"3.1":    "random-4",
-					"3.1.0":  "random-4",
-					"3.0":    "random-5",
-					"3.0.0":  "random-5",
-				},
-				[]string{"1", "2.1", "3.0.0", "3.1.0", "3.2.1"},
-			),
-			Entry("semver tags with latest tag having unique digest",
-				map[string]string{
-					"1.0.0":          "random-1",
-					"non-semver-tag": "random-2",
-					"latest":         "random-3",
-				},
-				[]string{"1.0.0", "latest"},
-			),
-			Entry("latest tag pointing to latest version",
-				map[string]string{
-					"1":      "random-1",
-					"2":      "random-2",
-					"3":      "random-3",
-					"latest": "random-3",
-				},
-				[]string{"1", "2", "3"},
-			),
-			Entry("latest tag pointing to older version",
-				map[string]string{
-					"1":      "random-1",
-					"2":      "random-2",
-					"latest": "random-2",
-					"3":      "random-3",
-				},
-				[]string{"1", "2", "3"},
-			),
-		)
-	})
-
 	Describe("tracking a single tag", func() {
 		JustBeforeEach(check)
 
@@ -648,3 +492,196 @@ var _ = Describe("Check", func() {
 		})
 	})
 })
+
+var _ = DescribeTable("tracking semver tags",
+	(SemverTagExample).Run,
+	Entry("no semver tags",
+		SemverTagExample{
+			Tags: map[string]string{
+				"non-semver-tag": "random-1",
+			},
+			Versions: []string{},
+		},
+	),
+	Entry("latest tag",
+		SemverTagExample{
+			Tags: map[string]string{
+				"non-semver-tag": "random-1",
+				"latest":         "random-2",
+			},
+			Versions: []string{"latest"},
+		},
+	),
+	Entry("semver and non-semver tags",
+		SemverTagExample{
+			Tags: map[string]string{
+				"1.0.0":          "random-1",
+				"non-semver-tag": "random-2",
+			},
+			Versions: []string{"1.0.0"},
+		},
+	),
+	Entry("mixed specificity semver tags",
+		SemverTagExample{
+			Tags: map[string]string{
+				"1":      "random-1",
+				"2":      "random-2",
+				"2.1":    "random-2",
+				"latest": "random-3",
+				"3":      "random-3",
+				"3.2":    "random-3",
+				"3.2.1":  "random-3",
+				"3.1":    "random-4",
+				"3.1.0":  "random-4",
+				"3.0":    "random-5",
+				"3.0.0":  "random-5",
+			},
+			Versions: []string{"1", "2.1", "3.0.0", "3.1.0", "3.2.1"},
+		},
+	),
+	Entry("semver tags with latest tag having unique digest",
+		SemverTagExample{
+			Tags: map[string]string{
+				"1.0.0":          "random-1",
+				"non-semver-tag": "random-2",
+				"latest":         "random-3",
+			},
+			Versions: []string{"1.0.0", "latest"},
+		},
+	),
+	Entry("latest tag pointing to latest version",
+		SemverTagExample{
+			Tags: map[string]string{
+				"1":      "random-1",
+				"2":      "random-2",
+				"3":      "random-3",
+				"latest": "random-3",
+			},
+			Versions: []string{"1", "2", "3"},
+		},
+	),
+	Entry("latest tag pointing to older version",
+		SemverTagExample{
+			Tags: map[string]string{
+				"1":      "random-1",
+				"2":      "random-2",
+				"latest": "random-2",
+				"3":      "random-3",
+			},
+			Versions: []string{"1", "2", "3"},
+		},
+	),
+)
+
+type SemverTagExample struct {
+	Tags    map[string]string
+	Variant string
+
+	Versions []string
+}
+
+type registryTagsResponse struct {
+	Name string   `json:"name"`
+	Tags []string `json:"tags"`
+}
+
+func (example SemverTagExample) Run() {
+	registryServer := ghttp.NewServer()
+	defer registryServer.Close()
+
+	registryServer.RouteToHandler(
+		"GET",
+		"/v2/",
+		ghttp.RespondWith(http.StatusOK, ""),
+	)
+
+	var err error
+	repo, err := name.NewRepository(fmt.Sprintf("%s/test-image", registryServer.Addr()))
+	Expect(err).ToNot(HaveOccurred())
+
+	req := resource.CheckRequest{
+		Source: resource.Source{
+			Repository: repo.Name(),
+		},
+	}
+
+	tagNames := []string{}
+	for name := range example.Tags {
+		tagNames = append(tagNames, name)
+	}
+
+	registryServer.RouteToHandler(
+		"GET",
+		"/v2/"+repo.RepositoryStr()+"/tags/list",
+		ghttp.RespondWithJSONEncoded(http.StatusOK, registryTagsResponse{
+			Name: "some-name",
+			Tags: tagNames,
+		}),
+	)
+
+	images := map[string]v1.Image{}
+
+	tagVersions := map[string]resource.Version{}
+	for name, imageName := range example.Tags {
+		image, found := images[imageName]
+		if !found {
+			var err error
+			image, err = random.Image(1024, 1)
+			Expect(err).ToNot(HaveOccurred())
+
+			images[imageName] = image
+		}
+
+		manifest, err := image.RawManifest()
+		Expect(err).ToNot(HaveOccurred())
+
+		mediaType, err := image.MediaType()
+		Expect(err).ToNot(HaveOccurred())
+
+		registryServer.RouteToHandler(
+			"GET",
+			"/v2/"+repo.RepositoryStr()+"/manifests/"+name,
+			ghttp.RespondWith(http.StatusOK, manifest, http.Header{"Content-Type": []string{string(mediaType)}}),
+		)
+
+		digest, err := image.Digest()
+		Expect(err).ToNot(HaveOccurred())
+
+		tagVersions[name] = resource.Version{
+			Tag:    name,
+			Digest: digest.String(),
+		}
+	}
+
+	res := example.check(req)
+
+	expectedVersions := make(resource.CheckResponse, len(example.Versions))
+	for i, ver := range example.Versions {
+		expectedVersions[i] = tagVersions[ver]
+	}
+
+	Expect(res).To(Equal(expectedVersions))
+}
+
+func (example SemverTagExample) check(req resource.CheckRequest) resource.CheckResponse {
+	cmd := exec.Command(bins.Check)
+	cmd.Env = []string{"TEST=true"}
+
+	payload, err := json.Marshal(req)
+	Expect(err).ToNot(HaveOccurred())
+
+	outBuf := new(bytes.Buffer)
+
+	cmd.Stdin = bytes.NewBuffer(payload)
+	cmd.Stdout = outBuf
+	cmd.Stderr = GinkgoWriter
+
+	err = cmd.Run()
+	Expect(err).ToNot(HaveOccurred())
+
+	var res resource.CheckResponse
+	err = json.Unmarshal(outBuf.Bytes(), &res)
+	Expect(err).ToNot(HaveOccurred())
+
+	return res
+}
