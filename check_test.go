@@ -571,6 +571,66 @@ var _ = DescribeTable("tracking semver tags",
 			Versions: []string{"1", "2", "3"},
 		},
 	),
+	Entry("variants",
+		SemverTagExample{
+			Variant: "foo",
+
+			Tags: map[string]string{
+				"latest":    "random-1",
+				"1.0.0":     "random-1",
+				"0.9.0":     "random-2",
+				"foo":       "random-3",
+				"1.0.0-foo": "random-3",
+				"0.9.0-foo": "random-4",
+				"bar":       "random-5",
+				"1.0.0-bar": "random-5",
+				"0.9.0-bar": "random-6",
+			},
+
+			Versions: []string{"0.9.0-foo", "1.0.0-foo"},
+		},
+	),
+	Entry("distinguishing additional variants from prereleases",
+		SemverTagExample{
+			Variant: "foo",
+
+			Tags: map[string]string{
+				"1.0.0-foo":             "random-1",
+				"1.0.0-rc.1-foo":        "random-2",
+				"1.0.0-alpha.1-foo":     "random-3",
+				"1.0.0-beta.1-foo":      "random-4",
+				"1.0.0-bar-foo":         "random-5",
+				"1.0.0-rc.1-bar-foo":    "random-6",
+				"1.0.0-alpha.1-bar-foo": "random-7",
+				"1.0.0-beta.1-bar-foo":  "random-8",
+			},
+
+			Versions: []string{
+				"1.0.0-alpha.1-foo",
+				"1.0.0-beta.1-foo",
+				"1.0.0-rc.1-foo",
+				"1.0.0-foo",
+			},
+		},
+	),
+	Entry("variant with bare variant tag pointing to unique digest",
+		SemverTagExample{
+			Variant: "foo",
+
+			Tags: map[string]string{
+				"latest":    "random-1",
+				"1.0.0":     "random-1",
+				"0.9.0":     "random-2",
+				"foo":       "random-3",
+				"0.8.0-foo": "random-4",
+				"bar":       "random-5",
+				"1.0.0-bar": "random-5",
+				"0.9.0-bar": "random-6",
+			},
+
+			Versions: []string{"0.8.0-foo", "foo"},
+		},
+	),
 )
 
 type SemverTagExample struct {
@@ -602,6 +662,7 @@ func (example SemverTagExample) Run() {
 	req := resource.CheckRequest{
 		Source: resource.Source{
 			Repository: repo.Name(),
+			Variant:    example.Variant,
 		},
 	}
 

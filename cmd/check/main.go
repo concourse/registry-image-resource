@@ -98,7 +98,7 @@ func main() {
 
 			repo.Registry = mirror
 
-			response, err = checkRepositoryWithRetry(req.Source.RegistryMirror.BasicCredentials, req.Version, repo)
+			response, err = checkRepositoryWithRetry(req.Source.RegistryMirror.BasicCredentials, req.Source.Variant, req.Version, repo)
 			if err != nil {
 				logrus.Warnf("checking mirror %s failed: %s", mirror.RegistryStr(), err)
 			} else if len(response) == 0 {
@@ -109,7 +109,7 @@ func main() {
 		}
 
 		if len(response) == 0 {
-			response, err = checkRepositoryWithRetry(req.Source.BasicCredentials, req.Version, repo)
+			response, err = checkRepositoryWithRetry(req.Source.BasicCredentials, req.Source.Variant, req.Version, repo)
 			if err != nil {
 				logrus.Errorf("checking origin failed: %s", err)
 				os.Exit(1)
@@ -121,11 +121,11 @@ func main() {
 	json.NewEncoder(os.Stdout).Encode(response)
 }
 
-func checkRepositoryWithRetry(principal resource.BasicCredentials, version *resource.Version, ref name.Repository) (resource.CheckResponse, error) {
+func checkRepositoryWithRetry(principal resource.BasicCredentials, variant string, version *resource.Version, ref name.Repository) (resource.CheckResponse, error) {
 	var response resource.CheckResponse
 	err := resource.RetryOnRateLimit(func() error {
 		var err error
-		response, err = checkRepository(principal, version, ref)
+		response, err = checkRepository(principal, variant, version, ref)
 		return err
 	})
 	return response, err
@@ -141,7 +141,7 @@ func checkTagWithRetry(principal resource.BasicCredentials, version *resource.Ve
 	return response, err
 }
 
-func checkRepository(principal resource.BasicCredentials, version *resource.Version, ref name.Repository) (resource.CheckResponse, error) {
+func checkRepository(principal resource.BasicCredentials, variant string, version *resource.Version, ref name.Repository) (resource.CheckResponse, error) {
 	auth := &authn.Basic{
 		Username: principal.Username,
 		Password: principal.Password,
@@ -158,6 +158,11 @@ func checkRepository(principal resource.BasicCredentials, version *resource.Vers
 		return resource.CheckResponse{}, fmt.Errorf("list repository tags: %w", err)
 	}
 
+	bareTag := "latest"
+	if variant != "" {
+		bareTag = variant
+	}
+
 	var latestTag string
 
 	versions := []*semver.Version{}
@@ -166,15 +171,37 @@ func checkRepository(principal resource.BasicCredentials, version *resource.Vers
 	digestVersions := map[string]*semver.Version{}
 	for _, identifier := range tags {
 		var ver *semver.Version
-		if identifier == "latest" {
-			// TODO: handle variants, e.g. 'alpine' is latest for
-			// 'x.x.x-alpine'
+		if identifier == bareTag {
 			latestTag = identifier
 		} else {
-			ver, err = semver.NewVersion(identifier)
+			verStr := identifier
+			if variant != "" {
+				if !strings.HasSuffix(identifier, "-"+variant) {
+					continue
+				}
+
+				verStr = strings.TrimSuffix(identifier, "-"+variant)
+			}
+
+			ver, err = semver.NewVersion(verStr)
 			if err != nil {
 				// not a version
 				continue
+			}
+
+			pre := ver.Prerelease()
+			if pre != "" {
+				// contains additional variant
+				if strings.Contains(pre, "-") {
+					continue
+				}
+
+				if !strings.HasPrefix(pre, "alpha.") &&
+					!strings.HasPrefix(pre, "beta.") &&
+					!strings.HasPrefix(pre, "rc.") {
+					// additional variant, not a prerelease segment
+					continue
+				}
 			}
 		}
 

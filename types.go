@@ -46,6 +46,7 @@ type RegistryMirror struct {
 
 type Source struct {
 	Repository string `json:"repository"`
+	Variant    string `json:"variant,omitempty"`
 	Tag        Tag    `json:"tag,omitempty"`
 
 	BasicCredentials
