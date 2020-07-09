@@ -46,8 +46,11 @@ type RegistryMirror struct {
 
 type Source struct {
 	Repository string `json:"repository"`
-	Variant    string `json:"variant,omitempty"`
-	Tag        Tag    `json:"tag,omitempty"`
+
+	PreReleases bool   `json:"pre_releases,omitempty"`
+	Variant     string `json:"variant,omitempty"`
+
+	Tag Tag `json:"tag,omitempty"`
 
 	BasicCredentials
 	AwsCredentials

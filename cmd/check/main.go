@@ -98,7 +98,7 @@ func main() {
 
 			repo.Registry = mirror
 
-			response, err = checkRepositoryWithRetry(req.Source.RegistryMirror.BasicCredentials, req.Source.Variant, req.Version, repo)
+			response, err = checkRepositoryWithRetry(req.Source.RegistryMirror.BasicCredentials, req.Source.Variant, req.Source.PreReleases, req.Version, repo)
 			if err != nil {
 				logrus.Warnf("checking mirror %s failed: %s", mirror.RegistryStr(), err)
 			} else if len(response) == 0 {
@@ -109,7 +109,7 @@ func main() {
 		}
 
 		if len(response) == 0 {
-			response, err = checkRepositoryWithRetry(req.Source.BasicCredentials, req.Source.Variant, req.Version, repo)
+			response, err = checkRepositoryWithRetry(req.Source.BasicCredentials, req.Source.Variant, req.Source.PreReleases, req.Version, repo)
 			if err != nil {
 				logrus.Errorf("checking origin failed: %s", err)
 				os.Exit(1)
@@ -121,11 +121,11 @@ func main() {
 	json.NewEncoder(os.Stdout).Encode(response)
 }
 
-func checkRepositoryWithRetry(principal resource.BasicCredentials, variant string, version *resource.Version, ref name.Repository) (resource.CheckResponse, error) {
+func checkRepositoryWithRetry(principal resource.BasicCredentials, variant string, pre bool, version *resource.Version, ref name.Repository) (resource.CheckResponse, error) {
 	var response resource.CheckResponse
 	err := resource.RetryOnRateLimit(func() error {
 		var err error
-		response, err = checkRepository(principal, variant, version, ref)
+		response, err = checkRepository(principal, variant, pre, version, ref)
 		return err
 	})
 	return response, err
@@ -141,7 +141,7 @@ func checkTagWithRetry(principal resource.BasicCredentials, version *resource.Ve
 	return response, err
 }
 
-func checkRepository(principal resource.BasicCredentials, variant string, version *resource.Version, ref name.Repository) (resource.CheckResponse, error) {
+func checkRepository(principal resource.BasicCredentials, variant string, preReleases bool, version *resource.Version, ref name.Repository) (resource.CheckResponse, error) {
 	auth := &authn.Basic{
 		Username: principal.Username,
 		Password: principal.Password,
@@ -191,6 +191,11 @@ func checkRepository(principal resource.BasicCredentials, variant string, versio
 
 			pre := ver.Prerelease()
 			if pre != "" {
+				// pre-releases not enabled; skip
+				if !preReleases {
+					continue
+				}
+
 				// contains additional variant
 				if strings.Contains(pre, "-") {
 					continue
