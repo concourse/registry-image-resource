@@ -9,7 +9,7 @@ require (
 	github.com/google/go-containerregistry v0.0.0-20191018211754-b77a90c667af
 	github.com/onsi/ginkgo v1.12.0
 	github.com/onsi/gomega v1.9.0
-	github.com/autonomic-ai/notary-gcr v0.0.6
+	github.com/autonomic-ai/notary-gcr v0.0.7
 	github.com/sirupsen/logrus v1.5.0
 	github.com/vbauerster/mpb v3.4.0+incompatible
 )
