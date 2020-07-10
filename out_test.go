@@ -376,6 +376,14 @@ var _ = DescribeTable("pushing semver tags",
 			PushedTags: []string{"1.2.3-ubuntu"},
 		},
 	),
+	Entry("no version provided",
+		SemverTagPushExample{
+			Variant: "",
+			Version: "",
+
+			Error: "no tag specified",
+		},
+	),
 )
 
 type SemverTagPushExample struct {
@@ -385,6 +393,7 @@ type SemverTagPushExample struct {
 	Version     string
 
 	PushedTags []string
+	Error      string
 }
 
 func (example SemverTagPushExample) Run() {
@@ -481,15 +490,21 @@ func (example SemverTagPushExample) Run() {
 		},
 	}
 
-	res := example.put(req, imageDir)
+	res, err := example.put(req, imageDir)
+	if example.Error != "" {
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring(example.Error))
+	} else {
+		Expect(err).ToNot(HaveOccurred())
 
-	Expect(res.Version.Tag).To(Equal(actualTags[0]))
-	Expect(res.Version.Digest).To(Equal(digest.String()))
+		Expect(actualTags).To(ConsistOf(example.PushedTags))
 
-	Expect(actualTags).To(ConsistOf(example.PushedTags))
+		Expect(res.Version.Tag).To(Equal(actualTags[0]))
+		Expect(res.Version.Digest).To(Equal(digest.String()))
+	}
 }
 
-func (example SemverTagPushExample) put(req resource.OutRequest, dir string) resource.OutResponse {
+func (example SemverTagPushExample) put(req resource.OutRequest, dir string) (resource.OutResponse, error) {
 	cmd := exec.Command(bins.Out, dir)
 	cmd.Env = []string{"TEST=true"}
 
@@ -497,17 +512,22 @@ func (example SemverTagPushExample) put(req resource.OutRequest, dir string) res
 	Expect(err).ToNot(HaveOccurred())
 
 	outBuf := new(bytes.Buffer)
+	errBuf := new(bytes.Buffer)
 
 	cmd.Stdin = bytes.NewBuffer(payload)
-	cmd.Stdout = outBuf
-	cmd.Stderr = GinkgoWriter
+	cmd.Stdout = io.MultiWriter(GinkgoWriter, outBuf)
+	cmd.Stderr = io.MultiWriter(GinkgoWriter, errBuf)
 
 	err = cmd.Run()
+	if err != nil {
+		return resource.OutResponse{}, fmt.Errorf("%w\n\nstderr:\n\n%s", err, errBuf)
+	}
+
 	Expect(err).ToNot(HaveOccurred())
 
 	var res resource.OutResponse
 	err = json.Unmarshal(outBuf.Bytes(), &res)
 	Expect(err).ToNot(HaveOccurred())
 
-	return res
+	return res, nil
 }

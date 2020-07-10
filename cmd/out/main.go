@@ -103,7 +103,9 @@ func main() {
 	}
 
 	if len(tagsToPush) == 0 {
-		panic("TODO: at least one tag must be specified")
+		logrus.Errorf("no tag specified - need either 'version:' in params or 'tag:' in source")
+		os.Exit(1)
+		return
 	}
 
 	imagePath := filepath.Join(src, req.Params.Image)
