@@ -134,25 +134,30 @@ func main() {
 			bumpMajor := true
 			bumpMinor := true
 			for _, v := range versions {
-				remoteVer, err := semver.NewVersion(v)
+				versionStr := v
+				if req.Source.Variant != "" {
+					versionStr = strings.TrimSuffix(versionStr, "-"+req.Source.Variant)
+				}
+
+				remoteVer, err := semver.NewVersion(versionStr)
 				if err != nil {
 					continue
 				}
 
-				final, err := remoteVer.SetPrerelease("")
-				if err != nil {
+				// don't compare to prereleases or other variants
+				if remoteVer.Prerelease() != "" {
 					continue
 				}
 
-				if final.GreaterThan(ver) {
+				if remoteVer.GreaterThan(ver) {
 					bumpLatest = false
 				}
 
-				if final.Major() == ver.Major() && final.Minor() > ver.Minor() {
+				if remoteVer.Major() == ver.Major() && remoteVer.Minor() > ver.Minor() {
 					bumpMajor = false
 				}
 
-				if final.Major() == ver.Major() && final.Minor() == ver.Minor() && final.Patch() > ver.Patch() {
+				if remoteVer.Major() == ver.Major() && remoteVer.Minor() == ver.Minor() && remoteVer.Patch() > ver.Patch() {
 					bumpMinor = false
 					bumpMajor = false
 				}
