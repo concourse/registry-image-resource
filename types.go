@@ -276,6 +276,18 @@ type PutParams struct {
 	// appended to this value to form the tag.
 	Version string `json:"version"`
 
+	// Bump additional alias tags after pushing the version's tag.
+	//
+	// Given a version without a prerelease, say 1.2.3:
+	//
+	// * If 1.2.3 is the latest of the 1.2.x series, push to the 1.2 tag.
+	//
+	// * If 1.2.3 is the latest of the 1.x series, push to the 1 tag.
+	//
+	// * If 1.2.3 is the latest overall, bump the variant tag, or 'latest'
+	//   if no variant is configured.
+	BumpAliases bool `json:"bump_aliases"`
+
 	// Path to a file containing line-separated tags to push.
 	AdditionalTags string `json:"additional_tags"`
 }
