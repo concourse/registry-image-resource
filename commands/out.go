@@ -105,6 +105,79 @@ func (o *Out) Execute() error {
 		}
 
 		tagsToPush = append(tagsToPush, repo.Tag(tag))
+
+		if req.Params.BumpAliases && ver.Prerelease() == "" {
+			auth := &authn.Basic{
+				Username: req.Source.Username,
+				Password: req.Source.Password,
+			}
+
+			imageOpts := []remote.Option{}
+
+			if auth.Username != "" && auth.Password != "" {
+				imageOpts = append(imageOpts, remote.WithAuth(auth))
+			}
+
+			versions, err := remote.List(repo, imageOpts...)
+			if err != nil {
+				return fmt.Errorf("list repository tags: %w", err)
+			}
+
+			bumpLatest := true
+			bumpMajor := true
+			bumpMinor := true
+			for _, v := range versions {
+				remoteVer, err := semver.NewVersion(v)
+				if err != nil {
+					continue
+				}
+
+				final, err := remoteVer.SetPrerelease("")
+				if err != nil {
+					continue
+				}
+
+				if final.GreaterThan(ver) {
+					bumpLatest = false
+				}
+
+				if final.Major() == ver.Major() && final.Minor() > ver.Minor() {
+					bumpMajor = false
+				}
+
+				if final.Major() == ver.Major() && final.Minor() == ver.Minor() && final.Patch() > ver.Patch() {
+					bumpMinor = false
+					bumpMajor = false
+				}
+			}
+
+			if bumpLatest {
+				latestTag := "latest"
+				if req.Source.Variant != "" {
+					latestTag = req.Source.Variant
+				}
+
+				tagsToPush = append(tagsToPush, repo.Tag(latestTag))
+			}
+
+			if bumpMajor {
+				tagName := fmt.Sprintf("%d", ver.Major())
+				if req.Source.Variant != "" {
+					tagName += "-" + req.Source.Variant
+				}
+
+				tagsToPush = append(tagsToPush, repo.Tag(tagName))
+			}
+
+			if bumpMinor {
+				tagName := fmt.Sprintf("%d.%d", ver.Major(), ver.Minor())
+				if req.Source.Variant != "" {
+					tagName += "-" + req.Source.Variant
+				}
+
+				tagsToPush = append(tagsToPush, repo.Tag(tagName))
+			}
+		}
 	}
 
 	additionalTags, err := req.Params.ParseAdditionalTags(src)

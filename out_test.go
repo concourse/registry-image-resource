@@ -405,13 +405,93 @@ var _ = DescribeTable("pushing semver tags",
 			Error: "no tag specified",
 		},
 	),
+	Entry("bumping aliases with no existing tags",
+		SemverTagPushExample{
+			Tags: []string{},
+
+			Variant:     "",
+			Version:     "1.2.3",
+			BumpAliases: true,
+
+			PushedTags: []string{"1.2.3", "1.2", "1", "latest"},
+		},
+	),
+	Entry("not bumping aliases if a prerelease is given",
+		SemverTagPushExample{
+			Tags: []string{},
+
+			Variant:     "",
+			Version:     "1.2.3-alpha.1",
+			BumpAliases: true,
+
+			PushedTags: []string{"1.2.3-alpha.1"},
+		},
+	),
+	Entry("bumping variant aliases with no existing tags",
+		SemverTagPushExample{
+			Tags: []string{},
+
+			Variant:     "hello",
+			Version:     "1.2.3",
+			BumpAliases: true,
+
+			PushedTags: []string{"1.2.3-hello", "1.2-hello", "1-hello", "hello"},
+		},
+	),
+	Entry("bumping aliases if only older versions exist",
+		SemverTagPushExample{
+			Tags: []string{"1.2.2"},
+
+			Variant:     "",
+			Version:     "1.2.3",
+			BumpAliases: true,
+
+			PushedTags: []string{"1.2.3", "1.2", "1", "latest"},
+		},
+	),
+	Entry("not bumping anything if a newer patch already exists",
+		SemverTagPushExample{
+			Tags: []string{"1.2.4"},
+
+			Variant:     "",
+			Version:     "1.2.3",
+			BumpAliases: true,
+
+			PushedTags: []string{"1.2.3"},
+		},
+	),
+	Entry("not bumping major if a newer minor already exists",
+		SemverTagPushExample{
+			Tags: []string{"1.3.0"},
+
+			Variant:     "",
+			Version:     "1.2.3",
+			BumpAliases: true,
+
+			PushedTags: []string{"1.2.3", "1.2"},
+		},
+	),
+	Entry("bumping minor and major, but not latest, if a newer major version exists",
+		SemverTagPushExample{
+			Tags: []string{"2.0.0"},
+
+			Variant:     "",
+			Version:     "1.2.3",
+			BumpAliases: true,
+
+			PushedTags: []string{"1.2.3", "1.2", "1"},
+		},
+	),
 )
 
 type SemverTagPushExample struct {
+	Tags []string
+
 	Variant string
 
 	ImageDigest string
 	Version     string
+	BumpAliases bool
 
 	PushedTags []string
 	Error      string
@@ -454,6 +534,15 @@ func (example SemverTagPushExample) Run() {
 		"GET",
 		"/v2/",
 		ghttp.RespondWith(http.StatusOK, ""),
+	)
+
+	registry.RouteToHandler(
+		"GET",
+		"/v2/"+repo.RepositoryStr()+"/tags/list",
+		ghttp.RespondWithJSONEncoded(http.StatusOK, registryTagsResponse{
+			Name: "some-name",
+			Tags: example.Tags,
+		}),
 	)
 
 	registry.RouteToHandler("HEAD", "/v2/test-image/blobs/"+digest.String(), func(w http.ResponseWriter, r *http.Request) {
@@ -506,8 +595,9 @@ func (example SemverTagPushExample) Run() {
 			Variant:    example.Variant,
 		},
 		Params: resource.PutParams{
-			Image:   filepath.Base(imagePath),
-			Version: example.Version,
+			Image:       filepath.Base(imagePath),
+			Version:     example.Version,
+			BumpAliases: example.BumpAliases,
 		},
 	}
 
