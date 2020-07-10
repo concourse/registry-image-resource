@@ -376,6 +376,14 @@ var _ = DescribeTable("pushing semver tags",
 			PushedTags: []string{"1.2.3-ubuntu"},
 		},
 	),
+	Entry("non-semver tag",
+		SemverTagPushExample{
+			Variant: "",
+			Version: "hoogily-boogily",
+
+			Error: `invalid semantic version: "hoogily-boogily"`,
+		},
+	),
 	Entry("no version provided",
 		SemverTagPushExample{
 			Variant: "",

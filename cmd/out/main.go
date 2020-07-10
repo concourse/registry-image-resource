@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/Masterminds/semver/v3"
 	resource "github.com/concourse/registry-image-resource"
 	"github.com/fatih/color"
 	"github.com/google/go-containerregistry/pkg/authn"
@@ -81,7 +82,29 @@ func main() {
 	}
 
 	if req.Params.Version != "" {
-		tag := req.Params.Version
+		ver, err := semver.NewVersion(req.Params.Version)
+		if err != nil {
+			if err == semver.ErrInvalidSemVer {
+				logrus.Errorf("invalid semantic version: %q", req.Params.Version)
+				os.Exit(1)
+			}
+
+			logrus.Errorf("failed to parse version: %s", err)
+			os.Exit(1)
+		}
+
+		// vito: subtle gotcha here - if someone passes the version as v1.2.3, the
+		// 'v' will be stripped, as *semver.Version parses it but does not preserve
+		// it in .String().
+		//
+		// we could call .Original(), of course, but it seems common practice to
+		// *not* have the v prefix in Docker image tags, so it might be better to
+		// just enforce it until someone complains enough; it seems more likely to
+		// be an accident than a legacy practice that must be preserved.
+		//
+		// if that's the person reading this: sorry! PR welcome! (maybe we should
+		// add tag_prefix:?)
+		tag := ver.String()
 		if req.Source.Variant != "" {
 			tag += "-" + req.Source.Variant
 		}
