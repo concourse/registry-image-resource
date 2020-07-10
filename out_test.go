@@ -427,17 +427,6 @@ var _ = DescribeTable("pushing semver tags",
 			PushedTags: []string{"1.2.3-alpha.1"},
 		},
 	),
-	Entry("bumping variant aliases with no existing tags",
-		SemverTagPushExample{
-			Tags: []string{},
-
-			Variant:     "hello",
-			Version:     "1.2.3",
-			BumpAliases: true,
-
-			PushedTags: []string{"1.2.3-hello", "1.2-hello", "1-hello", "hello"},
-		},
-	),
 	Entry("bumping aliases if only older versions exist",
 		SemverTagPushExample{
 			Tags: []string{"1.2.2"},
@@ -480,6 +469,107 @@ var _ = DescribeTable("pushing semver tags",
 			BumpAliases: true,
 
 			PushedTags: []string{"1.2.3", "1.2", "1"},
+		},
+	),
+	Entry("not bumping major if a newer non-variant minor exists",
+		// rationale: tags are representing versions of a cohesive product, so
+		// its versions should be comparable across variants.
+		SemverTagPushExample{
+			Tags: []string{"1.3.0"},
+
+			Variant:     "foo",
+			Version:     "1.2.3",
+			BumpAliases: true,
+
+			PushedTags: []string{"1.2.3-foo", "1.2-foo"},
+		},
+	),
+	Entry("bumping everything if the only available version is a prerelease",
+		SemverTagPushExample{
+			Tags: []string{"2.0.0-rc.1"},
+
+			Variant:     "",
+			Version:     "1.2.3",
+			BumpAliases: true,
+
+			PushedTags: []string{"1.2.3", "1.2", "1", "latest"},
+		},
+	),
+	Entry("bumping everything if the only available version is a different variant",
+		SemverTagPushExample{
+			Tags: []string{"2.0.0-goodbye"},
+
+			Variant:     "hello",
+			Version:     "1.2.3",
+			BumpAliases: true,
+
+			PushedTags: []string{"1.2.3-hello", "1.2-hello", "1-hello", "hello"},
+		},
+	),
+	Entry("bumping variant aliases with no existing tags",
+		SemverTagPushExample{
+			Tags: []string{},
+
+			Variant:     "hello",
+			Version:     "1.2.3",
+			BumpAliases: true,
+
+			PushedTags: []string{"1.2.3-hello", "1.2-hello", "1-hello", "hello"},
+		},
+	),
+	Entry("bumping minor and major, but not latest, if a newer major version exists with the same variant",
+		SemverTagPushExample{
+			Tags: []string{"2.0.0-hello"},
+
+			Variant:     "hello",
+			Version:     "1.2.3",
+			BumpAliases: true,
+
+			PushedTags: []string{"1.2.3-hello", "1.2-hello", "1-hello"},
+		},
+	),
+	Entry("bumping minor and major, but not latest, if a newer major version exists with the same variant",
+		SemverTagPushExample{
+			Tags: []string{"2.0.0-hello"},
+
+			Variant:     "hello",
+			Version:     "1.2.3",
+			BumpAliases: true,
+
+			PushedTags: []string{"1.2.3-hello", "1.2-hello", "1-hello"},
+		},
+	),
+	Entry("bumping aliases if only older versions exist of the same variant",
+		SemverTagPushExample{
+			Tags: []string{"1.2.2-hello"},
+
+			Variant:     "hello",
+			Version:     "1.2.3",
+			BumpAliases: true,
+
+			PushedTags: []string{"1.2.3-hello", "1.2-hello", "1-hello", "hello"},
+		},
+	),
+	Entry("not bumping anything if a newer patch already exists of the same variant",
+		SemverTagPushExample{
+			Tags: []string{"1.2.4-hello"},
+
+			Variant:     "hello",
+			Version:     "1.2.3",
+			BumpAliases: true,
+
+			PushedTags: []string{"1.2.3-hello"},
+		},
+	),
+	Entry("not bumping major if a newer minor already exists of the same variant",
+		SemverTagPushExample{
+			Tags: []string{"1.3.0-hello"},
+
+			Variant:     "hello",
+			Version:     "1.2.3",
+			BumpAliases: true,
+
+			PushedTags: []string{"1.2.3-hello", "1.2-hello"},
 		},
 	),
 )
