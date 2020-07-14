@@ -1,6 +1,20 @@
 # Registry Image Resource
 
 Supports checking, fetching, and pushing of images to Docker registries.
+This resource can be used in two ways: [with `tag`
+specified](#check-with-tag-discover-new-digests-for-the-tag) and [without
+`tag`](#check-without-tag-discover-semver-tags).
+
+With `tag` specified, `check` will detect changes to the digest the tag points
+to, and `out` will always push to the specified tag. This is to be used in
+simpler cases where no real versioning exists.
+
+With `tag` omitted, `check` will instead detect tags based on semver versions
+(e.g. `1.2.3`) and return them in semver order. With `variant` included,
+`check` will only detect semver tags that include the variant suffix (e.g.
+`1.2.3-stretch`).
+
+## Comparison to `docker-image` resource
 
 This resource is intended as a replacement for the [Docker Image
 resource](https://github.com/concourse/docker-image-resource). Here are the key
@@ -34,6 +48,10 @@ differences:
 
 * `tag`: *Optional.* Instead of monitoring semver tags, monitor a single tag
   for changes (based on digest).
+
+* `variant`: *Optional.* Detect only tags matching this variant suffix, and
+  push version tags with this suffix applied. For example, a value of
+  `stretch` would be used for tags like `1.2.3-stretch`.
 
 * `username` and `password`: *Optional.* A username and password to use when
   authenticating to the registry. Must be specified for private repos or when
@@ -111,15 +129,108 @@ registry_key: |
 
 ## Behavior
 
-### `check`: Discover new digests.
+### `check` with `tag`: discover new digests for the tag
 
 Reports the current digest that the registry has for the tag configured in
 `source`.
 
+### `check` without `tag`: discover semver tags
 
-### `in`: Fetch the image's rootfs and metadata.
+Detects tags which contain semver version numbers. Version numbers do not
+need to contain all 3 segments (major/minor/patch).
 
-Fetches an image at a digest.
+Each unique digest will be returned only once, with the most specific version
+tag available. This is to handle "alias" tags like `1`, `1.2` pointing to
+`1.2.3`.
+
+Note: the initial `check` call will return *all valid versions*, which is
+unlike most resources which only return the latest version. This is an
+intentional choice which will become the normal behavior for resources in
+the future (per concourse/rfcs#38).
+
+Example:
+
+```yaml
+resources:
+- name: concourse
+  type: registry-image
+  source: {repository: concourse/concourse}
+```
+
+The above resource definition would detect the following versions:
+
+```json
+[
+  {
+    "tag": "1.6.0",
+    "digest": "sha256:e1ad01d3227569ad869bdb6bd68cf1ea54057566c25bae38b99d92bbe9f28d78"
+  },
+  {
+    "tag": "2.0.0",
+    "digest": "sha256:9ab8d1021d97c6602abbb2c40548eab67aa7babca22f6fe33ab80f4cbf8ea92c"
+  },
+  // ...
+]
+```
+
+#### Variant tags
+
+Docker repositories have a pretty common convention of adding `-SUFFIX` to
+tags to denote "variant" images, i.e. the same version but with a different
+base image or dependency. For example, `1.2.3` vs `1.2.3-alpine`.
+
+With a `variant` value specified, only semver tags with the matching variant
+will be detected. With `variant` omitted, tags which include a variant are
+ignored.
+
+Note: some image tags actually include *mutliple* variants, e.g.
+`1.2.3-php7.3-apache`. With a variant of only `apache` configured, these tags
+will be skipped to avoid accidentally using multiple variants. In order to
+use these tags, you must specify the full variant combination, e.g.
+`php7.3-apache`.
+
+Example:
+
+```yaml
+resources:
+- name: concourse
+  type: registry-image
+  source:
+    repository: concourse/concourse
+    variant: ubuntu
+```
+
+The above resource definition would detect the following versions:
+
+```json
+[
+  {
+    "tag": "5.2.1-ubuntu",
+    "digest": "sha256:91f5d180d84ee4b2cedfae45771adac62c67c3f5f615448d3c34057c09404f27"
+  },
+  {
+    "tag": "5.2.2-ubuntu",
+    "digest": "sha256:cb631d788797f0fbbe72a00afd18e5e4bced356e1b988d1862dc9565130a6226"
+  },
+  // ...
+]
+```
+
+#### Pre-release versions
+
+By default, pre-release versions are ignored. With `pre_releases: true`, they
+will be included.
+
+Note however that variants and pre-releases both use the same syntax:
+`1.2.3-alpine` is technically also valid syntax for a Semver prerelease. For
+this reason, the resource will only consider prelease data containing
+`alpha.`, `beta.`, or `rc.` as a proper prerelease, treating anything else as
+a variant.
+
+
+### `in`: fetch an image
+
+Fetches an image at the exact digest specified by the version.
 
 #### Parameters
 
@@ -131,8 +242,8 @@ Fetches an image at a digest.
 
 The resource will produce the following files:
 
-* `./digest`: A file containing the image's digest, e.g. `sha256:...`.
-* `./tag`: A file containing the tag from `source`, e.g. `latest`.
+* `./tag`: A file containing the tag from the version.
+* `./digest`: A file containing the digest from the version, e.g. `sha256:...`.
 
 The remaining files depend on the configuration value for `format`:
 
@@ -158,20 +269,26 @@ In this format, the resource will produce the following files:
 * `./image.tar`: the OCI image tarball, suitable for passing to `docker load`.
 
 
-### `out`: Push an image up to the registry under the given tags.
+### `out`: push and tag an image
 
-Uploads an image to the registry under the tag configured in `source`.
-
-If `additional_tags` param is defined then the uploaded image will also be
-tagged with each one of the values specified in that file.
+Pushes an image to the registry as the specified tags.
 
 The currently encouraged way to build these images is by using the
 [`oci-build-task`](https://github.com/vito/oci-build-task).
+
+Tags may be specified in multiple ways:
+
+* With `tag` configured in `source`, the configured tag will always be pushed.
+* With `version` given in `params`, the image will be pushed using the version
+  number as a tag, optionally with a `variant` suffix (configured in `source`).
+* With `additional_tags` given in `params`, the image will be pushed as each
+  tag listed in the file (whitespace separated).
 
 #### Parameters
 
 * `image`: *Required.* The path to the OCI image tarball to upload. Expanded
   with [`filepath.Glob`](https://golang.org/pkg/path/filepath/#Glob).
+* `version`: *Optional.* A version number to use as a tag.
 * `additional_tags`: *Optional.* The path to a file with whitespace-separated
   list of tag values to tag the image with (in addition to the tag configured
   in `source`).
