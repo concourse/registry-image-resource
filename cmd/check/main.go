@@ -135,12 +135,21 @@ func checkRepository(source resource.Source, from *resource.Version) (resource.C
 		bareTag = source.Variant
 	}
 
-	var latestTag string
-
 	versions := []*semver.Version{}
 	versionTags := map[*semver.Version]name.Tag{}
 	tagDigests := map[string]string{}
 	digestVersions := map[string]*semver.Version{}
+
+	var cursorVer *semver.Version
+	var latestTag string
+
+	if from != nil {
+		// assess the 'from' tag first so we can skip lower version numbers
+		sort.Slice(tags, func(i, j int) bool {
+			return tags[i] == from.Tag
+		})
+	}
+
 	for _, identifier := range tags {
 		var ver *semver.Version
 		if identifier == bareTag {
@@ -180,6 +189,12 @@ func checkRepository(source resource.Source, from *resource.Version) (resource.C
 					continue
 				}
 			}
+
+			if cursorVer != nil && (cursorVer.GreaterThan(ver) || cursorVer.Equal(ver)) {
+				// optimization: don't bother fetching digests for lesser (or equal but
+				// less specific, i.e. 6.3 vs 6.3.0) version tags
+				continue
+			}
 		}
 
 		tagRef := repo.Tag(identifier)
@@ -206,6 +221,14 @@ func checkRepository(source resource.Source, from *resource.Version) (resource.C
 
 			versions = append(versions, ver)
 		}
+
+		if from != nil && identifier == from.Tag && digest.String() == from.Digest {
+			// if the 'from' version exists and has the same digest, treat its
+			// version as a cursor in the tags, only considering newer versions
+			//
+			// note: the 'from' version will always be the first one hit by this loop
+			cursorVer = ver
+		}
 	}
 
 	sort.Sort(semver.Collection(versions))
@@ -224,11 +247,6 @@ func checkRepository(source resource.Source, from *resource.Version) (resource.C
 	response := resource.CheckResponse{}
 
 	for _, ver := range tagVersions {
-		if from != nil && ver.TagName == from.Tag && ver.Digest == from.Digest {
-			// only include versions after
-			response = resource.CheckResponse{}
-		}
-
 		response = append(response, resource.Version{
 			Tag:    ver.TagName,
 			Digest: ver.Digest,
