@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"sort"
 	"strings"
@@ -120,6 +121,13 @@ func checkRepository(source resource.Source, from *resource.Version) (resource.C
 	}
 
 	imageOpts := []remote.Option{}
+
+	rt, err := transport.New(repo.Registry, auth, http.DefaultTransport, []string{repo.Scope(transport.PullScope)})
+	if err != nil {
+		return resource.CheckResponse{}, fmt.Errorf("initialize transport: %w", err)
+	}
+
+	imageOpts = append(imageOpts, remote.WithTransport(rt))
 
 	if auth.Username != "" && auth.Password != "" {
 		imageOpts = append(imageOpts, remote.WithAuth(auth))
