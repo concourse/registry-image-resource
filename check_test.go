@@ -460,8 +460,16 @@ var _ = Describe("Check", func() {
 						ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
 					),
 					ghttp.CombineHandlers(
+						ghttp.VerifyRequest("GET", "/v2/"),
+						ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
+					),
+					ghttp.CombineHandlers(
 						ghttp.VerifyRequest("GET", "/v2/fake-image/manifests/latest"),
 						ghttp.RespondWith(http.StatusTooManyRequests, "calm down"),
+					),
+					ghttp.CombineHandlers(
+						ghttp.VerifyRequest("GET", "/v2/"),
+						ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
 					),
 					ghttp.CombineHandlers(
 						ghttp.VerifyRequest("GET", "/v2/"),

@@ -96,44 +96,45 @@ func main() {
 }
 
 func checkWithRetry(source resource.Source, version *resource.Version) (resource.CheckResponse, error) {
-	var response resource.CheckResponse
-	err := resource.RetryOnRateLimit(func() error {
-		var err error
-		if source.Tag != "" {
-			response, err = checkTag(source, version)
-		} else {
-			response, err = checkRepository(source, version)
-		}
-		return err
-	})
-	return response, err
-}
-
-func checkRepository(source resource.Source, from *resource.Version) (resource.CheckResponse, error) {
 	repo, err := name.NewRepository(source.Repository, name.WeakValidation)
 	if err != nil {
 		return resource.CheckResponse{}, fmt.Errorf("resolve repository: %w", err)
 	}
 
-	auth := &authn.Basic{
-		Username: source.Username,
-		Password: source.Password,
+	var auth authn.Authenticator
+	if source.Username != "" && source.Password != "" {
+		auth = &authn.Basic{
+			Username: source.Username,
+			Password: source.Password,
+		}
+	} else {
+		auth = authn.Anonymous
 	}
 
-	imageOpts := []remote.Option{}
+	var response resource.CheckResponse
+	err = resource.RetryOnRateLimit(func() error {
+		opts := []remote.Option{remote.WithAuth(auth)}
 
-	rt, err := transport.New(repo.Registry, auth, http.DefaultTransport, []string{repo.Scope(transport.PullScope)})
-	if err != nil {
-		return resource.CheckResponse{}, fmt.Errorf("initialize transport: %w", err)
-	}
+		rt, err := transport.New(repo.Registry, auth, http.DefaultTransport, []string{repo.Scope(transport.PullScope)})
+		if err != nil {
+			return fmt.Errorf("initialize transport: %w", err)
+		}
 
-	imageOpts = append(imageOpts, remote.WithTransport(rt))
+		opts = append(opts, remote.WithTransport(rt))
 
-	if auth.Username != "" && auth.Password != "" {
-		imageOpts = append(imageOpts, remote.WithAuth(auth))
-	}
+		if source.Tag != "" {
+			response, err = checkTag(repo.Tag(source.Tag.String()), source, version, opts...)
+		} else {
+			response, err = checkRepository(repo, source, version, opts...)
+		}
+		return err
+	})
 
-	tags, err := remote.List(repo, imageOpts...)
+	return response, err
+}
+
+func checkRepository(repo name.Repository, source resource.Source, from *resource.Version, opts ...remote.Option) (resource.CheckResponse, error) {
+	tags, err := remote.List(repo, opts...)
 	if err != nil {
 		return resource.CheckResponse{}, fmt.Errorf("list repository tags: %w", err)
 	}
@@ -207,7 +208,7 @@ func checkRepository(source resource.Source, from *resource.Version) (resource.C
 
 		tagRef := repo.Tag(identifier)
 
-		digestImage, err := remote.Image(tagRef, imageOpts...)
+		digestImage, err := remote.Image(tagRef, opts...)
 		if err != nil {
 			return resource.CheckResponse{}, fmt.Errorf("get tag digest: %w", err)
 		}
@@ -288,27 +289,9 @@ func (vs TagVersions) Len() int           { return len(vs) }
 func (vs TagVersions) Less(i, j int) bool { return vs[i].Version.LessThan(vs[j].Version) }
 func (vs TagVersions) Swap(i, j int)      { vs[i], vs[j] = vs[j], vs[i] }
 
-func checkTag(source resource.Source, version *resource.Version) (resource.CheckResponse, error) {
-	repo, err := name.NewRepository(source.Repository, name.WeakValidation)
-	if err != nil {
-		return resource.CheckResponse{}, fmt.Errorf("resolve repository: %w", err)
-	}
-
-	ref := repo.Tag(source.Tag.String())
-
-	auth := &authn.Basic{
-		Username: source.Username,
-		Password: source.Password,
-	}
-
-	imageOpts := []remote.Option{}
-
-	if auth.Username != "" && auth.Password != "" {
-		imageOpts = append(imageOpts, remote.WithAuth(auth))
-	}
-
+func checkTag(tag name.Tag, source resource.Source, version *resource.Version, opts ...remote.Option) (resource.CheckResponse, error) {
 	var missingTag bool
-	image, err := remote.Image(ref, imageOpts...)
+	image, err := remote.Image(tag, opts...)
 	if err != nil {
 		missingTag = checkMissingManifest(err)
 		if !missingTag {
@@ -326,9 +309,9 @@ func checkTag(source resource.Source, version *resource.Version) (resource.Check
 
 	response := resource.CheckResponse{}
 	if version != nil && !missingTag && version.Digest != digest.String() {
-		digestRef := ref.Repository.Digest(version.Digest)
+		digestRef := tag.Repository.Digest(version.Digest)
 
-		digestImage, err := remote.Image(digestRef, imageOpts...)
+		digestImage, err := remote.Image(digestRef, opts...)
 		var missingDigest bool
 		if err != nil {
 			missingDigest = checkMissingManifest(err)
