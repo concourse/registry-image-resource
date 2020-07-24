@@ -346,6 +346,60 @@ var _ = Describe("In", func() {
 		})
 	})
 
+	Context("when implying a namespace against a mirror", func() {
+		var registry *ghttp.Server
+
+		BeforeEach(func() {
+			registry = ghttp.NewServer()
+
+			fakeImage := empty.Image
+
+			digest, err := fakeImage.Digest()
+			Expect(err).ToNot(HaveOccurred())
+
+			manifest, err := fakeImage.RawManifest()
+			Expect(err).ToNot(HaveOccurred())
+
+			config, err := fakeImage.RawConfigFile()
+			Expect(err).ToNot(HaveOccurred())
+
+			configDigest, err := fakeImage.ConfigName()
+			Expect(err).ToNot(HaveOccurred())
+
+			registry.AppendHandlers(
+				ghttp.CombineHandlers(
+					ghttp.VerifyRequest("GET", "/v2/"),
+					ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
+				),
+				ghttp.CombineHandlers(
+					ghttp.VerifyRequest("GET", "/v2/library/fake-image/manifests/"+digest.String()),
+					ghttp.RespondWith(http.StatusOK, manifest),
+				),
+				ghttp.CombineHandlers(
+					ghttp.VerifyRequest("GET", "/v2/library/fake-image/blobs/"+configDigest.String()),
+					ghttp.RespondWith(http.StatusOK, config),
+				),
+			)
+
+			req.Source = resource.Source{
+				Repository: "fake-image",
+				RegistryMirror: &resource.RegistryMirror{
+					Host: registry.Addr(),
+				},
+			}
+
+			req.Version.Digest = digest.String()
+		})
+
+		AfterEach(func() {
+			registry.Close()
+		})
+
+		It("retries", func() {
+			Expect(res.Version).To(Equal(req.Version))
+		})
+	})
+
 	Context("when the registry returns 429 Too Many Requests", func() {
 		var registry *ghttp.Server
 
@@ -422,46 +476,70 @@ var _ = Describe("In", func() {
 
 	Describe("uses a mirror", func() {
 		Context("which has the image", func() {
-			BeforeEach(func() {
-				req.Source.Repository = "fakeserver.foo:5000/concourse/test-image-static"
-				req.Source.RegistryMirror = &resource.RegistryMirror{
-					Host: name.DefaultRegistry,
-				}
+			Context("in an explicit namespace", func() {
+				BeforeEach(func() {
+					req.Source.Repository = "fakeserver.foo:5000/concourse/test-image-static"
+					req.Source.RegistryMirror = &resource.RegistryMirror{
+						Host: name.DefaultRegistry,
+					}
 
-				req.Version.Digest = LATEST_STATIC_DIGEST
-			})
+					req.Version.Digest = LATEST_STATIC_DIGEST
+				})
 
-			It("saves the rootfs and metadata", func() {
-				_, err := os.Stat(rootfsPath("Dockerfile"))
-				Expect(err).ToNot(HaveOccurred())
+				It("saves the rootfs and metadata", func() {
+					_, err := os.Stat(rootfsPath("Dockerfile"))
+					Expect(err).ToNot(HaveOccurred())
 
-				_, err = ioutil.ReadFile(filepath.Join(destDir, "digest"))
-				Expect(err).ToNot(HaveOccurred())
+					_, err = ioutil.ReadFile(filepath.Join(destDir, "digest"))
+					Expect(err).ToNot(HaveOccurred())
 
-				_, err = ioutil.ReadFile(filepath.Join(destDir, "tag"))
-				Expect(err).ToNot(HaveOccurred())
+					_, err = ioutil.ReadFile(filepath.Join(destDir, "tag"))
+					Expect(err).ToNot(HaveOccurred())
+				})
 			})
 		})
 
 		Context("which is missing the image", func() {
-			BeforeEach(func() {
-				req.Source.Repository = "concourse/test-image-static"
-				req.Source.RegistryMirror = &resource.RegistryMirror{
-					Host: "fakeserver.foo:5000",
-				}
+			Context("in an implied namespace", func() {
+				BeforeEach(func() {
+					req.Source.Repository = "concourse/test-image-static"
+					req.Source.RegistryMirror = &resource.RegistryMirror{
+						Host: "fakeserver.foo:5000",
+					}
 
-				req.Version.Digest = LATEST_STATIC_DIGEST
+					req.Version.Digest = LATEST_STATIC_DIGEST
+				})
+
+				It("saves the rootfs and metadata", func() {
+					_, err := os.Stat(rootfsPath("Dockerfile"))
+					Expect(err).ToNot(HaveOccurred())
+
+					_, err = ioutil.ReadFile(filepath.Join(destDir, "digest"))
+					Expect(err).ToNot(HaveOccurred())
+
+					_, err = ioutil.ReadFile(filepath.Join(destDir, "tag"))
+					Expect(err).ToNot(HaveOccurred())
+				})
 			})
 
-			It("saves the rootfs and metadata", func() {
-				_, err := os.Stat(rootfsPath("Dockerfile"))
-				Expect(err).ToNot(HaveOccurred())
+			Context("in an implied namespace", func() {
+				BeforeEach(func() {
+					req.Source.Repository = "busybox"
+					req.Source.Tag = "1.32.0"
+					req.Source.RegistryMirror = &resource.RegistryMirror{
+						Host: "fakeserver.foo:5000",
+					}
 
-				_, err = ioutil.ReadFile(filepath.Join(destDir, "digest"))
-				Expect(err).ToNot(HaveOccurred())
+					req.Version.Digest = LIBRARY_DIGEST
+				})
 
-				_, err = ioutil.ReadFile(filepath.Join(destDir, "tag"))
-				Expect(err).ToNot(HaveOccurred())
+				It("saves the rootfs and metadata", func() {
+					_, err := ioutil.ReadFile(filepath.Join(destDir, "digest"))
+					Expect(err).ToNot(HaveOccurred())
+
+					_, err = ioutil.ReadFile(filepath.Join(destDir, "tag"))
+					Expect(err).ToNot(HaveOccurred())
+				})
 			})
 		})
 	})
