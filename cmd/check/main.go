@@ -48,24 +48,29 @@ func main() {
 
 	var mirrorSource *resource.Source
 	if req.Source.RegistryMirror != nil {
-		mirror, err := name.NewRegistry(req.Source.RegistryMirror.Host, name.WeakValidation)
+		origin, err := name.NewRepository(req.Source.Repository)
+		if err != nil {
+			logrus.Errorf("could not resolve origin repository: %s", err)
+			os.Exit(1)
+			return
+		}
+
+		mirror, err := name.NewRepository(origin.String())
+		if err != nil {
+			logrus.Errorf("could not resolve mirror repository: %s", err)
+			os.Exit(1)
+			return
+		}
+
+		mirror.Registry, err = name.NewRegistry(req.Source.RegistryMirror.Host, name.WeakValidation)
 		if err != nil {
 			logrus.Errorf("could not resolve registry: %s", err)
 			os.Exit(1)
 			return
 		}
 
-		repo, err := name.NewRepository(req.Source.Repository)
-		if err != nil {
-			logrus.Errorf("could not resolve repository: %s", err)
-			os.Exit(1)
-			return
-		}
-
-		repo.Registry = mirror
-
 		copy := req.Source
-		copy.Repository = repo.String()
+		copy.Repository = mirror.String()
 		copy.BasicCredentials = req.Source.RegistryMirror.BasicCredentials
 		copy.RegistryMirror = nil
 
