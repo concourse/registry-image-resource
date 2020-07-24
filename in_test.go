@@ -425,7 +425,7 @@ var _ = Describe("In", func() {
 		})
 	})
 
-	Describe("uses a mirror", func() {
+	Describe("using a mirror", func() {
 		Context("which has the image", func() {
 			BeforeEach(func() {
 				req.Source.Repository = "fakeserver.foo:5000/concourse/test-image-static"
@@ -446,6 +446,20 @@ var _ = Describe("In", func() {
 
 				_, err = ioutil.ReadFile(filepath.Join(destDir, "tag"))
 				Expect(err).ToNot(HaveOccurred())
+			})
+
+			Context("saving an OCI tarball", func() {
+				BeforeEach(func() {
+					req.Params.RawFormat = "oci"
+				})
+
+				It("names the image with the original repository and tag, not the mirror", func() {
+					tag, err := name.NewTag("fakeserver.foo:5000/concourse/test-image-static:latest", name.WeakValidation)
+					Expect(err).ToNot(HaveOccurred())
+
+					_, err = tarball.ImageFromPath(filepath.Join(destDir, "image.tar"), &tag)
+					Expect(err).ToNot(HaveOccurred())
+				})
 			})
 		})
 
