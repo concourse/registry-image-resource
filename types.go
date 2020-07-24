@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -15,6 +16,10 @@ import (
 	"github.com/aws/aws-sdk-go/aws/credentials/stscreds"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ecr"
+	"github.com/google/go-containerregistry/pkg/authn"
+	"github.com/google/go-containerregistry/pkg/name"
+	"github.com/google/go-containerregistry/pkg/v1/remote"
+	"github.com/google/go-containerregistry/pkg/v1/remote/transport"
 	"github.com/sirupsen/logrus"
 )
 
@@ -81,6 +86,54 @@ type Source struct {
 	ContentTrust *ContentTrust `json:"content_trust,omitempty"`
 
 	Debug bool `json:"debug,omitempty"`
+}
+
+func (source Source) Mirror() (Source, bool, error) {
+	if source.RegistryMirror == nil {
+		return Source{}, false, nil
+	}
+
+	repo, err := name.NewRepository(source.Repository)
+	if err != nil {
+		return Source{}, false, fmt.Errorf("parse repository: %w", err)
+	}
+
+	mirror, err := name.NewRegistry(source.RegistryMirror.Host, name.WeakValidation)
+	if err != nil {
+		return Source{}, false, fmt.Errorf("parse mirror registry: %w", err)
+	}
+
+	repo.Registry = mirror
+
+	copy := source
+	copy.Repository = repo.String()
+	copy.BasicCredentials = source.RegistryMirror.BasicCredentials
+	copy.RegistryMirror = nil
+
+	return copy, true, nil
+}
+
+func (source Source) AuthOptions(repo name.Repository) ([]remote.Option, error) {
+	var auth authn.Authenticator
+	if source.Username != "" && source.Password != "" {
+		auth = &authn.Basic{
+			Username: source.Username,
+			Password: source.Password,
+		}
+	} else {
+		auth = authn.Anonymous
+	}
+
+	opts := []remote.Option{remote.WithAuth(auth)}
+
+	rt, err := transport.New(repo.Registry, auth, http.DefaultTransport, []string{repo.Scope(transport.PullScope)})
+	if err != nil {
+		return nil, fmt.Errorf("initialize transport: %w", err)
+	}
+
+	opts = append(opts, remote.WithTransport(rt))
+
+	return opts, nil
 }
 
 type ContentTrust struct {

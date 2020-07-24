@@ -4,14 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"net/http"
 	"os"
 	"sort"
 	"strings"
 
 	"github.com/Masterminds/semver/v3"
 	resource "github.com/concourse/registry-image-resource"
-	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/logs"
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
@@ -46,36 +44,17 @@ func main() {
 		}
 	}
 
-	var mirrorSource *resource.Source
-	if req.Source.RegistryMirror != nil {
-		mirror, err := name.NewRegistry(req.Source.RegistryMirror.Host, name.WeakValidation)
-		if err != nil {
-			logrus.Errorf("could not resolve registry: %s", err)
-			os.Exit(1)
-			return
-		}
-
-		repo, err := name.NewRepository(req.Source.Repository)
-		if err != nil {
-			logrus.Errorf("could not resolve repository: %s", err)
-			os.Exit(1)
-			return
-		}
-
-		repo.Registry = mirror
-
-		copy := req.Source
-		copy.Repository = repo.String()
-		copy.BasicCredentials = req.Source.RegistryMirror.BasicCredentials
-		copy.RegistryMirror = nil
-
-		mirrorSource = &copy
+	mirrorSource, hasMirror, err := req.Source.Mirror()
+	if err != nil {
+		logrus.Errorf("failed to resolve mirror: %s", err)
+		os.Exit(1)
+		return
 	}
 
 	var response resource.CheckResponse
 
-	if mirrorSource != nil {
-		response, err = checkWithRetry(*mirrorSource, req.Version)
+	if hasMirror {
+		response, err = checkWithRetry(mirrorSource, req.Version)
 		if err != nil {
 			logrus.Warnf("checking mirror %s failed: %s", mirrorSource.Repository, err)
 		} else if len(response) == 0 {
@@ -101,26 +80,12 @@ func checkWithRetry(source resource.Source, version *resource.Version) (resource
 		return resource.CheckResponse{}, fmt.Errorf("resolve repository: %w", err)
 	}
 
-	var auth authn.Authenticator
-	if source.Username != "" && source.Password != "" {
-		auth = &authn.Basic{
-			Username: source.Username,
-			Password: source.Password,
-		}
-	} else {
-		auth = authn.Anonymous
-	}
-
 	var response resource.CheckResponse
 	err = resource.RetryOnRateLimit(func() error {
-		opts := []remote.Option{remote.WithAuth(auth)}
-
-		rt, err := transport.New(repo.Registry, auth, http.DefaultTransport, []string{repo.Scope(transport.PullScope)})
+		opts, err := source.AuthOptions(repo)
 		if err != nil {
-			return fmt.Errorf("initialize transport: %w", err)
+			return err
 		}
-
-		opts = append(opts, remote.WithTransport(rt))
 
 		if source.Tag != "" {
 			response, err = checkTag(repo.Tag(source.Tag.String()), source, version, opts...)
