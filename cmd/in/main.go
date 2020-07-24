@@ -81,24 +81,26 @@ func main() {
 		digest := new(name.Digest)
 
 		if req.Source.RegistryMirror != nil {
-			origin := repo.Registry
+			mirror, err := name.NewRepository(repo.String())
+			if err != nil {
+				logrus.Errorf("could not resolve mirror repository: %s", err)
+				os.Exit(1)
+				return
+			}
 
-			mirror, err := name.NewRegistry(req.Source.RegistryMirror.Host, name.WeakValidation)
+			mirror.Registry, err = name.NewRegistry(req.Source.RegistryMirror.Host, name.WeakValidation)
 			if err != nil {
 				logrus.Errorf("could not resolve registry reference: %s", err)
 				os.Exit(1)
 				return
 			}
 
-			repo.Registry = mirror
-			*digest = repo.Digest(req.Version.Digest)
+			*digest = mirror.Digest(req.Version.Digest)
 
 			image, err = getWithRetry(req.Source.RegistryMirror.BasicCredentials, *digest)
 			if err != nil {
 				logrus.Warnf("fetching mirror %s failed: %s", digest.RegistryStr(), err)
 			}
-
-			repo.Registry = origin
 		}
 
 		if image == nil {
