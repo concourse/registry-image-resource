@@ -47,7 +47,7 @@ func main() {
 	}
 
 	if len(os.Args) < 2 {
-		logrus.Errorf("destination path not specified")
+		logrus.Error("destination path not specified")
 		os.Exit(1)
 		return
 	}
@@ -125,7 +125,7 @@ func main() {
 
 			versions, err := remote.List(repo, imageOpts...)
 			if err != nil {
-				logrus.Errorf("failed to list repository tags: %w", err)
+				logrus.Error("failed to list repository tags: %w", err)
 				os.Exit(1)
 				return
 			}
@@ -206,7 +206,7 @@ func main() {
 	}
 
 	if len(tagsToPush) == 0 {
-		logrus.Errorf("no tag specified - need either 'version:' in params or 'tag:' in source")
+		logrus.Error("no tag specified - need either 'version:' in params or 'tag:' in source")
 		os.Exit(1)
 		return
 	}

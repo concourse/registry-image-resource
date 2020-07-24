@@ -51,7 +51,7 @@ func main() {
 	}
 
 	if len(os.Args) < 2 {
-		logrus.Errorf("destination path not specified")
+		logrus.Error("destination path not specified")
 		os.Exit(1)
 		return
 	}

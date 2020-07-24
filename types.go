@@ -212,7 +212,7 @@ func (source *Source) AuthenticateToECR() bool {
 		if len(split) == 2 {
 			source.Password = strings.TrimSpace(split[1])
 		} else {
-			logrus.Errorf("failed to parse password.")
+			logrus.Error("failed to parse password.")
 			return false
 		}
 	}
