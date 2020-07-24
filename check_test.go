@@ -115,21 +115,42 @@ var _ = Describe("Check", func() {
 				})
 
 				Context("which is missing the image", func() {
-					BeforeEach(func() {
-						req.Source = resource.Source{
-							Repository: "concourse/test-image-static",
-							Tag:        "latest",
+					Context("in an explicit namespace", func() {
+						BeforeEach(func() {
+							req.Source = resource.Source{
+								Repository: "concourse/test-image-static",
+								Tag:        "latest",
 
-							RegistryMirror: &resource.RegistryMirror{
-								Host: "fakeserver.foo:5000",
-							},
-						}
+								RegistryMirror: &resource.RegistryMirror{
+									Host: "fakeserver.foo:5000",
+								},
+							}
+						})
+
+						It("returns the current digest", func() {
+							Expect(res).To(Equal([]resource.Version{
+								{Digest: LATEST_STATIC_DIGEST},
+							}))
+						})
 					})
 
-					It("returns the current digest", func() {
-						Expect(res).To(Equal([]resource.Version{
-							{Digest: LATEST_STATIC_DIGEST},
-						}))
+					Context("in an implied namespace", func() {
+						BeforeEach(func() {
+							req.Source = resource.Source{
+								Repository: "busybox",
+								Tag:        "1.32.0",
+
+								RegistryMirror: &resource.RegistryMirror{
+									Host: "fakeserver.foo:5000",
+								},
+							}
+						})
+
+						It("returns the current digest", func() {
+							Expect(res).To(Equal([]resource.Version{
+								{Digest: LIBRARY_DIGEST},
+							}))
+						})
 					})
 				})
 			})
@@ -204,25 +225,50 @@ var _ = Describe("Check", func() {
 				})
 
 				Context("which is missing the image", func() {
-					BeforeEach(func() {
-						req.Source = resource.Source{
-							Repository: "concourse/test-image-static",
-							Tag:        "latest",
+					Context("in an explicit namespace", func() {
+						BeforeEach(func() {
+							req.Source = resource.Source{
+								Repository: "concourse/test-image-static",
+								Tag:        "latest",
 
-							RegistryMirror: &resource.RegistryMirror{
-								Host: "fakeserver.foo:5000",
-							},
-						}
+								RegistryMirror: &resource.RegistryMirror{
+									Host: "fakeserver.foo:5000",
+								},
+							}
 
-						req.Version = &resource.Version{
-							Digest: LATEST_STATIC_DIGEST,
-						}
+							req.Version = &resource.Version{
+								Digest: LATEST_STATIC_DIGEST,
+							}
+						})
+
+						It("returns the current digest", func() {
+							Expect(res).To(Equal([]resource.Version{
+								{Digest: LATEST_STATIC_DIGEST},
+							}))
+						})
 					})
 
-					It("returns the current digest", func() {
-						Expect(res).To(Equal([]resource.Version{
-							{Digest: LATEST_STATIC_DIGEST},
-						}))
+					Context("in an implied namespace", func() {
+						BeforeEach(func() {
+							req.Source = resource.Source{
+								Repository: "busybox",
+								Tag:        "1.32.0",
+
+								RegistryMirror: &resource.RegistryMirror{
+									Host: "fakeserver.foo:5000",
+								},
+							}
+
+							req.Version = &resource.Version{
+								Digest: LATEST_STATIC_DIGEST,
+							}
+						})
+
+						It("returns the current digest", func() {
+							Expect(res).To(Equal([]resource.Version{
+								{Digest: LIBRARY_DIGEST},
+							}))
+						})
 					})
 				})
 			})
@@ -371,6 +417,7 @@ var _ = Describe("Check", func() {
 
 			Context("against a mirror", func() {
 				Context("which has the image", func() {
+
 					BeforeEach(func() {
 						req.Source = resource.Source{
 							Repository: "fakeserver.foo:5000/concourse/test-image-static",
@@ -390,21 +437,42 @@ var _ = Describe("Check", func() {
 				})
 
 				Context("which is missing the image", func() {
-					BeforeEach(func() {
-						req.Source = resource.Source{
-							Repository: "concourse/test-image-static",
-							Tag:        "latest",
+					Context("in an explicit namespace", func() {
+						BeforeEach(func() {
+							req.Source = resource.Source{
+								Repository: "concourse/test-image-static",
+								Tag:        "latest",
 
-							RegistryMirror: &resource.RegistryMirror{
-								Host: "fakeserver.foo:5000",
-							},
-						}
+								RegistryMirror: &resource.RegistryMirror{
+									Host: "fakeserver.foo:5000",
+								},
+							}
+						})
+
+						It("returns the current digest", func() {
+							Expect(res).To(Equal([]resource.Version{
+								{Digest: LATEST_STATIC_DIGEST},
+							}))
+						})
 					})
 
-					It("returns the current digest", func() {
-						Expect(res).To(Equal([]resource.Version{
-							{Digest: LATEST_STATIC_DIGEST},
-						}))
+					Context("in an implied namespace", func() {
+						BeforeEach(func() {
+							req.Source = resource.Source{
+								Repository: "busybox",
+								Tag:        "1.32.0",
+
+								RegistryMirror: &resource.RegistryMirror{
+									Host: "fakeserver.foo:5000",
+								},
+							}
+						})
+
+						It("returns the current digest", func() {
+							Expect(res).To(Equal([]resource.Version{
+								{Digest: LIBRARY_DIGEST},
+							}))
+						})
 					})
 				})
 			})
@@ -441,6 +509,44 @@ var _ = Describe("Check", func() {
 				It("returns empty digest", func() {
 					Expect(res).To(Equal([]resource.Version{}))
 				})
+			})
+		})
+
+		Context("when implying a namespace against a mirror", func() {
+			var registry *ghttp.Server
+
+			BeforeEach(func() {
+				registry = ghttp.NewServer()
+
+				registry.AppendHandlers(
+					ghttp.CombineHandlers(
+						ghttp.VerifyRequest("GET", "/v2/"),
+						ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
+					),
+					ghttp.CombineHandlers(
+						ghttp.VerifyRequest("GET", "/v2/library/fake-image/manifests/latest"),
+						ghttp.RespondWith(http.StatusOK, `{"fake":"manifest"}`),
+					),
+				)
+
+				req.Source = resource.Source{
+					Repository: "fake-image",
+					Tag:        "latest",
+					RegistryMirror: &resource.RegistryMirror{
+						Host: registry.Addr(),
+					},
+				}
+			})
+
+			AfterEach(func() {
+				registry.Close()
+			})
+
+			It("retries", func() {
+				Expect(res).To(Equal([]resource.Version{
+					// sha256 of {"fake":"manifest"}
+					{Digest: "sha256:c4c25c2cd70e3071f08cf124c4b5c656c061dd38247d166d97098d58eeea8aa6"},
+				}))
 			})
 		})
 
