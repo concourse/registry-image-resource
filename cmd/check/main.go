@@ -144,7 +144,6 @@ func checkRepository(repo name.Repository, source resource.Source, from *resourc
 		bareTag = source.Variant
 	}
 
-	versions := []*semver.Version{}
 	versionTags := map[*semver.Version]name.Tag{}
 	tagDigests := map[string]string{}
 	digestVersions := map[string]*semver.Version{}
@@ -227,8 +226,6 @@ func checkRepository(repo name.Repository, source resource.Source, from *resourc
 			if !found || strings.Count(ver.Original(), ".") > strings.Count(existing.Original(), ".") {
 				digestVersions[digest.String()] = ver
 			}
-
-			versions = append(versions, ver)
 		}
 
 		if from != nil && identifier == from.Tag && digest.String() == from.Digest {
@@ -239,8 +236,6 @@ func checkRepository(repo name.Repository, source resource.Source, from *resourc
 			cursorVer = ver
 		}
 	}
-
-	sort.Sort(semver.Collection(versions))
 
 	var tagVersions TagVersions
 	for digest, version := range digestVersions {
