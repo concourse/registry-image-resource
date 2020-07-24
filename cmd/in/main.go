@@ -10,11 +10,9 @@ import (
 
 	resource "github.com/concourse/registry-image-resource"
 	color "github.com/fatih/color"
-	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/logs"
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
-	"github.com/google/go-containerregistry/pkg/v1/empty"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/google/go-containerregistry/pkg/v1/tarball"
 	"github.com/sirupsen/logrus"
@@ -65,9 +63,9 @@ func main() {
 		}
 	}
 
-	repo, err := name.NewRepository(req.Source.Repository, name.WeakValidation)
+	repo, err := name.NewRepository(req.Source.Repository)
 	if err != nil {
-		logrus.Errorf("failed to resolve repository: %s", err)
+		logrus.Errorf("could not resolve repository: %s", err)
 		os.Exit(1)
 		return
 	}
@@ -75,99 +73,78 @@ func main() {
 	tag := repo.Tag(req.Version.Tag)
 
 	if !req.Params.SkipDownload {
-		fmt.Fprintf(os.Stderr, "fetching %s@%s\n", color.GreenString(req.Source.Repository), color.YellowString(req.Version.Digest))
-
-		var image v1.Image
-		digest := new(name.Digest)
-
-		if req.Source.RegistryMirror != nil {
-			origin := repo.Registry
-
-			mirror, err := name.NewRegistry(req.Source.RegistryMirror.Host, name.WeakValidation)
-			if err != nil {
-				logrus.Errorf("could not resolve registry reference: %s", err)
-				os.Exit(1)
-				return
-			}
-
-			repo.Registry = mirror
-			*digest = repo.Digest(req.Version.Digest)
-
-			image, err = getWithRetry(req.Source.RegistryMirror.BasicCredentials, *digest)
-			if err != nil {
-				logrus.Warnf("fetching mirror %s failed: %s", digest.RegistryStr(), err)
-			}
-
-			repo.Registry = origin
-		}
-
-		if image == nil {
-			*digest = repo.Digest(req.Version.Digest)
-			image, err = getWithRetry(req.Source.BasicCredentials, *digest)
-			if err != nil {
-				logrus.Errorf("fetching origin %s failed: %s", digest.RegistryStr(), err)
-				os.Exit(1)
-				return
-			}
-		}
-
-		err = saveWithRetry(dest, tag, image, req.Params.Format(), req.Source.Debug)
+		mirrorSource, hasMirror, err := req.Source.Mirror()
 		if err != nil {
-			logrus.Errorf("saving image: %s", err)
+			logrus.Errorf("failed to resolve mirror: %s", err)
 			os.Exit(1)
 			return
 		}
+
+		usedMirror := false
+		if hasMirror {
+			err := downloadWithRetry(tag, mirrorSource, req.Params, req.Version, dest)
+			if err != nil {
+				logrus.Warnf("download from mirror %s failed: %s", mirrorSource.Repository, err)
+			} else {
+				usedMirror = true
+			}
+		}
+
+		if !usedMirror {
+			err := downloadWithRetry(tag, req.Source, req.Params, req.Version, dest)
+			if err != nil {
+				logrus.Errorf("download failed: %s", err)
+				os.Exit(1)
+				return
+			}
+		}
+	}
+
+	err = saveVersionInfo(dest, req.Version)
+	if err != nil {
+		logrus.Errorf("saving version info failed: %s", err)
+		os.Exit(1)
+		return
 	}
 
 	json.NewEncoder(os.Stdout).Encode(resource.InResponse{
 		Version: req.Version,
 		Metadata: append(req.Source.Metadata(), resource.MetadataField{
 			Name:  "tag",
-			Value: tag.TagStr(),
+			Value: req.Version.Tag,
 		}),
 	})
 }
 
-func getWithRetry(principal resource.BasicCredentials, digest name.Digest) (v1.Image, error) {
-	var image v1.Image
-	err := resource.RetryOnRateLimit(func() error {
-		var err error
-		image, err = get(principal, digest)
-		return err
-	})
-	return image, err
-}
+func downloadWithRetry(tag name.Tag, source resource.Source, params resource.GetParams, version resource.Version, dest string) error {
+	fmt.Fprintf(os.Stderr, "fetching %s@%s\n", color.GreenString(source.Repository), color.YellowString(version.Digest))
 
-func get(principal resource.BasicCredentials, digest name.Digest) (v1.Image, error) {
-	auth := &authn.Basic{
-		Username: principal.Username,
-		Password: principal.Password,
-	}
-
-	imageOpts := []remote.Option{}
-
-	if auth.Username != "" && auth.Password != "" {
-		imageOpts = append(imageOpts, remote.WithAuth(auth))
-	}
-
-	image, err := remote.Image(digest, imageOpts...)
+	repo, err := name.NewRepository(source.Repository, name.WeakValidation)
 	if err != nil {
-		return nil, fmt.Errorf("locate remote image: %w", err)
-	}
-	if image == empty.Image {
-		return nil, fmt.Errorf("download image")
+		return fmt.Errorf("resolve repository name: %w", err)
 	}
 
-	return image, err
-}
-
-func saveWithRetry(dest string, tag name.Tag, image v1.Image, format string, debug bool) error {
 	return resource.RetryOnRateLimit(func() error {
-		return save(dest, tag, image, format, debug)
+		opts, err := source.AuthOptions(repo)
+		if err != nil {
+			return err
+		}
+
+		image, err := remote.Image(repo.Digest(version.Digest), opts...)
+		if err != nil {
+			return fmt.Errorf("get image: %w", err)
+		}
+
+		err = saveImage(dest, tag, image, params.Format(), source.Debug)
+		if err != nil {
+			return fmt.Errorf("save image: %w", err)
+		}
+
+		return nil
 	})
 }
 
-func save(dest string, tag name.Tag, image v1.Image, format string, debug bool) error {
+func saveImage(dest string, tag name.Tag, image v1.Image, format string, debug bool) error {
 	switch format {
 	case "oci":
 		err := ociFormat(dest, tag, image)
@@ -181,27 +158,21 @@ func save(dest string, tag name.Tag, image v1.Image, format string, debug bool) 
 		}
 	}
 
-	err := ioutil.WriteFile(filepath.Join(dest, "tag"), []byte(tag.TagStr()), 0644)
-	if err != nil {
-		return fmt.Errorf("save image tag: %w", err)
-	}
-
-	err = saveDigest(dest, image)
-	if err != nil {
-		return fmt.Errorf("save image digest: %w", err)
-	}
-
-	return err
+	return nil
 }
 
-func saveDigest(dest string, image v1.Image) error {
-	digest, err := image.Digest()
+func saveVersionInfo(dest string, version resource.Version) error {
+	err := ioutil.WriteFile(filepath.Join(dest, "tag"), []byte(version.Tag), 0644)
 	if err != nil {
-		return fmt.Errorf("get image digest: %w", err)
+		return fmt.Errorf("write image tag: %w", err)
 	}
 
-	digestDest := filepath.Join(dest, "digest")
-	return ioutil.WriteFile(digestDest, []byte(digest.String()), 0644)
+	err = ioutil.WriteFile(filepath.Join(dest, "digest"), []byte(version.Digest), 0644)
+	if err != nil {
+		return fmt.Errorf("write image digest: %w", err)
+	}
+
+	return nil
 }
 
 func ociFormat(dest string, tag name.Tag, image v1.Image) error {

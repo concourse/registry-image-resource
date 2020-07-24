@@ -324,7 +324,7 @@ var _ = Describe("In", func() {
 		})
 	})
 
-	Describe("skips the download", func() {
+	Describe("skipping the download", func() {
 		BeforeEach(func() {
 			req.Source.Repository = "concourse/test-image-static"
 			req.Params.SkipDownload = true
@@ -332,21 +332,25 @@ var _ = Describe("In", func() {
 			req.Version.Digest = LATEST_STATIC_DIGEST
 		})
 
-		It("does not save any files", func() {
+		It("does not download the image", func() {
 			_, err := os.Stat(filepath.Join(destDir, "rootfs"))
 			Expect(os.IsNotExist(err)).To(BeTrue())
 
 			_, err = os.Stat(filepath.Join(destDir, "manifest.json"))
 			Expect(os.IsNotExist(err)).To(BeTrue())
 
-			_, err = os.Stat(filepath.Join(destDir, "digest"))
-			Expect(os.IsNotExist(err)).To(BeTrue())
-
-			_, err = os.Stat(filepath.Join(destDir, "tag"))
-			Expect(os.IsNotExist(err)).To(BeTrue())
-
 			_, err = os.Stat(filepath.Join(destDir, "image.tar"))
 			Expect(os.IsNotExist(err)).To(BeTrue())
+		})
+
+		It("saves the tag and digest files", func() {
+			digest, err := ioutil.ReadFile(filepath.Join(destDir, "digest"))
+			Expect(err).ToNot(HaveOccurred())
+			Expect(string(digest)).To(Equal(LATEST_STATIC_DIGEST))
+
+			tag, err := ioutil.ReadFile(filepath.Join(destDir, "tag"))
+			Expect(err).ToNot(HaveOccurred())
+			Expect(string(tag)).To(Equal("latest"))
 		})
 	})
 
@@ -371,13 +375,27 @@ var _ = Describe("In", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			registry.AppendHandlers(
-				// immediate 429
+				// immediate 429 on transport setup
+				ghttp.CombineHandlers(
+					ghttp.VerifyRequest("GET", "/v2/"),
+					ghttp.RespondWith(http.StatusTooManyRequests, "calm down"),
+				),
+
+				// 429 following transport setup
+				ghttp.CombineHandlers(
+					ghttp.VerifyRequest("GET", "/v2/"),
+					ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
+				),
 				ghttp.CombineHandlers(
 					ghttp.VerifyRequest("GET", "/v2/"),
 					ghttp.RespondWith(http.StatusTooManyRequests, "calm down"),
 				),
 
 				// 429 on manifest fetch
+				ghttp.CombineHandlers(
+					ghttp.VerifyRequest("GET", "/v2/"),
+					ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
+				),
 				ghttp.CombineHandlers(
 					ghttp.VerifyRequest("GET", "/v2/"),
 					ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
@@ -393,6 +411,10 @@ var _ = Describe("In", func() {
 					ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
 				),
 				ghttp.CombineHandlers(
+					ghttp.VerifyRequest("GET", "/v2/"),
+					ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
+				),
+				ghttp.CombineHandlers(
 					ghttp.VerifyRequest("GET", "/v2/fake-image/manifests/"+digest.String()),
 					ghttp.RespondWith(http.StatusOK, manifest),
 				),
@@ -401,7 +423,19 @@ var _ = Describe("In", func() {
 					ghttp.RespondWith(http.StatusTooManyRequests, "calm down"),
 				),
 
-				// successful sequence following a pseudo-checkpoint
+				// successful sequence
+				ghttp.CombineHandlers(
+					ghttp.VerifyRequest("GET", "/v2/"),
+					ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
+				),
+				ghttp.CombineHandlers(
+					ghttp.VerifyRequest("GET", "/v2/"),
+					ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
+				),
+				ghttp.CombineHandlers(
+					ghttp.VerifyRequest("GET", "/v2/fake-image/manifests/"+digest.String()),
+					ghttp.RespondWith(http.StatusOK, manifest),
+				),
 				ghttp.CombineHandlers(
 					ghttp.VerifyRequest("GET", "/v2/fake-image/blobs/"+configDigest.String()),
 					ghttp.RespondWith(http.StatusOK, config),
