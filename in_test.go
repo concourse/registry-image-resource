@@ -249,6 +249,7 @@ var _ = Describe("In", func() {
 			checkDockerPrivateUserConfigured()
 
 			req.Version = resource.Version{
+				Tag:    "latest",
 				Digest: PRIVATE_LATEST_STATIC_DIGEST,
 			}
 		})
@@ -265,6 +266,7 @@ var _ = Describe("In", func() {
 			req.Source.Repository = "concourse/test-image-static"
 			req.Params.RawFormat = "oci"
 
+			req.Version.Tag = "latest"
 			req.Version.Digest, manifest = latestManifest(req.Source.Repository)
 		})
 
@@ -295,6 +297,7 @@ var _ = Describe("In", func() {
 	Describe("saving the digest", func() {
 		BeforeEach(func() {
 			req.Source.Repository = "concourse/test-image-static"
+			req.Version.Tag = "latest"
 			req.Version.Digest = LATEST_STATIC_DIGEST
 		})
 
@@ -325,6 +328,7 @@ var _ = Describe("In", func() {
 		BeforeEach(func() {
 			req.Source.Repository = "concourse/test-image-static"
 			req.Params.SkipDownload = true
+			req.Version.Tag = "latest"
 			req.Version.Digest = LATEST_STATIC_DIGEST
 		})
 
@@ -408,6 +412,7 @@ var _ = Describe("In", func() {
 				Repository: registry.Addr() + "/fake-image",
 			}
 
+			req.Version.Tag = "latest"
 			req.Version.Digest = digest.String()
 		})
 
@@ -428,6 +433,7 @@ var _ = Describe("In", func() {
 					Host: name.DefaultRegistry,
 				}
 
+				req.Version.Tag = "latest"
 				req.Version.Digest = LATEST_STATIC_DIGEST
 			})
 
@@ -450,6 +456,7 @@ var _ = Describe("In", func() {
 					Host: "fakeserver.foo:5000",
 				}
 
+				req.Version.Tag = "latest"
 				req.Version.Digest = LATEST_STATIC_DIGEST
 			})
 
