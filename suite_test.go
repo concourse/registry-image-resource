@@ -20,6 +20,12 @@ var bins struct {
 	Check string `json:"check"`
 }
 
+// sha256 of {"fake":"outdated"} and {"fake":"manifest"}
+const OLDER_FAKE_DIGEST = "sha256:f5361183777fc8973760829d7cd24c37e3fab6d86c8fe6ae42851c305805c01b"
+const LATEST_FAKE_DIGEST = "sha256:c4c25c2cd70e3071f08cf124c4b5c656c061dd38247d166d97098d58eeea8aa6"
+
+const OLDER_LIBRARY_DIGEST = "sha256:2131f09e4044327fd101ca1fd4043e6f3ad921ae7ee901e9142e6e36b354a907"
+
 // see testdata/static/Dockerfile
 const OLDER_STATIC_DIGEST = "sha256:7dabedca9d367a71d1cd646bd8d79f14de7b07327e4417ab691f5f13be5647a9"
 const LATEST_STATIC_DIGEST = "sha256:fc484c7e21a5616c600778d7ee720b3adfe1373c896be4f068c3da4a205d4a2e"
