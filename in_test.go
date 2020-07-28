@@ -125,17 +125,28 @@ var _ = Describe("In", func() {
 	})
 
 	Describe("file attributes", func() {
+		var stat os.FileInfo
+
 		BeforeEach(func() {
 			req.Source.Repository = "concourse/test-image-file-perms-mtime"
 			req.Version.Digest = latestDigest(req.Source.Repository)
 		})
 
-		It("keeps file ownership, permissions, and modified times", func() {
-			stat, err := os.Stat(rootfsPath("home", "alex", "birthday"))
+		JustBeforeEach(func() {
+			var err error
+			stat, err = os.Stat(rootfsPath("home", "alex", "birthday"))
 			Expect(err).ToNot(HaveOccurred())
+		})
 
+		It("keeps file permissions and file modified times", func() {
 			Expect(stat.Mode()).To(Equal(os.FileMode(0603)))
 			Expect(stat.ModTime()).To(BeTemporally("==", time.Date(1991, 06, 03, 05, 30, 30, 0, time.UTC)))
+		})
+
+		It("keeps file ownership", func() {
+			if os.Geteuid() != 0 {
+				Skip("Must be run as root to validate file ownership")
+			}
 
 			sys, ok := stat.Sys().(*syscall.Stat_t)
 			Expect(ok).To(BeTrue())
