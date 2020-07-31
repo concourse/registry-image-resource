@@ -119,7 +119,7 @@ func main() {
 func downloadWithRetry(tag name.Tag, source resource.Source, params resource.GetParams, version resource.Version, dest string) error {
 	fmt.Fprintf(os.Stderr, "fetching %s@%s\n", color.GreenString(source.Repository), color.YellowString(version.Digest))
 
-	repo, err := name.NewRepository(source.Repository, name.WeakValidation)
+	repo, err := name.NewRepository(source.Repository)
 	if err != nil {
 		return fmt.Errorf("resolve repository name: %w", err)
 	}

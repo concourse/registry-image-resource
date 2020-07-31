@@ -113,7 +113,7 @@ var _ = Describe("Out", func() {
 		It("works", func() {
 			Expect(actualErr).ToNot(HaveOccurred())
 
-			name, err := name.ParseReference(req.Source.Name(), name.WeakValidation)
+			name, err := name.ParseReference(req.Source.Name())
 			Expect(err).ToNot(HaveOccurred())
 
 			auth := &authn.Basic{
@@ -156,7 +156,7 @@ var _ = Describe("Out", func() {
 				randomImage2, err = random.Image(1024, 1)
 				Expect(err).ToNot(HaveOccurred())
 
-				tag, err := name.NewTag(req.Source.Name(), name.WeakValidation)
+				tag, err := name.NewTag(req.Source.Name())
 				Expect(err).ToNot(HaveOccurred())
 
 				err = tarball.WriteToFile(filepath.Join(srcDir, "image-glob.tar"), tag, randomImage2)
@@ -168,7 +168,7 @@ var _ = Describe("Out", func() {
 			It("works", func() {
 				Expect(actualErr).ToNot(HaveOccurred())
 
-				name, err := name.ParseReference(req.Source.Name(), name.WeakValidation)
+				name, err := name.ParseReference(req.Source.Name())
 				Expect(err).ToNot(HaveOccurred())
 
 				auth := &authn.Basic{
@@ -230,7 +230,7 @@ var _ = Describe("Out", func() {
 				for _, t := range []string{"latest", "additional", "tags"} {
 					tag := parallelTag(t)
 
-					name, err := name.ParseReference(req.Source.Repository+":"+tag, name.WeakValidation)
+					name, err := name.ParseReference(req.Source.Repository+":"+tag)
 					Expect(err).ToNot(HaveOccurred())
 
 					auth := &authn.Basic{

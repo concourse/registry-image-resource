@@ -104,7 +104,7 @@ func (source Source) Mirror() (Source, bool, error) {
 		return Source{}, false, fmt.Errorf("resolve implicit namespace: %w", err)
 	}
 
-	mirror.Registry, err = name.NewRegistry(source.RegistryMirror.Host, name.WeakValidation)
+	mirror.Registry, err = name.NewRegistry(source.RegistryMirror.Host)
 	if err != nil {
 		return Source{}, false, fmt.Errorf("parse mirror registry: %w", err)
 	}

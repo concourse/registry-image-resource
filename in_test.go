@@ -288,7 +288,7 @@ var _ = Describe("In", func() {
 			_, err = os.Stat(filepath.Join(destDir, "manifest.json"))
 			Expect(os.IsNotExist(err)).To(BeTrue())
 
-			tag, err := name.NewTag("concourse/test-image-static:latest", name.WeakValidation)
+			tag, err := name.NewTag("concourse/test-image-static:latest")
 			Expect(err).ToNot(HaveOccurred())
 
 			img, err := tarball.ImageFromPath(filepath.Join(destDir, "image.tar"), &tag)

@@ -75,7 +75,7 @@ func main() {
 }
 
 func checkWithRetry(source resource.Source, version *resource.Version) (resource.CheckResponse, error) {
-	repo, err := name.NewRepository(source.Repository, name.WeakValidation)
+	repo, err := name.NewRepository(source.Repository)
 	if err != nil {
 		return resource.CheckResponse{}, fmt.Errorf("resolve repository: %w", err)
 	}

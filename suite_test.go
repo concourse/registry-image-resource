@@ -105,7 +105,7 @@ func TestRegistryImageResource(t *testing.T) {
 }
 
 func latestDigest(ref string) string {
-	n, err := name.ParseReference(ref, name.WeakValidation)
+	n, err := name.ParseReference(ref)
 	Expect(err).ToNot(HaveOccurred())
 
 	image, err := remote.Image(n)
@@ -118,7 +118,7 @@ func latestDigest(ref string) string {
 }
 
 func latestManifest(ref string) (string, *v1.Manifest) {
-	n, err := name.ParseReference(ref, name.WeakValidation)
+	n, err := name.ParseReference(ref)
 	Expect(err).ToNot(HaveOccurred())
 
 	image, err := remote.Image(n)
