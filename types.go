@@ -98,15 +98,19 @@ func (source Source) Mirror() (Source, bool, error) {
 		return Source{}, false, fmt.Errorf("parse repository: %w", err)
 	}
 
-	mirror, err := name.NewRegistry(source.RegistryMirror.Host, name.WeakValidation)
+	// resolve implicit namespace by re-parsing .Name()
+	mirror, err := name.NewRepository(repo.Name())
+	if err != nil {
+		return Source{}, false, fmt.Errorf("resolve implicit namespace: %w", err)
+	}
+
+	mirror.Registry, err = name.NewRegistry(source.RegistryMirror.Host, name.WeakValidation)
 	if err != nil {
 		return Source{}, false, fmt.Errorf("parse mirror registry: %w", err)
 	}
 
-	repo.Registry = mirror
-
 	copy := source
-	copy.Repository = repo.String()
+	copy.Repository = mirror.Name()
 	copy.BasicCredentials = source.RegistryMirror.BasicCredentials
 	copy.RegistryMirror = nil
 
