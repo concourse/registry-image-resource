@@ -60,17 +60,21 @@ func main() {
 	tag := new(name.Tag)
 
 	if req.Source.RegistryMirror != nil {
-		origin := repo.Registry
+		mirror, err := name.NewRepository(repo.String())
+		if err != nil {
+			logrus.Errorf("could not resolve mirror repository: %s", err)
+			os.Exit(1)
+			return
+		}
 
-		mirror, err := name.NewRegistry(req.Source.RegistryMirror.Host, name.WeakValidation)
+		mirror.Registry, err = name.NewRegistry(req.Source.RegistryMirror.Host, name.WeakValidation)
 		if err != nil {
 			logrus.Errorf("could not resolve registry: %s", err)
 			os.Exit(1)
 			return
 		}
 
-		repo.Registry = mirror
-		*tag = repo.Tag(req.Source.Tag())
+		*tag = mirror.Tag(req.Source.Tag())
 
 		response, err = checkWithRetry(req.Source.RegistryMirror.BasicCredentials, req.Version, *tag)
 		if err != nil {
@@ -78,8 +82,6 @@ func main() {
 		} else if len(response) == 0 {
 			logrus.Warnf("checking mirror %s failed: tag not found", mirror.RegistryStr())
 		}
-
-		repo.Registry = origin
 	}
 
 	if len(response) == 0 {
