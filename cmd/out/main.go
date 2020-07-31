@@ -61,13 +61,6 @@ func main() {
 		}
 	}
 
-	tags, err := req.Params.ParseTags(src)
-	if err != nil {
-		logrus.Errorf("could not parse additional tags: %s", err)
-		os.Exit(1)
-		return
-	}
-
 	tagsToPush := []name.Tag{}
 
 	repo, err := name.NewRepository(req.Source.Repository)
@@ -112,17 +105,22 @@ func main() {
 		tagsToPush = append(tagsToPush, repo.Tag(tag))
 	}
 
-	for _, tag := range tags {
-		n := fmt.Sprintf("%s:%s", req.Source.Repository, tag)
+	additionalTags, err := req.Params.ParseAdditionalTags(src)
+	if err != nil {
+		logrus.Errorf("could not parse additional tags: %s", err)
+		os.Exit(1)
+		return
+	}
 
-		extraRef, err := name.NewTag(n, name.WeakValidation)
+	for _, tagName := range additionalTags {
+		tag, err := name.NewTag(fmt.Sprintf("%s:%s", req.Source.Repository, tagName))
 		if err != nil {
 			logrus.Errorf("could not resolve repository/tag reference: %s", err)
 			os.Exit(1)
 			return
 		}
 
-		tagsToPush = append(tagsToPush, extraRef)
+		tagsToPush = append(tagsToPush, tag)
 	}
 
 	if len(tagsToPush) == 0 {
@@ -189,7 +187,7 @@ func main() {
 	})
 }
 
-func put(req resource.OutRequest, img v1.Image, refs []name.Tag) error {
+func put(req resource.OutRequest, img v1.Image, tags []name.Tag) error {
 	auth := &authn.Basic{
 		Username: req.Source.Username,
 		Password: req.Source.Password,
@@ -204,10 +202,10 @@ func put(req resource.OutRequest, img v1.Image, refs []name.Tag) error {
 		}
 	}
 
-	for _, extraRef := range refs {
-		logrus.Infof("pushing to tag %s", extraRef.Identifier())
+	for _, tag := range tags {
+		logrus.Infof("pushing to tag %s", tag.Identifier())
 
-		err = remote.Write(extraRef, img, remote.WithAuth(auth))
+		err = remote.Write(tag, img, remote.WithAuth(auth))
 		if err != nil {
 			return fmt.Errorf("tag image: %w", err)
 		}
@@ -215,7 +213,7 @@ func put(req resource.OutRequest, img v1.Image, refs []name.Tag) error {
 		logrus.Info("pushed")
 
 		if notaryConfigDir != "" {
-			trustedRepo, err := gcr.NewTrustedGcrRepository(notaryConfigDir, extraRef, auth)
+			trustedRepo, err := gcr.NewTrustedGcrRepository(notaryConfigDir, tag, auth)
 			if err != nil {
 				return fmt.Errorf("create TrustedGcrRepository: %w", err)
 			}

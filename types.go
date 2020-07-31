@@ -337,9 +337,9 @@ type PutParams struct {
 	AdditionalTags string `json:"additional_tags"`
 }
 
-func (p *PutParams) ParseTags(src string) ([]string, error) {
+func (p *PutParams) ParseAdditionalTags(src string) ([]string, error) {
 	if p.AdditionalTags == "" {
-		return nil, nil
+		return []string{}, nil
 	}
 
 	filepath := filepath.Join(src, p.AdditionalTags)
