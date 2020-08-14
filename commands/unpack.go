@@ -1,4 +1,4 @@
-package main
+package commands
 
 import (
 	"archive/tar"
@@ -19,7 +19,7 @@ import (
 
 const whiteoutPrefix = ".wh."
 
-func unpackImage(dest string, img v1.Image, debug bool) error {
+func unpackImage(dest string, img v1.Image, debug bool, out io.Writer) error {
 	layers, err := img.Layers()
 	if err != nil {
 		return err
@@ -27,11 +27,8 @@ func unpackImage(dest string, img v1.Image, debug bool) error {
 
 	chown := os.Getuid() == 0
 
-	var out io.Writer
 	if debug {
 		out = ioutil.Discard
-	} else {
-		out = os.Stderr
 	}
 
 	progress := mpb.New(mpb.WithOutput(out))
