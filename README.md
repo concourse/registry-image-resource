@@ -46,7 +46,7 @@ differences:
 * `aws_session_token`: *Optional. Default `""`.* The session token to use
   for authenticating with STS credentials with ECR.
 
-* `aws_region`: *Optional. Default `""`.* The region to use for accessing ECR.
+* `aws_region`: *Optional. Default `""`.* The region to use for accessing ECR. This is required if you are using ECR. This region will help determine the full repository URL you are accessing (e.g., `012345678910.dkr.ecr.us-east-1.amazonaws.com`)
 
 * `aws_role_arn`: *Optional. Default `""`.* If set, then this role will be
   assumed before authenticating to ECR.
