@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"os/exec"
+	"strconv"
 
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
@@ -134,8 +135,10 @@ var _ = Describe("Check", func() {
 									ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
 								),
 								ghttp.CombineHandlers(
-									ghttp.VerifyRequest("GET", "/v2/library/fake-image/manifests/latest"),
-									ghttp.RespondWith(http.StatusOK, `{"fake":"manifest"}`),
+									ghttp.VerifyRequest("HEAD", "/v2/library/fake-image/manifests/latest"),
+									ghttp.RespondWith(http.StatusOK, `{"fake":"manifest"}`, http.Header{
+										"Docker-Content-Digest": {LATEST_FAKE_DIGEST},
+									}),
 								),
 							)
 
@@ -172,7 +175,7 @@ var _ = Describe("Check", func() {
 									ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
 								),
 								ghttp.CombineHandlers(
-									ghttp.VerifyRequest("GET", "/v2/concourse/test-image-static/manifests/latest"),
+									ghttp.VerifyRequest("HEAD", "/v2/concourse/test-image-static/manifests/latest"),
 									ghttp.RespondWith(http.StatusNotFound, nil),
 								),
 							)
@@ -197,7 +200,7 @@ var _ = Describe("Check", func() {
 									ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
 								),
 								ghttp.CombineHandlers(
-									ghttp.VerifyRequest("GET", "/v2/library/busybox/manifests/1.32.0"),
+									ghttp.VerifyRequest("HEAD", "/v2/library/busybox/manifests/1.32.0"),
 									ghttp.RespondWith(http.StatusNotFound, nil),
 								),
 							)
@@ -300,8 +303,10 @@ var _ = Describe("Check", func() {
 									ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
 								),
 								ghttp.CombineHandlers(
-									ghttp.VerifyRequest("GET", "/v2/library/fake-image/manifests/latest"),
-									ghttp.RespondWith(http.StatusOK, `{"fake":"manifest"}`),
+									ghttp.VerifyRequest("HEAD", "/v2/library/fake-image/manifests/latest"),
+									ghttp.RespondWith(http.StatusOK, `{"fake":"manifest"}`, http.Header{
+										"Docker-Content-Digest": {LATEST_FAKE_DIGEST},
+									}),
 								),
 							)
 
@@ -342,7 +347,7 @@ var _ = Describe("Check", func() {
 									ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
 								),
 								ghttp.CombineHandlers(
-									ghttp.VerifyRequest("GET", "/v2/concourse/test-image-static/manifests/latest"),
+									ghttp.VerifyRequest("HEAD", "/v2/concourse/test-image-static/manifests/latest"),
 									ghttp.RespondWith(http.StatusNotFound, nil),
 								),
 							)
@@ -367,7 +372,7 @@ var _ = Describe("Check", func() {
 									ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
 								),
 								ghttp.CombineHandlers(
-									ghttp.VerifyRequest("GET", "/v2/library/busybox/manifests/1.32.0"),
+									ghttp.VerifyRequest("HEAD", "/v2/library/busybox/manifests/1.32.0"),
 									ghttp.RespondWith(http.StatusNotFound, nil),
 								),
 							)
@@ -479,16 +484,20 @@ var _ = Describe("Check", func() {
 									ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
 								),
 								ghttp.CombineHandlers(
-									ghttp.VerifyRequest("GET", "/v2/library/fake-image/manifests/latest"),
-									ghttp.RespondWith(http.StatusOK, `{"fake":"manifest"}`),
+									ghttp.VerifyRequest("HEAD", "/v2/library/fake-image/manifests/latest"),
+									ghttp.RespondWith(http.StatusOK, `{"fake":"manifest"}`, http.Header{
+										"Docker-Content-Digest": {LATEST_FAKE_DIGEST},
+									}),
 								),
 								ghttp.CombineHandlers(
 									ghttp.VerifyRequest("GET", "/v2/"),
 									ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
 								),
 								ghttp.CombineHandlers(
-									ghttp.VerifyRequest("GET", "/v2/library/fake-image/manifests/"+OLDER_FAKE_DIGEST),
-									ghttp.RespondWith(http.StatusOK, `{"fake":"outdated"}`),
+									ghttp.VerifyRequest("HEAD", "/v2/library/fake-image/manifests/"+OLDER_FAKE_DIGEST),
+									ghttp.RespondWith(http.StatusOK, `{"fake":"outdated"}`, http.Header{
+										"Docker-Content-Digest": {OLDER_FAKE_DIGEST},
+									}),
 								),
 							)
 
@@ -528,7 +537,7 @@ var _ = Describe("Check", func() {
 									ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
 								),
 								ghttp.CombineHandlers(
-									ghttp.VerifyRequest("GET", "/v2/concourse/test-image-static/manifests/latest"),
+									ghttp.VerifyRequest("HEAD", "/v2/concourse/test-image-static/manifests/latest"),
 									ghttp.RespondWith(http.StatusNotFound, nil),
 								),
 							)
@@ -554,7 +563,7 @@ var _ = Describe("Check", func() {
 									ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
 								),
 								ghttp.CombineHandlers(
-									ghttp.VerifyRequest("GET", "/v2/library/busybox/manifests/1.32.0"),
+									ghttp.VerifyRequest("HEAD", "/v2/library/busybox/manifests/1.32.0"),
 									ghttp.RespondWith(http.StatusNotFound, nil),
 								),
 							)
@@ -656,15 +665,17 @@ var _ = Describe("Check", func() {
 									ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
 								),
 								ghttp.CombineHandlers(
-									ghttp.VerifyRequest("GET", "/v2/library/fake-image/manifests/latest"),
-									ghttp.RespondWith(http.StatusOK, `{"fake":"manifest"}`),
+									ghttp.VerifyRequest("HEAD", "/v2/library/fake-image/manifests/latest"),
+									ghttp.RespondWith(http.StatusOK, `{"fake":"manifest"}`, http.Header{
+										"Docker-Content-Digest": {LATEST_FAKE_DIGEST},
+									}),
 								),
 								ghttp.CombineHandlers(
 									ghttp.VerifyRequest("GET", "/v2/"),
 									ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
 								),
 								ghttp.CombineHandlers(
-									ghttp.VerifyRequest("GET", "/v2/library/fake-image/manifests/"+req.Version.Digest),
+									ghttp.VerifyRequest("HEAD", "/v2/library/fake-image/manifests/"+req.Version.Digest),
 									ghttp.RespondWith(http.StatusNotFound, `{"errors":[{"code": "MANIFEST_UNKNOWN", "message": "ruh roh", "detail": "not here"}]}`),
 								),
 							)
@@ -702,7 +713,7 @@ var _ = Describe("Check", func() {
 									ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
 								),
 								ghttp.CombineHandlers(
-									ghttp.VerifyRequest("GET", "/v2/concourse/test-image-static/manifests/latest"),
+									ghttp.VerifyRequest("HEAD", "/v2/concourse/test-image-static/manifests/latest"),
 									ghttp.RespondWith(http.StatusNotFound, nil),
 								),
 							)
@@ -727,7 +738,7 @@ var _ = Describe("Check", func() {
 									ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
 								),
 								ghttp.CombineHandlers(
-									ghttp.VerifyRequest("GET", "/v2/library/busybox/manifests/1.32.0"),
+									ghttp.VerifyRequest("HEAD", "/v2/library/busybox/manifests/1.32.0"),
 									ghttp.RespondWith(http.StatusNotFound, nil),
 								),
 							)
@@ -777,61 +788,6 @@ var _ = Describe("Check", func() {
 				It("returns empty digest", func() {
 					Expect(res).To(Equal([]resource.Version{}))
 				})
-			})
-		})
-
-		Context("when the registry returns 429 Too Many Requests", func() {
-			var registry *ghttp.Server
-
-			BeforeEach(func() {
-				registry = ghttp.NewServer()
-
-				registry.AppendHandlers(
-					ghttp.CombineHandlers(
-						ghttp.VerifyRequest("GET", "/v2/"),
-						ghttp.RespondWith(http.StatusTooManyRequests, "calm down"),
-					),
-					ghttp.CombineHandlers(
-						ghttp.VerifyRequest("GET", "/v2/"),
-						ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
-					),
-					ghttp.CombineHandlers(
-						ghttp.VerifyRequest("GET", "/v2/"),
-						ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
-					),
-					ghttp.CombineHandlers(
-						ghttp.VerifyRequest("GET", "/v2/fake-image/manifests/latest"),
-						ghttp.RespondWith(http.StatusTooManyRequests, "calm down"),
-					),
-					ghttp.CombineHandlers(
-						ghttp.VerifyRequest("GET", "/v2/"),
-						ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
-					),
-					ghttp.CombineHandlers(
-						ghttp.VerifyRequest("GET", "/v2/"),
-						ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
-					),
-					ghttp.CombineHandlers(
-						ghttp.VerifyRequest("GET", "/v2/fake-image/manifests/latest"),
-						ghttp.RespondWith(http.StatusOK, `{"fake":"manifest"}`),
-					),
-				)
-
-				req.Source = resource.Source{
-					Repository: registry.Addr() + "/fake-image",
-					Tag:        "latest",
-				}
-			})
-
-			AfterEach(func() {
-				registry.Close()
-			})
-
-			It("retries", func() {
-				Expect(res).To(Equal([]resource.Version{
-					// sha256 of {"fake":"manifest"}
-					{Digest: "sha256:c4c25c2cd70e3071f08cf124c4b5c656c061dd38247d166d97098d58eeea8aa6"},
-				}))
 			})
 		})
 	})
@@ -1172,14 +1128,18 @@ func (example SemverTagCheckExample) Run() {
 		mediaType, err := image.MediaType()
 		Expect(err).ToNot(HaveOccurred())
 
-		registryServer.RouteToHandler(
-			"GET",
-			"/v2/"+repo.RepositoryStr()+"/manifests/"+name,
-			ghttp.RespondWith(http.StatusOK, manifest, http.Header{"Content-Type": []string{string(mediaType)}}),
-		)
-
 		digest, err := image.Digest()
 		Expect(err).ToNot(HaveOccurred())
+
+		registryServer.RouteToHandler(
+			"HEAD",
+			"/v2/"+repo.RepositoryStr()+"/manifests/"+name,
+			ghttp.RespondWith(http.StatusOK, manifest, http.Header{
+				"Content-Type":          {string(mediaType)},
+				"Content-Length":        {strconv.Itoa(len(manifest))},
+				"Docker-Content-Digest": {digest.String()},
+			}),
+		)
 
 		tagVersions[name] = resource.Version{
 			Tag:    name,

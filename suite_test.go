@@ -108,13 +108,10 @@ func latestDigest(ref string) string {
 	n, err := name.ParseReference(ref)
 	Expect(err).ToNot(HaveOccurred())
 
-	image, err := remote.Image(n)
+	desc, err := remote.Head(n)
 	Expect(err).ToNot(HaveOccurred())
 
-	digest, err := image.Digest()
-	Expect(err).ToNot(HaveOccurred())
-
-	return digest.String()
+	return desc.Digest.String()
 }
 
 func latestManifest(ref string) (string, *v1.Manifest) {

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"sort"
 	"strings"
@@ -54,7 +55,7 @@ func main() {
 	var response resource.CheckResponse
 
 	if hasMirror {
-		response, err = checkWithRetry(mirrorSource, req.Version)
+		response, err = check(mirrorSource, req.Version)
 		if err != nil {
 			logrus.Warnf("checking mirror %s failed: %s", mirrorSource.Repository, err)
 		} else if len(response) == 0 {
@@ -63,7 +64,7 @@ func main() {
 	}
 
 	if len(response) == 0 {
-		response, err = checkWithRetry(req.Source, req.Version)
+		response, err = check(req.Source, req.Version)
 		if err != nil {
 			logrus.Errorf("checking origin %s failed: %s", req.Source.Repository, err)
 			os.Exit(1)
@@ -74,28 +75,22 @@ func main() {
 	json.NewEncoder(os.Stdout).Encode(response)
 }
 
-func checkWithRetry(source resource.Source, version *resource.Version) (resource.CheckResponse, error) {
+func check(source resource.Source, from *resource.Version) (resource.CheckResponse, error) {
 	repo, err := name.NewRepository(source.Repository)
 	if err != nil {
 		return resource.CheckResponse{}, fmt.Errorf("resolve repository: %w", err)
 	}
 
-	var response resource.CheckResponse
-	err = resource.RetryOnRateLimit(func() error {
-		opts, err := source.AuthOptions(repo)
-		if err != nil {
-			return err
-		}
+	opts, err := source.AuthOptions(repo)
+	if err != nil {
+		return resource.CheckResponse{}, err
+	}
 
-		if source.Tag != "" {
-			response, err = checkTag(repo.Tag(source.Tag.String()), source, version, opts...)
-		} else {
-			response, err = checkRepository(repo, source, version, opts...)
-		}
-		return err
-	})
-
-	return response, err
+	if source.Tag != "" {
+		return checkTag(repo.Tag(source.Tag.String()), source, from, opts...)
+	} else {
+		return checkRepository(repo, source, from, opts...)
+	}
 }
 
 func checkRepository(repo name.Repository, source resource.Source, from *resource.Version, opts ...remote.Option) (resource.CheckResponse, error) {
@@ -172,15 +167,12 @@ func checkRepository(repo name.Repository, source resource.Source, from *resourc
 
 		tagRef := repo.Tag(identifier)
 
-		digestImage, err := remote.Image(tagRef, opts...)
+		desc, err := remote.Head(tagRef, opts...)
 		if err != nil {
 			return resource.CheckResponse{}, fmt.Errorf("get tag digest: %w", err)
 		}
 
-		digest, err := digestImage.Digest()
-		if err != nil {
-			return resource.CheckResponse{}, fmt.Errorf("get cursor image digest: %w", err)
-		}
+		digest := desc.Digest
 
 		tagDigests[identifier] = digest.String()
 
@@ -251,27 +243,22 @@ func (vs TagVersions) Swap(i, j int)      { vs[i], vs[j] = vs[j], vs[i] }
 
 func checkTag(tag name.Tag, source resource.Source, version *resource.Version, opts ...remote.Option) (resource.CheckResponse, error) {
 	var missingTag bool
-	image, err := remote.Image(tag, opts...)
+	var digest v1.Hash
+	desc, err := remote.Head(tag, opts...)
 	if err != nil {
 		missingTag = checkMissingManifest(err)
 		if !missingTag {
 			return resource.CheckResponse{}, fmt.Errorf("get remote image: %w", err)
 		}
-	}
-
-	var digest v1.Hash
-	if !missingTag {
-		digest, err = image.Digest()
-		if err != nil {
-			return resource.CheckResponse{}, fmt.Errorf("get cursor image digest: %w", err)
-		}
+	} else {
+		digest = desc.Digest
 	}
 
 	response := resource.CheckResponse{}
 	if version != nil && !missingTag && version.Digest != digest.String() {
 		digestRef := tag.Repository.Digest(version.Digest)
 
-		digestImage, err := remote.Image(digestRef, opts...)
+		_, err := remote.Head(digestRef, opts...)
 		var missingDigest bool
 		if err != nil {
 			missingDigest = checkMissingManifest(err)
@@ -281,11 +268,6 @@ func checkTag(tag name.Tag, source resource.Source, version *resource.Version, o
 		}
 
 		if !missingDigest {
-			_, err = digestImage.Digest()
-			if err != nil {
-				return resource.CheckResponse{}, fmt.Errorf("get cursor image digest: %w", err)
-			}
-
 			response = append(response, *version)
 		}
 	}
@@ -302,12 +284,10 @@ func checkTag(tag name.Tag, source resource.Source, version *resource.Version, o
 func checkMissingManifest(err error) bool {
 	var missing bool
 	if rErr, ok := err.(*transport.Error); ok {
-		for _, e := range rErr.Errors {
-			if e.Code == transport.ManifestUnknownErrorCode {
-				missing = true
-				break
-			}
+		if rErr.StatusCode == http.StatusNotFound {
+			return true
 		}
 	}
+
 	return missing
 }
