@@ -3,6 +3,9 @@ package commands
 import (
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+
 	resource "github.com/concourse/registry-image-resource"
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
@@ -10,7 +13,6 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/google/go-containerregistry/pkg/v1/remote/transport"
 	"github.com/sirupsen/logrus"
-	"io"
 )
 
 type CheckRequest struct {
@@ -79,7 +81,7 @@ func (c *check) Execute() error {
 
 		*tag = mirror.Tag(req.Source.Tag())
 
-		response, err = checkWithRetry(req.Source.RegistryMirror.BasicCredentials, req.Version, *tag)
+		response, err = performCheck(req.Source.RegistryMirror.BasicCredentials, req.Version, *tag)
 		if err != nil {
 			logrus.Warnf("checking mirror %s failed: %s", mirror.RegistryStr(), err)
 		} else if len(response) == 0 {
@@ -89,28 +91,18 @@ func (c *check) Execute() error {
 
 	if len(response) == 0 {
 		*tag = repo.Tag(req.Source.Tag())
-		response, err = checkWithRetry(req.Source.BasicCredentials, req.Version, *tag)
+		response, err = performCheck(req.Source.BasicCredentials, req.Version, *tag)
 	}
 	if err != nil {
 		return fmt.Errorf("checking origin %s failed: %s", tag.RegistryStr(), err)
 	}
 
-	err =  json.NewEncoder(c.stdout).Encode(response)
+	err = json.NewEncoder(c.stdout).Encode(response)
 	if err != nil {
 		return fmt.Errorf("could not marshal JSON: %s", err)
 	}
 
 	return nil
-}
-
-func checkWithRetry(principal resource.BasicCredentials, version *resource.Version, ref name.Tag) (CheckResponse, error) {
-	var response CheckResponse
-	err := resource.RetryOnRateLimit(func() error {
-		var err error
-		response, err = performCheck(principal, version, ref)
-		return err
-	})
-	return response, err
 }
 
 func performCheck(principal resource.BasicCredentials, version *resource.Version, ref name.Tag) (CheckResponse, error) {
@@ -126,7 +118,7 @@ func performCheck(principal resource.BasicCredentials, version *resource.Version
 	}
 
 	var missingTag bool
-	image, err := remote.Image(ref, imageOpts...)
+	desc, err := remote.Head(ref, imageOpts...)
 	if err != nil {
 		missingTag = checkMissingManifest(err)
 		if !missingTag {
@@ -136,17 +128,14 @@ func performCheck(principal resource.BasicCredentials, version *resource.Version
 
 	var digest v1.Hash
 	if !missingTag {
-		digest, err = image.Digest()
-		if err != nil {
-			return CheckResponse{}, fmt.Errorf("get cursor image digest: %w", err)
-		}
+		digest = desc.Digest
 	}
 
 	response := CheckResponse{}
 	if version != nil && !missingTag && version.Digest != digest.String() {
 		digestRef := ref.Repository.Digest(version.Digest)
 
-		digestImage, err := remote.Image(digestRef, imageOpts...)
+		_, err := remote.Head(digestRef, imageOpts...)
 		var missingDigest bool
 		if err != nil {
 			missingDigest = checkMissingManifest(err)
@@ -156,11 +145,6 @@ func performCheck(principal resource.BasicCredentials, version *resource.Version
 		}
 
 		if !missingDigest {
-			_, err = digestImage.Digest()
-			if err != nil {
-				return CheckResponse{}, fmt.Errorf("get cursor image digest: %w", err)
-			}
-
 			response = append(response, *version)
 		}
 	}
@@ -175,14 +159,9 @@ func performCheck(principal resource.BasicCredentials, version *resource.Version
 }
 
 func checkMissingManifest(err error) bool {
-	var missing bool
 	if rErr, ok := err.(*transport.Error); ok {
-		for _, e := range rErr.Errors {
-			if e.Code == transport.ManifestUnknownErrorCode {
-				missing = true
-				break
-			}
-		}
+		return rErr.StatusCode == http.StatusNotFound
 	}
-	return missing
+
+	return false
 }
