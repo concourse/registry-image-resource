@@ -55,7 +55,7 @@ differences:
   and debugging output will be printed instead.
 
 * `registry_mirror`: *Optional.*
-  * `host`: *Required.* A hostname pointing to a Docker registry mirror service.
+  * `host`: *Required.* A hostname pointing to a Docker registry mirror service. Note that this is only used if no registry hostname prefix is specified in the `repository`. If the `repository` contains a registry hostname prefix -- such as `my-registry.com/foo/bar` -- the `registry_mirror` is ignored and the explicitly declared registry in the `repository` value is used.
   * `username` and `password`: *Optional.* A username and password to use when
   authenticating to the mirror.
 

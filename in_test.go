@@ -440,11 +440,58 @@ var _ = Describe("In", func() {
 			mirror.Close()
 		})
 
+		Context("when the repository contains a registry host name prefixed image", func() {
+			BeforeEach(func() {
+				fakeImage := empty.Image
+
+				digest, err := fakeImage.Digest()
+				Expect(err).ToNot(HaveOccurred())
+
+				manifest, err := fakeImage.RawManifest()
+				Expect(err).ToNot(HaveOccurred())
+
+				config, err := fakeImage.RawConfigFile()
+				Expect(err).ToNot(HaveOccurred())
+
+				configDigest, err := fakeImage.ConfigName()
+				Expect(err).ToNot(HaveOccurred())
+
+				mirror.AppendHandlers(
+					ghttp.CombineHandlers(
+						ghttp.VerifyRequest("GET", "/v2/"),
+						ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
+					),
+					ghttp.CombineHandlers(
+						ghttp.VerifyRequest("GET", "/v2/some/fake-image/manifests/"+digest.String()),
+						ghttp.RespondWith(http.StatusOK, manifest),
+					),
+					ghttp.CombineHandlers(
+						ghttp.VerifyRequest("GET", "/v2/some/fake-image/blobs/"+configDigest.String()),
+						ghttp.RespondWith(http.StatusOK, config),
+					),
+				)
+
+				req.Source = resource.Source{
+					Repository: mirror.Addr() + "/some/fake-image",
+					RegistryMirror: &resource.RegistryMirror{
+						Host: "thisregistrymirrordoesnotexist.nothing",
+					},
+				}
+
+				req.Version.Digest = digest.String()
+			})
+
+			It("pulls the image from the registry declared in the repository and not from the mirror", func() {
+				Expect(res.Version).To(Equal(req.Version))
+			})
+		})
+
 		Context("which has the image", func() {
 			Context("in an explicit namespace", func() {
 				BeforeEach(func() {
-					// use the mock mirror as the "origin", use Docker Hub as a "mirror"
-					req.Source.Repository = mirror.Addr() + "/concourse/test-image-static"
+					req.Source.Repository = "concourse/test-image-static"
+
+					// use Docker Hub as a "mirror"
 					req.Source.RegistryMirror = &resource.RegistryMirror{
 						Host: name.DefaultRegistry,
 					}

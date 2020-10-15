@@ -68,7 +68,9 @@ func (c *check) Execute() error {
 	var response CheckResponse
 	tag := new(name.Tag)
 
-	if req.Source.RegistryMirror != nil {
+	// only use the RegistryMirror as the Registry if the repo doesn't use a different,
+	// explicitly-declared, non-default registry, such as 'some-registry.com/foo/bar'.
+	if req.Source.RegistryMirror != nil && repo.Registry.String() == name.DefaultRegistry {
 		mirror, err := name.NewRepository(repo.String())
 		if err != nil {
 			return fmt.Errorf("could not resolve mirror repository: %s", err)
