@@ -3,6 +3,12 @@ package commands
 import (
 	"encoding/json"
 	"fmt"
+	"io"
+	"io/ioutil"
+	"log"
+	"os"
+	"path/filepath"
+
 	resource "github.com/concourse/registry-image-resource"
 	"github.com/fatih/color"
 	"github.com/google/go-containerregistry/pkg/authn"
@@ -13,11 +19,6 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/google/go-containerregistry/pkg/v1/tarball"
 	"github.com/sirupsen/logrus"
-	"io"
-	"io/ioutil"
-	"log"
-	"os"
-	"path/filepath"
 )
 
 type InRequest struct {
@@ -102,7 +103,9 @@ func (i *in) Execute() error {
 	var image v1.Image
 	digest := new(name.Digest)
 
-	if req.Source.RegistryMirror != nil {
+	// only use the RegistryMirror as the Registry if the repo doesn't use a different,
+	// explicitly-declared, non-default registry, such as 'some-registry.com/foo/bar'.
+	if req.Source.RegistryMirror != nil && repo.Registry.String() == name.DefaultRegistry {
 		mirror, err := name.NewRepository(repo.String())
 		if err != nil {
 			return fmt.Errorf("could not resolve mirror repository: %s", err)

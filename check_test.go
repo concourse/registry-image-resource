@@ -98,11 +98,38 @@ var _ = Describe("Check", func() {
 				mirror.Close()
 			})
 
+			Context("when the repository contains a registry host name prefixed image", func() {
+				BeforeEach(func() {
+					mirror.AppendHandlers(
+						ghttp.CombineHandlers(
+							ghttp.VerifyRequest("GET", "/v2/"),
+							ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
+						),
+						ghttp.CombineHandlers(
+							ghttp.VerifyRequest("HEAD", "/v2/some/fake-image/manifests/latest"),
+							ghttp.RespondWith(http.StatusOK, `{"fake":"manifest"}`, http.Header{
+								"Docker-Content-Digest": {LATEST_FAKE_DIGEST},
+							}),
+						),
+					)
+
+					req.Source.Repository = mirror.Addr() + "/some/fake-image"
+					req.Source.RegistryMirror = &resource.RegistryMirror{
+						Host: "thisregistrymirrordoesnotexist.nothing",
+					}
+				})
+
+				It("it checks and returns the current digest using the registry declared in the repository and not using the mirror", func() {
+					Expect(res).To(Equal([]resource.Version{
+						{Digest: LATEST_FAKE_DIGEST},
+					}))
+				})
+			})
+
 			Context("which has the image", func() {
 				Context("in an explicit namespace", func() {
 					BeforeEach(func() {
-						// use the mock mirror as the "origin", use Docker Hub as a "mirror"
-						req.Source.Repository = mirror.Addr() + "/" + req.Source.Repository
+						// use Docker Hub as a "mirror"
 						req.Source.RegistryMirror = &resource.RegistryMirror{
 							Host: name.DefaultRegistry,
 						}
@@ -257,8 +284,7 @@ var _ = Describe("Check", func() {
 			Context("which has the image", func() {
 				Context("in an explicit namespace", func() {
 					BeforeEach(func() {
-						// use the mock mirror as the "origin", use Docker Hub as a "mirror"
-						req.Source.Repository = mirror.Addr() + "/" + req.Source.Repository
+						// use Docker Hub as a "mirror"
 						req.Source.RegistryMirror = &resource.RegistryMirror{
 							Host: name.DefaultRegistry,
 						}
@@ -425,8 +451,7 @@ var _ = Describe("Check", func() {
 			Context("which has the image", func() {
 				Context("in an explicit namespace", func() {
 					BeforeEach(func() {
-						// use the mock mirror as the "origin", use Docker Hub as a "mirror"
-						req.Source.Repository = mirror.Addr() + "/" + req.Source.Repository
+						// use Docker Hub as a "mirror"
 						req.Source.RegistryMirror = &resource.RegistryMirror{
 							Host: name.DefaultRegistry,
 						}
@@ -595,8 +620,7 @@ var _ = Describe("Check", func() {
 			Context("which has the image", func() {
 				Context("in an explicit namespace", func() {
 					BeforeEach(func() {
-						// use the mock mirror as the "origin", use Docker Hub as a "mirror"
-						req.Source.Repository = mirror.Addr() + "/" + req.Source.Repository
+						// use Docker Hub as a "mirror"
 						req.Source.RegistryMirror = &resource.RegistryMirror{
 							Host: name.DefaultRegistry,
 						}
