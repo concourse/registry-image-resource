@@ -119,45 +119,54 @@ func performCheck(principal resource.BasicCredentials, version *resource.Version
 		imageOpts = append(imageOpts, remote.WithAuth(auth))
 	}
 
-	var missingTag bool
-	desc, err := remote.Head(ref, imageOpts...)
+	digest, found, err := headOrGet(ref, imageOpts...)
 	if err != nil {
-		missingTag = checkMissingManifest(err)
-		if !missingTag {
-			return CheckResponse{}, fmt.Errorf("get remote image: %w", err)
-		}
-	}
-
-	var digest v1.Hash
-	if !missingTag {
-		digest = desc.Digest
+		return CheckResponse{}, fmt.Errorf("get remote image: %w", err)
 	}
 
 	response := CheckResponse{}
-	if version != nil && !missingTag && version.Digest != digest.String() {
+	if version != nil && found && version.Digest != digest.String() {
 		digestRef := ref.Repository.Digest(version.Digest)
 
-		_, err := remote.Head(digestRef, imageOpts...)
-		var missingDigest bool
+		_, found, err := headOrGet(digestRef, imageOpts...)
 		if err != nil {
-			missingDigest = checkMissingManifest(err)
-			if !missingDigest {
-				return CheckResponse{}, fmt.Errorf("get remote image: %w", err)
-			}
+			return CheckResponse{}, fmt.Errorf("get remote image: %w", err)
 		}
 
-		if !missingDigest {
+		if found {
 			response = append(response, *version)
 		}
 	}
 
-	if !missingTag {
+	if found {
 		response = append(response, resource.Version{
 			Digest: digest.String(),
 		})
 	}
 
 	return response, nil
+}
+
+func headOrGet(ref name.Reference, imageOpts ...remote.Option) (v1.Hash, bool, error) {
+	v1Desc, err := remote.Head(ref, imageOpts...)
+	if err != nil {
+		if checkMissingManifest(err) {
+			return v1.Hash{}, false, nil
+		}
+
+		remoteDesc, err := remote.Get(ref, imageOpts...)
+		if err != nil {
+			if checkMissingManifest(err) {
+				return v1.Hash{}, false, nil
+			}
+
+			return v1.Hash{}, false, err
+		}
+
+		return remoteDesc.Digest, true, nil
+	}
+
+	return v1Desc.Digest, true, nil
 }
 
 func checkMissingManifest(err error) bool {
