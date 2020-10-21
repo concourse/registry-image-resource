@@ -87,6 +87,51 @@ var _ = Describe("Check", func() {
 			})
 		})
 
+		Context("when the registry does not return Docker-Content-Digest", func() {
+			var registry *ghttp.Server
+
+			BeforeEach(func() {
+				registry = ghttp.NewServer()
+			})
+
+			AfterEach(func() {
+				registry.Close()
+			})
+
+			BeforeEach(func() {
+				registry.AppendHandlers(
+					ghttp.CombineHandlers(
+						ghttp.VerifyRequest("GET", "/v2/"),
+						ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
+					),
+					ghttp.CombineHandlers(
+						ghttp.VerifyRequest("HEAD", "/v2/fake-image/manifests/latest"),
+						ghttp.RespondWith(http.StatusOK, ``, http.Header{
+							"Content-Length": LATEST_FAKE_HEADERS["Content-Length"],
+						}),
+					),
+					ghttp.CombineHandlers(
+						ghttp.VerifyRequest("GET", "/v2/"),
+						ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
+					),
+					ghttp.CombineHandlers(
+						ghttp.VerifyRequest("GET", "/v2/fake-image/manifests/latest"),
+						ghttp.RespondWith(http.StatusOK, `{"fake":"manifest"}`, http.Header{
+							"Content-Length": LATEST_FAKE_HEADERS["Content-Length"],
+						}),
+					),
+				)
+
+				req.Source.Repository = registry.Addr() + "/fake-image"
+			})
+
+			It("falls back on fetching the manifest", func() {
+				Expect(res).To(Equal([]resource.Version{
+					{Digest: LATEST_FAKE_DIGEST},
+				}))
+			})
+		})
+
 		Context("against a mirror", func() {
 			var mirror *ghttp.Server
 
@@ -107,9 +152,7 @@ var _ = Describe("Check", func() {
 						),
 						ghttp.CombineHandlers(
 							ghttp.VerifyRequest("HEAD", "/v2/some/fake-image/manifests/latest"),
-							ghttp.RespondWith(http.StatusOK, `{"fake":"manifest"}`, http.Header{
-								"Docker-Content-Digest": {LATEST_FAKE_DIGEST},
-							}),
+							ghttp.RespondWith(http.StatusOK, ``, LATEST_FAKE_HEADERS),
 						),
 					)
 
@@ -306,9 +349,7 @@ var _ = Describe("Check", func() {
 							),
 							ghttp.CombineHandlers(
 								ghttp.VerifyRequest("HEAD", "/v2/library/fake-image/manifests/latest"),
-								ghttp.RespondWith(http.StatusOK, `{"fake":"manifest"}`, http.Header{
-									"Docker-Content-Digest": {LATEST_FAKE_DIGEST},
-								}),
+								ghttp.RespondWith(http.StatusOK, ``, LATEST_FAKE_HEADERS),
 							),
 						)
 
@@ -474,9 +515,7 @@ var _ = Describe("Check", func() {
 							),
 							ghttp.CombineHandlers(
 								ghttp.VerifyRequest("HEAD", "/v2/library/fake-image/manifests/latest"),
-								ghttp.RespondWith(http.StatusOK, `{"fake":"manifest"}`, http.Header{
-									"Docker-Content-Digest": {LATEST_FAKE_DIGEST},
-								}),
+								ghttp.RespondWith(http.StatusOK, ``, LATEST_FAKE_HEADERS),
 							),
 							ghttp.CombineHandlers(
 								ghttp.VerifyRequest("GET", "/v2/"),
@@ -484,9 +523,7 @@ var _ = Describe("Check", func() {
 							),
 							ghttp.CombineHandlers(
 								ghttp.VerifyRequest("HEAD", "/v2/library/fake-image/manifests/"+OLDER_FAKE_DIGEST),
-								ghttp.RespondWith(http.StatusOK, `{"fake":"outdated"}`, http.Header{
-									"Docker-Content-Digest": {OLDER_FAKE_DIGEST},
-								}),
+								ghttp.RespondWith(http.StatusOK, ``, OLDER_FAKE_HEADERS),
 							),
 						)
 
@@ -642,9 +679,7 @@ var _ = Describe("Check", func() {
 							),
 							ghttp.CombineHandlers(
 								ghttp.VerifyRequest("HEAD", "/v2/library/fake-image/manifests/latest"),
-								ghttp.RespondWith(http.StatusOK, `{"fake":"manifest"}`, http.Header{
-									"Docker-Content-Digest": {LATEST_FAKE_DIGEST},
-								}),
+								ghttp.RespondWith(http.StatusOK, ``, LATEST_FAKE_HEADERS),
 							),
 							ghttp.CombineHandlers(
 								ghttp.VerifyRequest("GET", "/v2/"),
