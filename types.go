@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -210,7 +211,18 @@ func (source *Source) AuthenticateToECR() bool {
 
 	// Update username and repository
 	source.Username = "AWS"
-	source.Repository = strings.Join([]string{strings.TrimPrefix(*result.AuthorizationData[0].ProxyEndpoint, "https://"), source.Repository}, "/")
+
+	// Only prepend registry URL to repository if it hasn't been explicitly specified
+	matched, err := regexp.MatchString(`\d+\.dkr\.ecr\..+\.amazonaws\.com/.*`, source.Repository)
+
+	if err != nil {
+		logrus.Errorf("regexp error: %s", err)
+		return false
+	}
+
+	if !matched {
+		source.Repository = strings.Join([]string{strings.TrimPrefix(*result.AuthorizationData[0].ProxyEndpoint, "https://"), source.Repository}, "/")
+	}
 
 	return true
 }
