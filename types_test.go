@@ -6,6 +6,8 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
+	"github.com/aws/aws-sdk-go/service/ecr"
+	"github.com/aws/aws-sdk-go/service/ecr/ecriface"
 	resource "github.com/concourse/registry-image-resource"
 )
 
@@ -63,4 +65,55 @@ var _ = Describe("Source", func() {
 
 		Expect(json).To(MatchJSON(`{"repository":"foo","tag":"0"}`))
 	})
+
+	Describe("ecr", func() {
+		It("should exclude a registry id as part of the request for an authorization token when omitted", func() {
+			source := resource.Source{
+				Repository: "foo",
+				RawTag:     "0",
+				AwsCredentials: resource.AwsCredentials{
+					AwsAccessKeyId:     "foo",
+					AwsSecretAccessKey: "bar",
+					AwsRegion:          "us-east-1",
+				},
+			}
+
+			m := &mockECR{}
+			_, err := source.GetECRAuthorizationToken(m)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(len(m.getAuthorizationInput.RegistryIds)).To(Equal(0))
+		})
+
+		It("should include a registry id as part of the request for an authorization token when specified", func() {
+			source := resource.Source{
+				Repository: "foo",
+				RawTag:     "0",
+				AwsCredentials: resource.AwsCredentials{
+					AwsAccessKeyId:     "foo",
+					AwsSecretAccessKey: "bar",
+					AwsRegion:          "us-east-1",
+					AWSECRRegistryId:   "012345678901",
+				},
+			}
+
+			m := &mockECR{}
+			_, err := source.GetECRAuthorizationToken(m)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(len(m.getAuthorizationInput.RegistryIds)).To(Equal(1))
+			Expect(*m.getAuthorizationInput.RegistryIds[0]).To(Equal(source.AwsCredentials.AWSECRRegistryId))
+		})
+	})
 })
+
+type mockECR struct {
+	ecriface.ECRAPI
+
+	getAuthorizationInput  *ecr.GetAuthorizationTokenInput
+	getAuthorizationOutput *ecr.GetAuthorizationTokenOutput
+	getAuthorizationError  error
+}
+
+func (m *mockECR) GetAuthorizationToken(input *ecr.GetAuthorizationTokenInput) (*ecr.GetAuthorizationTokenOutput, error) {
+	m.getAuthorizationInput = input
+	return m.getAuthorizationOutput, m.getAuthorizationError
+}
