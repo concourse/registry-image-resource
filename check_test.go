@@ -95,125 +95,158 @@ var _ = Describe("Check", func() {
 				})
 			})
 
+			Context("when the registry does not return Docker-Content-Digest", func() {
+				var registry *ghttp.Server
+
+				BeforeEach(func() {
+					registry = ghttp.NewServer()
+				})
+
+				AfterEach(func() {
+					registry.Close()
+				})
+
+				BeforeEach(func() {
+					registry.AppendHandlers(
+						ghttp.CombineHandlers(
+							ghttp.VerifyRequest("GET", "/v2/"),
+							ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
+						),
+						ghttp.CombineHandlers(
+							ghttp.VerifyRequest("GET", "/v2/"),
+							ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
+						),
+						ghttp.CombineHandlers(
+							ghttp.VerifyRequest("HEAD", "/v2/fake-image/manifests/latest"),
+							ghttp.RespondWith(http.StatusOK, ``, http.Header{
+								"Content-Length": LATEST_FAKE_HEADERS["Content-Length"],
+							}),
+						),
+						ghttp.CombineHandlers(
+							ghttp.VerifyRequest("GET", "/v2/"),
+							ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
+						),
+						ghttp.CombineHandlers(
+							ghttp.VerifyRequest("GET", "/v2/fake-image/manifests/latest"),
+							ghttp.RespondWith(http.StatusOK, `{"fake":"manifest"}`, http.Header{
+								"Content-Length": LATEST_FAKE_HEADERS["Content-Length"],
+							}),
+						),
+					)
+
+					req.Source.Repository = registry.Addr() + "/fake-image"
+				})
+
+				It("falls back on fetching the manifest", func() {
+					Expect(res).To(Equal([]resource.Version{
+						{Digest: LATEST_FAKE_DIGEST},
+					}))
+				})
+			})
+
 			Context("against a mirror", func() {
 				var mirror *ghttp.Server
 
 				BeforeEach(func() {
 					mirror = ghttp.NewServer()
+
+					req.Source.RegistryMirror = &resource.RegistryMirror{
+						Host: mirror.Addr(),
+					}
 				})
 
 				AfterEach(func() {
 					mirror.Close()
 				})
 
-				Context("which has the image", func() {
-					Context("in an explicit namespace", func() {
-						BeforeEach(func() {
-							// use the mock mirror as the "origin", use Docker Hub as a "mirror"
-							req.Source.Repository = mirror.Addr() + "/" + req.Source.Repository
-							req.Source.RegistryMirror = &resource.RegistryMirror{
-								Host: name.DefaultRegistry,
-							}
-						})
+				Context("when the repository contains a registry host name prefixed image", func() {
+					var registry *ghttp.Server
 
-						It("returns the current digest", func() {
-							Expect(res).To(Equal([]resource.Version{
-								{Digest: LATEST_STATIC_DIGEST},
-							}))
-						})
-					})
-
-					Context("in an implied namespace", func() {
-						BeforeEach(func() {
-							mirror.AppendHandlers(
-								ghttp.CombineHandlers(
-									ghttp.VerifyRequest("GET", "/v2/"),
-									ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
-								),
-								ghttp.CombineHandlers(
-									ghttp.VerifyRequest("GET", "/v2/"),
-									ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
-								),
-								ghttp.CombineHandlers(
-									ghttp.VerifyRequest("HEAD", "/v2/library/fake-image/manifests/latest"),
-									ghttp.RespondWith(http.StatusOK, `{"fake":"manifest"}`, http.Header{
-										"Docker-Content-Digest": {LATEST_FAKE_DIGEST},
-									}),
-								),
-							)
-
-							req.Source.Repository = "fake-image"
-							req.Source.RegistryMirror = &resource.RegistryMirror{
-								Host: mirror.Addr(),
-							}
-						})
-
-						It("returns the current digest", func() {
-							Expect(res).To(Equal([]resource.Version{
-								{Digest: LATEST_FAKE_DIGEST},
-							}))
-						})
-					})
-				})
-
-				Context("which is missing the image", func() {
 					BeforeEach(func() {
+						registry = ghttp.NewServer()
+
+						registry.AppendHandlers(
+							ghttp.CombineHandlers(
+								ghttp.VerifyRequest("GET", "/v2/"),
+								ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
+							),
+							ghttp.CombineHandlers(
+								ghttp.VerifyRequest("GET", "/v2/"),
+								ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
+							),
+							ghttp.CombineHandlers(
+								ghttp.VerifyRequest("HEAD", "/v2/some/fake-image/manifests/latest"),
+								ghttp.RespondWith(http.StatusOK, ``, LATEST_FAKE_HEADERS),
+							),
+						)
+
+						req.Source.Repository = registry.Addr() + "/some/fake-image"
 						req.Source.RegistryMirror = &resource.RegistryMirror{
 							Host: mirror.Addr(),
 						}
 					})
 
-					Context("in an explicit namespace", func() {
-						BeforeEach(func() {
-							mirror.AppendHandlers(
-								ghttp.CombineHandlers(
-									ghttp.VerifyRequest("GET", "/v2/"),
-									ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
-								),
-								ghttp.CombineHandlers(
-									ghttp.VerifyRequest("GET", "/v2/"),
-									ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
-								),
-								ghttp.CombineHandlers(
-									ghttp.VerifyRequest("HEAD", "/v2/concourse/test-image-static/manifests/latest"),
-									ghttp.RespondWith(http.StatusNotFound, nil),
-								),
-							)
-						})
+					It("it checks and returns the current digest using the registry declared in the repository and not using the mirror", func() {
+						Expect(res).To(Equal([]resource.Version{
+							{Digest: LATEST_FAKE_DIGEST},
+						}))
 
-						It("returns the current digest", func() {
-							Expect(res).To(Equal([]resource.Version{
-								{Digest: LATEST_STATIC_DIGEST},
-							}))
-						})
+						Expect(mirror.ReceivedRequests()).To(BeEmpty())
+					})
+				})
+
+				Context("which has the image", func() {
+					BeforeEach(func() {
+						mirror.AppendHandlers(
+							ghttp.CombineHandlers(
+								ghttp.VerifyRequest("GET", "/v2/"),
+								ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
+							),
+							ghttp.CombineHandlers(
+								ghttp.VerifyRequest("GET", "/v2/"),
+								ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
+							),
+							ghttp.CombineHandlers(
+								ghttp.VerifyRequest("HEAD", "/v2/library/fake-image/manifests/latest"),
+								ghttp.RespondWith(http.StatusOK, ``, LATEST_FAKE_HEADERS),
+							),
+						)
+
+						req.Source.Repository = "fake-image"
 					})
 
-					Context("in an implied namespace", func() {
-						BeforeEach(func() {
-							mirror.AppendHandlers(
-								ghttp.CombineHandlers(
-									ghttp.VerifyRequest("GET", "/v2/"),
-									ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
-								),
-								ghttp.CombineHandlers(
-									ghttp.VerifyRequest("GET", "/v2/"),
-									ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
-								),
-								ghttp.CombineHandlers(
-									ghttp.VerifyRequest("HEAD", "/v2/library/busybox/manifests/1.32.0"),
-									ghttp.RespondWith(http.StatusNotFound, nil),
-								),
-							)
+					It("returns the current digest", func() {
+						Expect(res).To(Equal([]resource.Version{
+							{Digest: LATEST_FAKE_DIGEST},
+						}))
+					})
+				})
 
-							req.Source.Repository = "busybox"
-							req.Source.Tag = "1.32.0"
-						})
+				Context("which is missing the image", func() {
+					BeforeEach(func() {
+						mirror.AppendHandlers(
+							ghttp.CombineHandlers(
+								ghttp.VerifyRequest("GET", "/v2/"),
+								ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
+							),
+							ghttp.CombineHandlers(
+								ghttp.VerifyRequest("GET", "/v2/"),
+								ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
+							),
+							ghttp.CombineHandlers(
+								ghttp.VerifyRequest("HEAD", "/v2/library/busybox/manifests/1.32.0"),
+								ghttp.RespondWith(http.StatusNotFound, nil),
+							),
+						)
 
-						It("returns the current digest", func() {
-							Expect(res).To(Equal([]resource.Version{
-								{Digest: latestDigest(req.Source.Name())},
-							}))
-						})
+						req.Source.Repository = "busybox"
+						req.Source.Tag = "1.32.0"
+					})
+
+					It("returns the current digest", func() {
+						Expect(res).To(Equal([]resource.Version{
+							{Digest: latestDigest(req.Source.Name())},
+						}))
 					})
 				})
 			})
@@ -268,6 +301,10 @@ var _ = Describe("Check", func() {
 
 				BeforeEach(func() {
 					mirror = ghttp.NewServer()
+
+					req.Source.RegistryMirror = &resource.RegistryMirror{
+						Host: mirror.Addr(),
+					}
 				})
 
 				AfterEach(func() {
@@ -275,121 +312,65 @@ var _ = Describe("Check", func() {
 				})
 
 				Context("which has the image", func() {
-					Context("in an explicit namespace", func() {
-						BeforeEach(func() {
-							// use the mock mirror as the "origin", use Docker Hub as a "mirror"
-							req.Source.Repository = mirror.Addr() + "/" + req.Source.Repository
-							req.Source.RegistryMirror = &resource.RegistryMirror{
-								Host: name.DefaultRegistry,
-							}
-						})
+					BeforeEach(func() {
+						mirror.AppendHandlers(
+							ghttp.CombineHandlers(
+								ghttp.VerifyRequest("GET", "/v2/"),
+								ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
+							),
+							ghttp.CombineHandlers(
+								ghttp.VerifyRequest("GET", "/v2/"),
+								ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
+							),
+							ghttp.CombineHandlers(
+								ghttp.VerifyRequest("HEAD", "/v2/library/fake-image/manifests/latest"),
+								ghttp.RespondWith(http.StatusOK, ``, LATEST_FAKE_HEADERS),
+							),
+						)
 
-						It("returns the current digest", func() {
-							Expect(res).To(Equal([]resource.Version{
-								*req.Version,
-							}))
-						})
+						req.Source.Repository = "fake-image"
+
+						req.Version = &resource.Version{
+							Digest: LATEST_FAKE_DIGEST,
+						}
 					})
 
-					Context("in an implied namespace", func() {
-						BeforeEach(func() {
-							mirror.AppendHandlers(
-								ghttp.CombineHandlers(
-									ghttp.VerifyRequest("GET", "/v2/"),
-									ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
-								),
-								ghttp.CombineHandlers(
-									ghttp.VerifyRequest("GET", "/v2/"),
-									ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
-								),
-								ghttp.CombineHandlers(
-									ghttp.VerifyRequest("HEAD", "/v2/library/fake-image/manifests/latest"),
-									ghttp.RespondWith(http.StatusOK, `{"fake":"manifest"}`, http.Header{
-										"Docker-Content-Digest": {LATEST_FAKE_DIGEST},
-									}),
-								),
-							)
-
-							req.Source.Repository = "fake-image"
-							req.Source.RegistryMirror = &resource.RegistryMirror{
-								Host: mirror.Addr(),
-							}
-
-							req.Version = &resource.Version{
-								Digest: LATEST_FAKE_DIGEST,
-							}
-						})
-
-						It("returns the current digest", func() {
-							Expect(res).To(Equal([]resource.Version{
-								*req.Version,
-							}))
-						})
+					It("returns the current digest", func() {
+						Expect(res).To(Equal([]resource.Version{
+							*req.Version,
+						}))
 					})
 				})
 
 				Context("which is missing the image", func() {
 					BeforeEach(func() {
-						req.Source.RegistryMirror = &resource.RegistryMirror{
-							Host: mirror.Addr(),
+						mirror.AppendHandlers(
+							ghttp.CombineHandlers(
+								ghttp.VerifyRequest("GET", "/v2/"),
+								ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
+							),
+							ghttp.CombineHandlers(
+								ghttp.VerifyRequest("GET", "/v2/"),
+								ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
+							),
+							ghttp.CombineHandlers(
+								ghttp.VerifyRequest("HEAD", "/v2/library/busybox/manifests/1.32.0"),
+								ghttp.RespondWith(http.StatusNotFound, nil),
+							),
+						)
+
+						req.Source.Repository = "busybox"
+						req.Source.Tag = "1.32.0"
+
+						req.Version = &resource.Version{
+							Digest: latestDigest(req.Source.Name()),
 						}
 					})
 
-					Context("in an explicit namespace", func() {
-						BeforeEach(func() {
-							mirror.AppendHandlers(
-								ghttp.CombineHandlers(
-									ghttp.VerifyRequest("GET", "/v2/"),
-									ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
-								),
-								ghttp.CombineHandlers(
-									ghttp.VerifyRequest("GET", "/v2/"),
-									ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
-								),
-								ghttp.CombineHandlers(
-									ghttp.VerifyRequest("HEAD", "/v2/concourse/test-image-static/manifests/latest"),
-									ghttp.RespondWith(http.StatusNotFound, nil),
-								),
-							)
-						})
-
-						It("returns the current digest", func() {
-							Expect(res).To(Equal([]resource.Version{
-								*req.Version,
-							}))
-						})
-					})
-
-					Context("in an implied namespace", func() {
-						BeforeEach(func() {
-							mirror.AppendHandlers(
-								ghttp.CombineHandlers(
-									ghttp.VerifyRequest("GET", "/v2/"),
-									ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
-								),
-								ghttp.CombineHandlers(
-									ghttp.VerifyRequest("GET", "/v2/"),
-									ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
-								),
-								ghttp.CombineHandlers(
-									ghttp.VerifyRequest("HEAD", "/v2/library/busybox/manifests/1.32.0"),
-									ghttp.RespondWith(http.StatusNotFound, nil),
-								),
-							)
-
-							req.Source.Repository = "busybox"
-							req.Source.Tag = "1.32.0"
-
-							req.Version = &resource.Version{
-								Digest: latestDigest(req.Source.Name()),
-							}
-						})
-
-						It("returns the current digest", func() {
-							Expect(res).To(Equal([]resource.Version{
-								*req.Version,
-							}))
-						})
+					It("returns the current digest", func() {
+						Expect(res).To(Equal([]resource.Version{
+							*req.Version,
+						}))
 					})
 				})
 			})
@@ -448,6 +429,10 @@ var _ = Describe("Check", func() {
 
 				BeforeEach(func() {
 					mirror = ghttp.NewServer()
+
+					req.Source.RegistryMirror = &resource.RegistryMirror{
+						Host: mirror.Addr(),
+					}
 				})
 
 				AfterEach(func() {
@@ -455,131 +440,71 @@ var _ = Describe("Check", func() {
 				})
 
 				Context("which has the image", func() {
-					Context("in an explicit namespace", func() {
-						BeforeEach(func() {
-							// use the mock mirror as the "origin", use Docker Hub as a "mirror"
-							req.Source.Repository = mirror.Addr() + "/" + req.Source.Repository
-							req.Source.RegistryMirror = &resource.RegistryMirror{
-								Host: name.DefaultRegistry,
-							}
-						})
+					BeforeEach(func() {
+						mirror.AppendHandlers(
+							ghttp.CombineHandlers(
+								ghttp.VerifyRequest("GET", "/v2/"),
+								ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
+							),
+							ghttp.CombineHandlers(
+								ghttp.VerifyRequest("GET", "/v2/"),
+								ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
+							),
+							ghttp.CombineHandlers(
+								ghttp.VerifyRequest("HEAD", "/v2/library/fake-image/manifests/latest"),
+								ghttp.RespondWith(http.StatusOK, ``, LATEST_FAKE_HEADERS),
+							),
+							ghttp.CombineHandlers(
+								ghttp.VerifyRequest("GET", "/v2/"),
+								ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
+							),
+							ghttp.CombineHandlers(
+								ghttp.VerifyRequest("HEAD", "/v2/library/fake-image/manifests/"+OLDER_FAKE_DIGEST),
+								ghttp.RespondWith(http.StatusOK, ``, OLDER_FAKE_HEADERS),
+							),
+						)
 
-						It("returns the current digest", func() {
-							Expect(res).To(Equal([]resource.Version{
-								{Digest: OLDER_STATIC_DIGEST},
-								{Digest: LATEST_STATIC_DIGEST},
-							}))
-						})
+						req.Source.Repository = "fake-image"
+
+						req.Version.Digest = OLDER_FAKE_DIGEST
 					})
 
-					Context("in an implied namespace", func() {
-						BeforeEach(func() {
-							mirror.AppendHandlers(
-								ghttp.CombineHandlers(
-									ghttp.VerifyRequest("GET", "/v2/"),
-									ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
-								),
-								ghttp.CombineHandlers(
-									ghttp.VerifyRequest("GET", "/v2/"),
-									ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
-								),
-								ghttp.CombineHandlers(
-									ghttp.VerifyRequest("HEAD", "/v2/library/fake-image/manifests/latest"),
-									ghttp.RespondWith(http.StatusOK, `{"fake":"manifest"}`, http.Header{
-										"Docker-Content-Digest": {LATEST_FAKE_DIGEST},
-									}),
-								),
-								ghttp.CombineHandlers(
-									ghttp.VerifyRequest("GET", "/v2/"),
-									ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
-								),
-								ghttp.CombineHandlers(
-									ghttp.VerifyRequest("HEAD", "/v2/library/fake-image/manifests/"+OLDER_FAKE_DIGEST),
-									ghttp.RespondWith(http.StatusOK, `{"fake":"outdated"}`, http.Header{
-										"Docker-Content-Digest": {OLDER_FAKE_DIGEST},
-									}),
-								),
-							)
-
-							req.Source.Repository = "fake-image"
-							req.Source.RegistryMirror = &resource.RegistryMirror{
-								Host: mirror.Addr(),
-							}
-
-							req.Version.Digest = OLDER_FAKE_DIGEST
-						})
-
-						It("returns the current digest", func() {
-							Expect(res).To(Equal([]resource.Version{
-								{Digest: OLDER_FAKE_DIGEST},
-								{Digest: LATEST_FAKE_DIGEST},
-							}))
-						})
+					It("returns the current digest", func() {
+						Expect(res).To(Equal([]resource.Version{
+							{Digest: OLDER_FAKE_DIGEST},
+							{Digest: LATEST_FAKE_DIGEST},
+						}))
 					})
 				})
 
 				Context("which is missing the image", func() {
 					BeforeEach(func() {
-						req.Source.RegistryMirror = &resource.RegistryMirror{
-							Host: mirror.Addr(),
-						}
+						mirror.AppendHandlers(
+							ghttp.CombineHandlers(
+								ghttp.VerifyRequest("GET", "/v2/"),
+								ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
+							),
+							ghttp.CombineHandlers(
+								ghttp.VerifyRequest("GET", "/v2/"),
+								ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
+							),
+							ghttp.CombineHandlers(
+								ghttp.VerifyRequest("HEAD", "/v2/library/busybox/manifests/1.32.0"),
+								ghttp.RespondWith(http.StatusNotFound, nil),
+							),
+						)
+
+						req.Source.Repository = "busybox"
+						req.Source.Tag = "1.32.0"
+
+						req.Version.Digest = OLDER_LIBRARY_DIGEST
 					})
 
-					Context("in an explicit namespace", func() {
-						BeforeEach(func() {
-							mirror.AppendHandlers(
-								ghttp.CombineHandlers(
-									ghttp.VerifyRequest("GET", "/v2/"),
-									ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
-								),
-								ghttp.CombineHandlers(
-									ghttp.VerifyRequest("GET", "/v2/"),
-									ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
-								),
-								ghttp.CombineHandlers(
-									ghttp.VerifyRequest("HEAD", "/v2/concourse/test-image-static/manifests/latest"),
-									ghttp.RespondWith(http.StatusNotFound, nil),
-								),
-							)
-						})
-
-						It("returns the current digest", func() {
-							Expect(res).To(Equal([]resource.Version{
-								{Digest: OLDER_STATIC_DIGEST},
-								{Digest: LATEST_STATIC_DIGEST},
-							}))
-						})
-					})
-
-					Context("in an implied namespace", func() {
-						BeforeEach(func() {
-							mirror.AppendHandlers(
-								ghttp.CombineHandlers(
-									ghttp.VerifyRequest("GET", "/v2/"),
-									ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
-								),
-								ghttp.CombineHandlers(
-									ghttp.VerifyRequest("GET", "/v2/"),
-									ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
-								),
-								ghttp.CombineHandlers(
-									ghttp.VerifyRequest("HEAD", "/v2/library/busybox/manifests/1.32.0"),
-									ghttp.RespondWith(http.StatusNotFound, nil),
-								),
-							)
-
-							req.Source.Repository = "busybox"
-							req.Source.Tag = "1.32.0"
-
-							req.Version.Digest = OLDER_LIBRARY_DIGEST
-						})
-
-						It("returns the current digest", func() {
-							Expect(res).To(Equal([]resource.Version{
-								{Digest: OLDER_LIBRARY_DIGEST},
-								{Digest: latestDigest(req.Source.Name())},
-							}))
-						})
+					It("returns the current digest", func() {
+						Expect(res).To(Equal([]resource.Version{
+							{Digest: OLDER_LIBRARY_DIGEST},
+							{Digest: latestDigest(req.Source.Name())},
+						}))
 					})
 				})
 			})
@@ -630,6 +555,10 @@ var _ = Describe("Check", func() {
 
 				BeforeEach(func() {
 					mirror = ghttp.NewServer()
+
+					req.Source.RegistryMirror = &resource.RegistryMirror{
+						Host: mirror.Addr(),
+					}
 				})
 
 				AfterEach(func() {
@@ -637,121 +566,65 @@ var _ = Describe("Check", func() {
 				})
 
 				Context("which has the image", func() {
-					Context("in an explicit namespace", func() {
-						BeforeEach(func() {
-							// use the mock mirror as the "origin", use Docker Hub as a "mirror"
-							req.Source.Repository = mirror.Addr() + "/" + req.Source.Repository
-							req.Source.RegistryMirror = &resource.RegistryMirror{
-								Host: name.DefaultRegistry,
-							}
-						})
+					BeforeEach(func() {
+						mirror.AppendHandlers(
+							ghttp.CombineHandlers(
+								ghttp.VerifyRequest("GET", "/v2/"),
+								ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
+							),
+							ghttp.CombineHandlers(
+								ghttp.VerifyRequest("GET", "/v2/"),
+								ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
+							),
+							ghttp.CombineHandlers(
+								ghttp.VerifyRequest("HEAD", "/v2/library/fake-image/manifests/latest"),
+								ghttp.RespondWith(http.StatusOK, ``, LATEST_FAKE_HEADERS),
+							),
+							ghttp.CombineHandlers(
+								ghttp.VerifyRequest("GET", "/v2/"),
+								ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
+							),
+							ghttp.CombineHandlers(
+								ghttp.VerifyRequest("HEAD", "/v2/library/fake-image/manifests/"+req.Version.Digest),
+								ghttp.RespondWith(http.StatusNotFound, `{"errors":[{"code": "MANIFEST_UNKNOWN", "message": "ruh roh", "detail": "not here"}]}`),
+							),
+						)
 
-						It("returns the current digest", func() {
-							Expect(res).To(Equal([]resource.Version{
-								{Digest: LATEST_STATIC_DIGEST},
-							}))
-						})
+						req.Source.Repository = "fake-image"
 					})
 
-					Context("in an implied namespace", func() {
-						BeforeEach(func() {
-							mirror.AppendHandlers(
-								ghttp.CombineHandlers(
-									ghttp.VerifyRequest("GET", "/v2/"),
-									ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
-								),
-								ghttp.CombineHandlers(
-									ghttp.VerifyRequest("GET", "/v2/"),
-									ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
-								),
-								ghttp.CombineHandlers(
-									ghttp.VerifyRequest("HEAD", "/v2/library/fake-image/manifests/latest"),
-									ghttp.RespondWith(http.StatusOK, `{"fake":"manifest"}`, http.Header{
-										"Docker-Content-Digest": {LATEST_FAKE_DIGEST},
-									}),
-								),
-								ghttp.CombineHandlers(
-									ghttp.VerifyRequest("GET", "/v2/"),
-									ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
-								),
-								ghttp.CombineHandlers(
-									ghttp.VerifyRequest("HEAD", "/v2/library/fake-image/manifests/"+req.Version.Digest),
-									ghttp.RespondWith(http.StatusNotFound, `{"errors":[{"code": "MANIFEST_UNKNOWN", "message": "ruh roh", "detail": "not here"}]}`),
-								),
-							)
-
-							req.Source.Repository = "fake-image"
-							req.Source.RegistryMirror = &resource.RegistryMirror{
-								Host: mirror.Addr(),
-							}
-						})
-
-						It("returns the current digest", func() {
-							Expect(res).To(Equal([]resource.Version{
-								{Digest: LATEST_FAKE_DIGEST},
-							}))
-						})
+					It("returns the current digest", func() {
+						Expect(res).To(Equal([]resource.Version{
+							{Digest: LATEST_FAKE_DIGEST},
+						}))
 					})
 				})
 
 				Context("which is missing the image", func() {
 					BeforeEach(func() {
-						req.Source.RegistryMirror = &resource.RegistryMirror{
-							Host: mirror.Addr(),
-						}
+						mirror.AppendHandlers(
+							ghttp.CombineHandlers(
+								ghttp.VerifyRequest("GET", "/v2/"),
+								ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
+							),
+							ghttp.CombineHandlers(
+								ghttp.VerifyRequest("GET", "/v2/"),
+								ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
+							),
+							ghttp.CombineHandlers(
+								ghttp.VerifyRequest("HEAD", "/v2/library/busybox/manifests/1.32.0"),
+								ghttp.RespondWith(http.StatusNotFound, nil),
+							),
+						)
+
+						req.Source.Repository = "busybox"
+						req.Source.Tag = "1.32.0"
 					})
 
-					Context("in an explicit namespace", func() {
-						BeforeEach(func() {
-							mirror.AppendHandlers(
-								ghttp.CombineHandlers(
-									ghttp.VerifyRequest("GET", "/v2/"),
-									ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
-								),
-								ghttp.CombineHandlers(
-									ghttp.VerifyRequest("GET", "/v2/"),
-									ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
-								),
-								ghttp.CombineHandlers(
-									ghttp.VerifyRequest("HEAD", "/v2/concourse/test-image-static/manifests/latest"),
-									ghttp.RespondWith(http.StatusNotFound, nil),
-								),
-							)
-						})
-
-						It("returns the current digest", func() {
-							Expect(res).To(Equal([]resource.Version{
-								{Digest: LATEST_STATIC_DIGEST},
-							}))
-						})
-					})
-
-					Context("in an implied namespace", func() {
-						BeforeEach(func() {
-							mirror.AppendHandlers(
-								ghttp.CombineHandlers(
-									ghttp.VerifyRequest("GET", "/v2/"),
-									ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
-								),
-								ghttp.CombineHandlers(
-									ghttp.VerifyRequest("GET", "/v2/"),
-									ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
-								),
-								ghttp.CombineHandlers(
-									ghttp.VerifyRequest("HEAD", "/v2/library/busybox/manifests/1.32.0"),
-									ghttp.RespondWith(http.StatusNotFound, nil),
-								),
-							)
-
-							req.Source.Repository = "busybox"
-							req.Source.Tag = "1.32.0"
-						})
-
-						It("returns the current digest", func() {
-							Expect(res).To(Equal([]resource.Version{
-								{Digest: latestDigest(req.Source.Name())},
-							}))
-						})
+					It("returns the current digest", func() {
+						Expect(res).To(Equal([]resource.Version{
+							{Digest: latestDigest(req.Source.Name())},
+						}))
 					})
 				})
 			})
@@ -809,6 +682,16 @@ var _ = DescribeTable("tracking semver tags",
 				"non-semver-tag": "random-1",
 				"latest":         "random-2",
 			},
+			Versions: []string{"latest"},
+		},
+	),
+	Entry("HEAD with GET fallback",
+		SemverTagCheckExample{
+			Tags: map[string]string{
+				"non-semver-tag": "random-1",
+				"latest":         "random-2",
+			},
+			NoHEAD:   true,
 			Versions: []string{"latest"},
 		},
 	),
@@ -1036,7 +919,7 @@ var _ = DescribeTable("tracking semver tags",
 				"2.0.0": "random-5",
 			},
 
-			Repository:    "fakeserver.foo:5000/test-image",
+			Repository:    "test-image",
 			WorkingMirror: true,
 
 			Versions: []string{"1.0.0", "1.2.1", "2.0.0"},
@@ -1057,6 +940,8 @@ type SemverTagCheckExample struct {
 	From *resource.Version
 
 	Versions []string
+
+	NoHEAD bool
 }
 
 func (example SemverTagCheckExample) Run() {
@@ -1069,8 +954,13 @@ func (example SemverTagCheckExample) Run() {
 		ghttp.RespondWith(http.StatusOK, ""),
 	)
 
+	repoStr := fmt.Sprintf("%s/test-image", registryServer.Addr())
+	if example.Repository != "" {
+		repoStr = example.Repository
+	}
+
 	var err error
-	repo, err := name.NewRepository(fmt.Sprintf("%s/test-image", registryServer.Addr()))
+	repo, err := name.NewRepository(repoStr)
 	Expect(err).ToNot(HaveOccurred())
 
 	req := resource.CheckRequest{
@@ -1081,17 +971,13 @@ func (example SemverTagCheckExample) Run() {
 		},
 	}
 
-	if example.Repository != "" {
-		req.Source.Repository = example.Repository
-	}
-
 	if example.RegistryMirror != "" {
 		req.Source.RegistryMirror = &resource.RegistryMirror{
 			Host: example.RegistryMirror,
 		}
 	} else if example.WorkingMirror {
 		req.Source.RegistryMirror = &resource.RegistryMirror{
-			Host: repo.RegistryStr(),
+			Host: registryServer.Addr(),
 		}
 	}
 
@@ -1131,15 +1017,34 @@ func (example SemverTagCheckExample) Run() {
 		digest, err := image.Digest()
 		Expect(err).ToNot(HaveOccurred())
 
-		registryServer.RouteToHandler(
-			"HEAD",
-			"/v2/"+repo.RepositoryStr()+"/manifests/"+name,
-			ghttp.RespondWith(http.StatusOK, manifest, http.Header{
-				"Content-Type":          {string(mediaType)},
-				"Content-Length":        {strconv.Itoa(len(manifest))},
-				"Docker-Content-Digest": {digest.String()},
-			}),
-		)
+		if example.NoHEAD {
+			registryServer.RouteToHandler(
+				"HEAD",
+				"/v2/"+repo.RepositoryStr()+"/manifests/"+name,
+				ghttp.RespondWith(http.StatusOK, manifest, http.Header{
+					"Content-Type":   {string(mediaType)},
+					"Content-Length": {strconv.Itoa(len(manifest))},
+				}),
+			)
+			registryServer.RouteToHandler(
+				"GET",
+				"/v2/"+repo.RepositoryStr()+"/manifests/"+name,
+				ghttp.RespondWith(http.StatusOK, manifest, http.Header{
+					"Content-Type":   {string(mediaType)},
+					"Content-Length": {strconv.Itoa(len(manifest))},
+				}),
+			)
+		} else {
+			registryServer.RouteToHandler(
+				"HEAD",
+				"/v2/"+repo.RepositoryStr()+"/manifests/"+name,
+				ghttp.RespondWith(http.StatusOK, manifest, http.Header{
+					"Content-Type":          {string(mediaType)},
+					"Content-Length":        {strconv.Itoa(len(manifest))},
+					"Docker-Content-Digest": {digest.String()},
+				}),
+			)
+		}
 
 		tagVersions[name] = resource.Version{
 			Tag:    name,

@@ -98,6 +98,14 @@ func (source Source) Mirror() (Source, bool, error) {
 		return Source{}, false, fmt.Errorf("parse repository: %w", err)
 	}
 
+	if repo.Registry.String() != name.DefaultRegistry {
+		// only use registry_mirror for the default registry so that a mirror can
+		// be configured as a global default
+		//
+		// note that this matches the behavior of the `docker` CLI
+		return Source{}, false, nil
+	}
+
 	// resolve implicit namespace by re-parsing .Name()
 	mirror, err := name.NewRepository(repo.Name())
 	if err != nil {

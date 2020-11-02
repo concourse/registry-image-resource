@@ -178,12 +178,14 @@ func checkRepository(repo name.Repository, source resource.Source, from *resourc
 
 		tagRef := repo.Tag(identifier)
 
-		desc, err := remote.Head(tagRef, opts...)
+		digest, found, err := headOrGet(tagRef, opts...)
 		if err != nil {
 			return resource.CheckResponse{}, fmt.Errorf("get tag digest: %w", err)
 		}
 
-		digest := desc.Digest
+		if !found {
+			continue
+		}
 
 		tagDigests[identifier] = digest.String()
 
@@ -253,37 +255,26 @@ func (vs TagVersions) Less(i, j int) bool { return vs[i].Version.LessThan(vs[j].
 func (vs TagVersions) Swap(i, j int)      { vs[i], vs[j] = vs[j], vs[i] }
 
 func checkTag(tag name.Tag, source resource.Source, version *resource.Version, opts ...remote.Option) (resource.CheckResponse, error) {
-	var missingTag bool
-	var digest v1.Hash
-	desc, err := remote.Head(tag, opts...)
+	digest, found, err := headOrGet(tag, opts...)
 	if err != nil {
-		missingTag = checkMissingManifest(err)
-		if !missingTag {
-			return resource.CheckResponse{}, fmt.Errorf("get remote image: %w", err)
-		}
-	} else {
-		digest = desc.Digest
+		return resource.CheckResponse{}, fmt.Errorf("get remote image: %w", err)
 	}
 
 	response := resource.CheckResponse{}
-	if version != nil && !missingTag && version.Digest != digest.String() {
+	if version != nil && found && version.Digest != digest.String() {
 		digestRef := tag.Repository.Digest(version.Digest)
 
-		_, err := remote.Head(digestRef, opts...)
-		var missingDigest bool
+		_, found, err := headOrGet(digestRef, opts...)
 		if err != nil {
-			missingDigest = checkMissingManifest(err)
-			if !missingDigest {
-				return resource.CheckResponse{}, fmt.Errorf("get remote image: %w", err)
-			}
+			return resource.CheckResponse{}, fmt.Errorf("get remote image: %w", err)
 		}
 
-		if !missingDigest {
+		if found {
 			response = append(response, *version)
 		}
 	}
 
-	if !missingTag {
+	if found {
 		response = append(response, resource.Version{
 			Digest: digest.String(),
 		})
@@ -292,13 +283,32 @@ func checkTag(tag name.Tag, source resource.Source, version *resource.Version, o
 	return response, nil
 }
 
-func checkMissingManifest(err error) bool {
-	var missing bool
-	if rErr, ok := err.(*transport.Error); ok {
-		if rErr.StatusCode == http.StatusNotFound {
-			return true
+func headOrGet(ref name.Reference, imageOpts ...remote.Option) (v1.Hash, bool, error) {
+	v1Desc, err := remote.Head(ref, imageOpts...)
+	if err != nil {
+		if checkMissingManifest(err) {
+			return v1.Hash{}, false, nil
 		}
+
+		remoteDesc, err := remote.Get(ref, imageOpts...)
+		if err != nil {
+			if checkMissingManifest(err) {
+				return v1.Hash{}, false, nil
+			}
+
+			return v1.Hash{}, false, err
+		}
+
+		return remoteDesc.Digest, true, nil
 	}
 
-	return missing
+	return v1Desc.Digest, true, nil
+}
+
+func checkMissingManifest(err error) bool {
+	if rErr, ok := err.(*transport.Error); ok {
+		return rErr.StatusCode == http.StatusNotFound
+	}
+
+	return false
 }
