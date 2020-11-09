@@ -161,9 +161,9 @@ func checkRepository(repo name.Repository, source resource.Source, from *resourc
 					continue
 				}
 
-				if !strings.HasPrefix(pre, "alpha.") &&
-					!strings.HasPrefix(pre, "beta.") &&
-					!strings.HasPrefix(pre, "rc.") {
+				if !strings.HasPrefix(pre, "alpha") &&
+					!strings.HasPrefix(pre, "beta") &&
+					!strings.HasPrefix(pre, "rc") {
 					// additional variant, not a prerelease segment
 					continue
 				}
