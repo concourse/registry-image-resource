@@ -193,7 +193,19 @@ func checkRepository(repo name.Repository, source resource.Source, from *resourc
 			versionTags[ver] = tagRef
 
 			existing, found := digestVersions[digest.String()]
-			if !found || strings.Count(ver.Original(), ".") > strings.Count(existing.Original(), ".") {
+
+			shouldSet := !found
+			if found {
+				if existing.Prerelease() != "" && ver.Prerelease() == "" {
+					// favor final version over prereleases
+					shouldSet = true
+				} else if strings.Count(ver.Original(), ".") > strings.Count(existing.Original(), ".") {
+					// favor more specific semver tag (i.e. 3.2.1 over 3.2, 1.0.0-rc.2 over 1.0.0-rc)
+					shouldSet = true
+				}
+			}
+
+			if shouldSet {
 				digestVersions[digest.String()] = ver
 			}
 		}

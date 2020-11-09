@@ -831,6 +831,18 @@ var _ = DescribeTable("tracking semver tags",
 			},
 		},
 	),
+	Entry("final versions take priority over rcs",
+		SemverTagCheckExample{
+			Tags: map[string]string{
+				"1.0.0-rc.1": "random-2",
+				"1.0.0-rc1":  "random-2",
+				"1.0.0-rc":   "random-2",
+				"1.0.0":      "random-2",
+			},
+			PreReleases: true,
+			Versions:    []string{"1.0.0"},
+		},
+	),
 	Entry("mixed specificity semver tags",
 		SemverTagCheckExample{
 			Tags: map[string]string{
