@@ -16,6 +16,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/credentials/stscreds"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ecr"
+	"github.com/aws/aws-sdk-go/service/ecr/ecriface"
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
@@ -56,6 +57,7 @@ type AwsCredentials struct {
 	AwsSecretAccessKey string `json:"aws_secret_access_key,omitempty"`
 	AwsSessionToken    string `json:"aws_session_token,omitempty"`
 	AwsRegion          string `json:"aws_region,omitempty"`
+	AWSECRRegistryId   string `json:"aws_ecr_registry_id,omitempty"`
 	AwsRoleArn         string `json:"aws_role_arn,omitempty"`
 }
 
@@ -256,9 +258,7 @@ func (source *Source) AuthenticateToECR() bool {
 	}
 
 	client := ecr.New(mySession, &config)
-
-	input := &ecr.GetAuthorizationTokenInput{}
-	result, err := client.GetAuthorizationToken(input)
+	result, err := source.GetECRAuthorizationToken(client)
 	if err != nil {
 		logrus.Errorf("failed to authenticate to ECR: %s", err)
 		return false
@@ -287,6 +287,14 @@ func (source *Source) AuthenticateToECR() bool {
 	source.Repository = strings.Join([]string{strings.TrimPrefix(*result.AuthorizationData[0].ProxyEndpoint, "https://"), source.Repository}, "/")
 
 	return true
+}
+
+func (source *Source) GetECRAuthorizationToken(client ecriface.ECRAPI) (*ecr.GetAuthorizationTokenOutput, error) {
+	input := &ecr.GetAuthorizationTokenInput{}
+	if source.AWSECRRegistryId != "" {
+		input.RegistryIds = append(input.RegistryIds, aws.String(source.AWSECRRegistryId))
+	}
+	return client.GetAuthorizationToken(input)
 }
 
 // Tag refers to a tag for an image in the registry.
