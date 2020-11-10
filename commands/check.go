@@ -196,7 +196,10 @@ func checkRepository(repo name.Repository, source resource.Source, from *resourc
 
 			shouldSet := !found
 			if found {
-				if existing.Prerelease() != "" && ver.Prerelease() == "" {
+				if existing.Prerelease() == "" && ver.Prerelease() != "" {
+					// favor final version over prereleases
+					shouldSet = false
+				} else if existing.Prerelease() != "" && ver.Prerelease() == "" {
 					// favor final version over prereleases
 					shouldSet = true
 				} else if strings.Count(ver.Original(), ".") > strings.Count(existing.Original(), ".") {
