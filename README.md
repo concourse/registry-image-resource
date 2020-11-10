@@ -223,8 +223,8 @@ will be included.
 
 Note however that variants and pre-releases both use the same syntax:
 `1.2.3-alpine` is technically also valid syntax for a Semver prerelease. For
-this reason, the resource will only consider prelease data containing
-`alpha.`, `beta.`, or `rc.` as a proper prerelease, treating anything else as
+this reason, the resource will only consider prerelease data starting with
+`alpha`, `beta`, or `rc` as a proper prerelease, treating anything else as
 a variant.
 
 
