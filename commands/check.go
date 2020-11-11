@@ -285,12 +285,16 @@ func checkTag(tag name.Tag, source resource.Source, version *resource.Version, o
 		}
 
 		if found {
-			response = append(response, *version)
+			response = append(response, resource.Version{
+				Tag:    tag.TagStr(),
+				Digest: version.Digest,
+			})
 		}
 	}
 
 	if found {
 		response = append(response, resource.Version{
+			Tag:    tag.TagStr(),
 			Digest: digest.String(),
 		})
 	}

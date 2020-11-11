@@ -69,7 +69,7 @@ var _ = Describe("Check", func() {
 
 			It("returns the current digest", func() {
 				Expect(res).To(Equal([]resource.Version{
-					{Digest: LATEST_STATIC_DIGEST},
+					{Tag: "latest", Digest: LATEST_STATIC_DIGEST},
 				}))
 			})
 
@@ -90,7 +90,7 @@ var _ = Describe("Check", func() {
 
 				It("returns the current digest", func() {
 					Expect(res).To(Equal([]resource.Version{
-						{Digest: PRIVATE_LATEST_STATIC_DIGEST},
+						{Tag: "latest", Digest: PRIVATE_LATEST_STATIC_DIGEST},
 					}))
 				})
 			})
@@ -139,7 +139,7 @@ var _ = Describe("Check", func() {
 
 				It("falls back on fetching the manifest", func() {
 					Expect(res).To(Equal([]resource.Version{
-						{Digest: LATEST_FAKE_DIGEST},
+						{Tag: "latest", Digest: LATEST_FAKE_DIGEST},
 					}))
 				})
 			})
@@ -188,7 +188,7 @@ var _ = Describe("Check", func() {
 
 					It("it checks and returns the current digest using the registry declared in the repository and not using the mirror", func() {
 						Expect(res).To(Equal([]resource.Version{
-							{Digest: LATEST_FAKE_DIGEST},
+							{Tag: "latest", Digest: LATEST_FAKE_DIGEST},
 						}))
 
 						Expect(mirror.ReceivedRequests()).To(BeEmpty())
@@ -217,7 +217,7 @@ var _ = Describe("Check", func() {
 
 					It("returns the current digest", func() {
 						Expect(res).To(Equal([]resource.Version{
-							{Digest: LATEST_FAKE_DIGEST},
+							{Tag: "latest", Digest: LATEST_FAKE_DIGEST},
 						}))
 					})
 				})
@@ -245,7 +245,7 @@ var _ = Describe("Check", func() {
 
 					It("returns the current digest", func() {
 						Expect(res).To(Equal([]resource.Version{
-							{Digest: latestDigest(req.Source.Name())},
+							{Tag: "1.32.0", Digest: latestDigest(req.Source.Name())},
 						}))
 					})
 				})
@@ -260,14 +260,27 @@ var _ = Describe("Check", func() {
 				}
 
 				req.Version = &resource.Version{
+					Tag:    "latest",
 					Digest: LATEST_STATIC_DIGEST,
 				}
 			})
 
 			It("returns the given digest", func() {
 				Expect(res).To(Equal([]resource.Version{
-					{Digest: LATEST_STATIC_DIGEST},
+					{Tag: "latest", Digest: LATEST_STATIC_DIGEST},
 				}))
+			})
+
+			Context("when the cursor version is missing the tag", func() {
+				BeforeEach(func() {
+					req.Version.Tag = ""
+				})
+
+				It("includes the tag in the response version", func() {
+					Expect(res).To(Equal([]resource.Version{
+						{Tag: "latest", Digest: LATEST_STATIC_DIGEST},
+					}))
+				})
 			})
 
 			Context("against a private repo with credentials", func() {
@@ -285,13 +298,14 @@ var _ = Describe("Check", func() {
 					checkDockerPrivateUserConfigured()
 
 					req.Version = &resource.Version{
+						Tag:    "latest",
 						Digest: PRIVATE_LATEST_STATIC_DIGEST,
 					}
 				})
 
 				It("returns the current digest", func() {
 					Expect(res).To(Equal([]resource.Version{
-						{Digest: PRIVATE_LATEST_STATIC_DIGEST},
+						{Tag: "latest", Digest: PRIVATE_LATEST_STATIC_DIGEST},
 					}))
 				})
 			})
@@ -331,6 +345,7 @@ var _ = Describe("Check", func() {
 						req.Source.Repository = "fake-image"
 
 						req.Version = &resource.Version{
+							Tag:    "latest",
 							Digest: LATEST_FAKE_DIGEST,
 						}
 					})
@@ -363,6 +378,7 @@ var _ = Describe("Check", func() {
 						req.Source.Tag = "1.32.0"
 
 						req.Version = &resource.Version{
+							Tag:    "1.32.0",
 							Digest: latestDigest(req.Source.Name()),
 						}
 					})
@@ -385,14 +401,15 @@ var _ = Describe("Check", func() {
 
 				req.Version = &resource.Version{
 					// this was previously pushed to the 'latest' tag
+					Tag:    "latest",
 					Digest: OLDER_STATIC_DIGEST,
 				}
 			})
 
 			It("returns the previous digest and the current digest", func() {
 				Expect(res).To(Equal([]resource.Version{
-					{Digest: OLDER_STATIC_DIGEST},
-					{Digest: LATEST_STATIC_DIGEST},
+					{Tag: "latest", Digest: OLDER_STATIC_DIGEST},
+					{Tag: "latest", Digest: LATEST_STATIC_DIGEST},
 				}))
 			})
 
@@ -412,14 +429,15 @@ var _ = Describe("Check", func() {
 
 					req.Version = &resource.Version{
 						// this was previously pushed to the 'latest' tag
+						Tag:    "latest",
 						Digest: PRIVATE_OLDER_STATIC_DIGEST,
 					}
 				})
 
 				It("returns the current digest", func() {
 					Expect(res).To(Equal([]resource.Version{
-						{Digest: PRIVATE_OLDER_STATIC_DIGEST},
-						{Digest: PRIVATE_LATEST_STATIC_DIGEST},
+						{Tag: "latest", Digest: PRIVATE_OLDER_STATIC_DIGEST},
+						{Tag: "latest", Digest: PRIVATE_LATEST_STATIC_DIGEST},
 					}))
 				})
 			})
@@ -471,8 +489,8 @@ var _ = Describe("Check", func() {
 
 					It("returns the current digest", func() {
 						Expect(res).To(Equal([]resource.Version{
-							{Digest: OLDER_FAKE_DIGEST},
-							{Digest: LATEST_FAKE_DIGEST},
+							{Tag: "latest", Digest: OLDER_FAKE_DIGEST},
+							{Tag: "latest", Digest: LATEST_FAKE_DIGEST},
 						}))
 					})
 				})
@@ -497,13 +515,14 @@ var _ = Describe("Check", func() {
 						req.Source.Repository = "busybox"
 						req.Source.Tag = "1.32.0"
 
+						req.Version.Tag = "1.32.0"
 						req.Version.Digest = OLDER_LIBRARY_DIGEST
 					})
 
 					It("returns the current digest", func() {
 						Expect(res).To(Equal([]resource.Version{
-							{Digest: OLDER_LIBRARY_DIGEST},
-							{Digest: latestDigest(req.Source.Name())},
+							{Tag: "1.32.0", Digest: OLDER_LIBRARY_DIGEST},
+							{Tag: "1.32.0", Digest: latestDigest(req.Source.Name())},
 						}))
 					})
 				})
@@ -518,13 +537,14 @@ var _ = Describe("Check", func() {
 				}
 
 				req.Version = &resource.Version{
+					Tag:    "latest",
 					Digest: "sha256:deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
 				}
 			})
 
 			It("returns only the current digest", func() {
 				Expect(res).To(Equal([]resource.Version{
-					{Digest: LATEST_STATIC_DIGEST},
+					{Tag: "latest", Digest: LATEST_STATIC_DIGEST},
 				}))
 			})
 
@@ -545,7 +565,7 @@ var _ = Describe("Check", func() {
 
 				It("returns the current digest", func() {
 					Expect(res).To(Equal([]resource.Version{
-						{Digest: PRIVATE_LATEST_STATIC_DIGEST},
+						{Tag: "latest", Digest: PRIVATE_LATEST_STATIC_DIGEST},
 					}))
 				})
 			})
@@ -595,7 +615,7 @@ var _ = Describe("Check", func() {
 
 					It("returns the current digest", func() {
 						Expect(res).To(Equal([]resource.Version{
-							{Digest: LATEST_FAKE_DIGEST},
+							{Tag: "latest", Digest: LATEST_FAKE_DIGEST},
 						}))
 					})
 				})
@@ -623,7 +643,7 @@ var _ = Describe("Check", func() {
 
 					It("returns the current digest", func() {
 						Expect(res).To(Equal([]resource.Version{
-							{Digest: latestDigest(req.Source.Name())},
+							{Tag: "1.32.0", Digest: latestDigest(req.Source.Name())},
 						}))
 					})
 				})
