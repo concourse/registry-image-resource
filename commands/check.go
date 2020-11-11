@@ -117,6 +117,8 @@ func performCheck(principal resource.BasicCredentials, version *resource.Version
 
 	if auth.Username != "" && auth.Password != "" {
 		imageOpts = append(imageOpts, remote.WithAuth(auth))
+	} else {
+		imageOpts = append(imageOpts, remote.WithAuthFromKeychain(authn.DefaultKeychain))
 	}
 
 	digest, found, err := headOrGet(ref, imageOpts...)

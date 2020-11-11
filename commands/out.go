@@ -3,6 +3,10 @@ package commands
 import (
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+	"path/filepath"
+
 	resource "github.com/concourse/registry-image-resource"
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
@@ -11,9 +15,6 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/tarball"
 	"github.com/simonshyu/notary-gcr/pkg/gcr"
 	"github.com/sirupsen/logrus"
-	"io"
-	"net/http"
-	"path/filepath"
 )
 
 type OutRequest struct {
@@ -142,12 +143,25 @@ func (o *out) Execute() error {
 }
 
 func outPut(req OutRequest, img v1.Image, ref name.Reference, extraRefs []name.Reference) error {
-	auth := &authn.Basic{
-		Username: req.Source.Username,
-		Password: req.Source.Password,
+
+	var auth authn.Authenticator
+	var authOpt remote.Option
+	var err error
+	if req.Source.Username != "" && req.Source.Password != "" {
+		auth = &authn.Basic{
+			Username: req.Source.Username,
+			Password: req.Source.Password,
+		}
+		authOpt = remote.WithAuth(auth)
+	} else {
+		auth, err = authn.DefaultKeychain.Resolve(ref.Context())
+		authOpt = remote.WithAuthFromKeychain(authn.DefaultKeychain)
+		if err != nil {
+			return fmt.Errorf("resolve target: %w", err)
+		}
 	}
 
-	err := remote.Write(ref, img, remote.WithAuth(auth))
+	err = remote.Write(ref, img, authOpt)
 	if err != nil {
 		return fmt.Errorf("upload image: %w", err)
 	}
@@ -175,7 +189,7 @@ func outPut(req OutRequest, img v1.Image, ref name.Reference, extraRefs []name.R
 	for _, extraRef := range extraRefs {
 		logrus.Infof("pushing as tag %s", extraRef.Identifier())
 
-		err = remote.Write(extraRef, img, remote.WithAuth(auth), remote.WithTransport(http.DefaultTransport))
+		err = remote.Write(extraRef, img, authOpt, remote.WithTransport(http.DefaultTransport))
 		if err != nil {
 			return fmt.Errorf("tag image: %w", err)
 		}

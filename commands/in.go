@@ -181,6 +181,8 @@ func get(principal resource.BasicCredentials, digest name.Digest) (v1.Image, err
 
 	if auth.Username != "" && auth.Password != "" {
 		imageOpts = append(imageOpts, remote.WithAuth(auth))
+	} else {
+		imageOpts = append(imageOpts, remote.WithAuthFromKeychain(authn.DefaultKeychain))
 	}
 
 	image, err := remote.Image(digest, imageOpts...)
