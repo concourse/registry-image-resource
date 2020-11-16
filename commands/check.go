@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sort"
+	"strings"
 
+	"github.com/Masterminds/semver"
 	resource "github.com/concourse/registry-image-resource"
-	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
@@ -15,14 +17,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-type CheckRequest struct {
-	Source  resource.Source   `json:"source"`
-	Version *resource.Version `json:"version"`
-}
-
-type CheckResponse []resource.Version
-
-type check struct {
+type Check struct {
 	stdin  io.Reader
 	stderr io.Writer
 	stdout io.Writer
@@ -34,8 +29,8 @@ func NewCheck(
 	stderr io.Writer,
 	stdout io.Writer,
 	args []string,
-) *check {
-	return &check{
+) *Check {
+	return &Check{
 		stdin:  stdin,
 		stderr: stderr,
 		stdout: stdout,
@@ -43,10 +38,10 @@ func NewCheck(
 	}
 }
 
-func (c *check) Execute() error {
+func (c *Check) Execute() error {
 	setupLogging(c.stderr)
 
-	var req CheckRequest
+	var req resource.CheckRequest
 	decoder := json.NewDecoder(c.stdin)
 	decoder.DisallowUnknownFields()
 	err := decoder.Decode(&req)
@@ -60,43 +55,27 @@ func (c *check) Execute() error {
 		}
 	}
 
-	repo, err := name.NewRepository(req.Source.Repository, name.WeakValidation)
+	mirrorSource, hasMirror, err := req.Source.Mirror()
 	if err != nil {
-		return fmt.Errorf("failed to resolve repository: %s", err)
+		return fmt.Errorf("failed to resolve mirror: %w", err)
 	}
 
-	var response CheckResponse
-	tag := new(name.Tag)
+	var response resource.CheckResponse
 
-	// only use the RegistryMirror as the Registry if the repo doesn't use a different,
-	// explicitly-declared, non-default registry, such as 'some-registry.com/foo/bar'.
-	if req.Source.RegistryMirror != nil && repo.Registry.String() == name.DefaultRegistry {
-		mirror, err := name.NewRepository(repo.String())
+	if hasMirror {
+		response, err = check(mirrorSource, req.Version)
 		if err != nil {
-			return fmt.Errorf("could not resolve mirror repository: %s", err)
-		}
-
-		mirror.Registry, err = name.NewRegistry(req.Source.RegistryMirror.Host, name.WeakValidation)
-		if err != nil {
-			return fmt.Errorf("could not resolve registry: %s", err)
-		}
-
-		*tag = mirror.Tag(req.Source.Tag())
-
-		response, err = performCheck(req.Source.RegistryMirror.BasicCredentials, req.Version, *tag)
-		if err != nil {
-			logrus.Warnf("checking mirror %s failed: %s", mirror.RegistryStr(), err)
+			logrus.Warnf("checking mirror %s failed: %s", mirrorSource.Repository, err)
 		} else if len(response) == 0 {
-			logrus.Warnf("checking mirror %s failed: tag not found", mirror.RegistryStr())
+			logrus.Warnf("checking mirror %s failed: tag not found", mirrorSource.Repository)
 		}
 	}
 
 	if len(response) == 0 {
-		*tag = repo.Tag(req.Source.Tag())
-		response, err = performCheck(req.Source.BasicCredentials, req.Version, *tag)
-	}
-	if err != nil {
-		return fmt.Errorf("checking origin %s failed: %s", tag.RegistryStr(), err)
+		response, err = check(req.Source, req.Version)
+		if err != nil {
+			return fmt.Errorf("checking origin %s failed: %w", req.Source.Repository, err)
+		}
 	}
 
 	err = json.NewEncoder(c.stdout).Encode(response)
@@ -107,39 +86,215 @@ func (c *check) Execute() error {
 	return nil
 }
 
-func performCheck(principal resource.BasicCredentials, version *resource.Version, ref name.Tag) (CheckResponse, error) {
-	auth := &authn.Basic{
-		Username: principal.Username,
-		Password: principal.Password,
-	}
-
-	imageOpts := []remote.Option{}
-
-	if auth.Username != "" && auth.Password != "" {
-		imageOpts = append(imageOpts, remote.WithAuth(auth))
-	}
-
-	digest, found, err := headOrGet(ref, imageOpts...)
+func check(source resource.Source, from *resource.Version) (resource.CheckResponse, error) {
+	repo, err := name.NewRepository(source.Repository)
 	if err != nil {
-		return CheckResponse{}, fmt.Errorf("get remote image: %w", err)
+		return resource.CheckResponse{}, fmt.Errorf("resolve repository: %w", err)
 	}
 
-	response := CheckResponse{}
-	if version != nil && found && version.Digest != digest.String() {
-		digestRef := ref.Repository.Digest(version.Digest)
+	opts, err := source.AuthOptions(repo)
+	if err != nil {
+		return resource.CheckResponse{}, err
+	}
 
-		_, found, err := headOrGet(digestRef, imageOpts...)
+	if source.Tag != "" {
+		return checkTag(repo.Tag(source.Tag.String()), source, from, opts...)
+	} else {
+		return checkRepository(repo, source, from, opts...)
+	}
+}
+
+func checkRepository(repo name.Repository, source resource.Source, from *resource.Version, opts ...remote.Option) (resource.CheckResponse, error) {
+	tags, err := remote.List(repo, opts...)
+	if err != nil {
+		return resource.CheckResponse{}, fmt.Errorf("list repository tags: %w", err)
+	}
+
+	bareTag := "latest"
+	if source.Variant != "" {
+		bareTag = source.Variant
+	}
+
+	versionTags := map[*semver.Version]name.Tag{}
+	tagDigests := map[string]string{}
+	digestVersions := map[string]*semver.Version{}
+
+	var cursorVer *semver.Version
+	var latestTag string
+
+	if from != nil {
+		// assess the 'from' tag first so we can skip lower version numbers
+		sort.Slice(tags, func(i, j int) bool {
+			return tags[i] == from.Tag
+		})
+	}
+
+	for _, identifier := range tags {
+		var ver *semver.Version
+		if identifier == bareTag {
+			latestTag = identifier
+		} else {
+			verStr := identifier
+			if source.Variant != "" {
+				if !strings.HasSuffix(identifier, "-"+source.Variant) {
+					continue
+				}
+
+				verStr = strings.TrimSuffix(identifier, "-"+source.Variant)
+			}
+
+			ver, err = semver.NewVersion(verStr)
+			if err != nil {
+				// not a version
+				continue
+			}
+
+			pre := ver.Prerelease()
+			if pre != "" {
+				// pre-releases not enabled; skip
+				if !source.PreReleases {
+					continue
+				}
+
+				// contains additional variant
+				if strings.Contains(pre, "-") {
+					continue
+				}
+
+				if !strings.HasPrefix(pre, "alpha") &&
+					!strings.HasPrefix(pre, "beta") &&
+					!strings.HasPrefix(pre, "rc") {
+					// additional variant, not a prerelease segment
+					continue
+				}
+			}
+
+			if cursorVer != nil && (cursorVer.GreaterThan(ver) || cursorVer.Equal(ver)) {
+				// optimization: don't bother fetching digests for lesser (or equal but
+				// less specific, i.e. 6.3 vs 6.3.0) version tags
+				continue
+			}
+		}
+
+		tagRef := repo.Tag(identifier)
+
+		digest, found, err := headOrGet(tagRef, opts...)
 		if err != nil {
-			return CheckResponse{}, fmt.Errorf("get remote image: %w", err)
+			return resource.CheckResponse{}, fmt.Errorf("get tag digest: %w", err)
+		}
+
+		if !found {
+			continue
+		}
+
+		tagDigests[identifier] = digest.String()
+
+		if ver != nil {
+			versionTags[ver] = tagRef
+
+			existing, found := digestVersions[digest.String()]
+
+			shouldSet := !found
+			if found {
+				if existing.Prerelease() == "" && ver.Prerelease() != "" {
+					// favor final version over prereleases
+					shouldSet = false
+				} else if existing.Prerelease() != "" && ver.Prerelease() == "" {
+					// favor final version over prereleases
+					shouldSet = true
+				} else if strings.Count(ver.Original(), ".") > strings.Count(existing.Original(), ".") {
+					// favor more specific semver tag (i.e. 3.2.1 over 3.2, 1.0.0-rc.2 over 1.0.0-rc)
+					shouldSet = true
+				}
+			}
+
+			if shouldSet {
+				digestVersions[digest.String()] = ver
+			}
+		}
+
+		if from != nil && identifier == from.Tag && digest.String() == from.Digest {
+			// if the 'from' version exists and has the same digest, treat its
+			// version as a cursor in the tags, only considering newer versions
+			//
+			// note: the 'from' version will always be the first one hit by this loop
+			cursorVer = ver
+		}
+	}
+
+	var tagVersions TagVersions
+	for digest, version := range digestVersions {
+		tagVersions = append(tagVersions, TagVersion{
+			TagName: versionTags[version].TagStr(),
+			Digest:  digest,
+			Version: version,
+		})
+	}
+
+	sort.Sort(tagVersions)
+
+	response := resource.CheckResponse{}
+
+	for _, ver := range tagVersions {
+		response = append(response, resource.Version{
+			Tag:    ver.TagName,
+			Digest: ver.Digest,
+		})
+	}
+
+	if latestTag != "" {
+		digest := tagDigests[latestTag]
+
+		_, existsAsSemver := digestVersions[digest]
+		if !existsAsSemver {
+			response = append(response, resource.Version{
+				Tag:    latestTag,
+				Digest: digest,
+			})
+		}
+	}
+
+	return response, nil
+}
+
+type TagVersion struct {
+	TagName string
+	Digest  string
+	Version *semver.Version
+}
+
+type TagVersions []TagVersion
+
+func (vs TagVersions) Len() int           { return len(vs) }
+func (vs TagVersions) Less(i, j int) bool { return vs[i].Version.LessThan(vs[j].Version) }
+func (vs TagVersions) Swap(i, j int)      { vs[i], vs[j] = vs[j], vs[i] }
+
+func checkTag(tag name.Tag, source resource.Source, version *resource.Version, opts ...remote.Option) (resource.CheckResponse, error) {
+	digest, found, err := headOrGet(tag, opts...)
+	if err != nil {
+		return resource.CheckResponse{}, fmt.Errorf("get remote image: %w", err)
+	}
+
+	response := resource.CheckResponse{}
+	if version != nil && found && version.Digest != digest.String() {
+		digestRef := tag.Repository.Digest(version.Digest)
+
+		_, found, err := headOrGet(digestRef, opts...)
+		if err != nil {
+			return resource.CheckResponse{}, fmt.Errorf("get remote image: %w", err)
 		}
 
 		if found {
-			response = append(response, *version)
+			response = append(response, resource.Version{
+				Tag:    tag.TagStr(),
+				Digest: version.Digest,
+			})
 		}
 	}
 
 	if found {
 		response = append(response, resource.Version{
+			Tag:    tag.TagStr(),
 			Digest: digest.String(),
 		})
 	}

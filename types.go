@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -16,10 +17,40 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ecr"
 	"github.com/aws/aws-sdk-go/service/ecr/ecriface"
+	"github.com/google/go-containerregistry/pkg/authn"
+	"github.com/google/go-containerregistry/pkg/name"
+	"github.com/google/go-containerregistry/pkg/v1/remote"
+	"github.com/google/go-containerregistry/pkg/v1/remote/transport"
 	"github.com/sirupsen/logrus"
 )
 
-const DefaultTag = "latest"
+type CheckRequest struct {
+	Source  Source   `json:"source"`
+	Version *Version `json:"version"`
+}
+
+type CheckResponse []Version
+
+type InRequest struct {
+	Source  Source    `json:"source"`
+	Params  GetParams `json:"params"`
+	Version Version   `json:"version"`
+}
+
+type InResponse struct {
+	Version  Version         `json:"version"`
+	Metadata []MetadataField `json:"metadata"`
+}
+
+type OutRequest struct {
+	Source Source    `json:"source"`
+	Params PutParams `json:"params"`
+}
+
+type OutResponse struct {
+	Version  Version         `json:"version"`
+	Metadata []MetadataField `json:"metadata"`
+}
 
 type AwsCredentials struct {
 	AwsAccessKeyId     string `json:"aws_access_key_id,omitempty"`
@@ -43,7 +74,11 @@ type RegistryMirror struct {
 
 type Source struct {
 	Repository string `json:"repository"`
-	RawTag     Tag    `json:"tag,omitempty"`
+
+	PreReleases bool   `json:"pre_releases,omitempty"`
+	Variant     string `json:"variant,omitempty"`
+
+	Tag Tag `json:"tag,omitempty"`
 
 	BasicCredentials
 	AwsCredentials
@@ -53,6 +88,66 @@ type Source struct {
 	ContentTrust *ContentTrust `json:"content_trust,omitempty"`
 
 	Debug bool `json:"debug,omitempty"`
+}
+
+func (source Source) Mirror() (Source, bool, error) {
+	if source.RegistryMirror == nil {
+		return Source{}, false, nil
+	}
+
+	repo, err := name.NewRepository(source.Repository)
+	if err != nil {
+		return Source{}, false, fmt.Errorf("parse repository: %w", err)
+	}
+
+	if repo.Registry.String() != name.DefaultRegistry {
+		// only use registry_mirror for the default registry so that a mirror can
+		// be configured as a global default
+		//
+		// note that this matches the behavior of the `docker` CLI
+		return Source{}, false, nil
+	}
+
+	// resolve implicit namespace by re-parsing .Name()
+	mirror, err := name.NewRepository(repo.Name())
+	if err != nil {
+		return Source{}, false, fmt.Errorf("resolve implicit namespace: %w", err)
+	}
+
+	mirror.Registry, err = name.NewRegistry(source.RegistryMirror.Host)
+	if err != nil {
+		return Source{}, false, fmt.Errorf("parse mirror registry: %w", err)
+	}
+
+	copy := source
+	copy.Repository = mirror.Name()
+	copy.BasicCredentials = source.RegistryMirror.BasicCredentials
+	copy.RegistryMirror = nil
+
+	return copy, true, nil
+}
+
+func (source Source) AuthOptions(repo name.Repository) ([]remote.Option, error) {
+	var auth authn.Authenticator
+	if source.Username != "" && source.Password != "" {
+		auth = &authn.Basic{
+			Username: source.Username,
+			Password: source.Password,
+		}
+	} else {
+		auth = authn.Anonymous
+	}
+
+	opts := []remote.Option{remote.WithAuth(auth)}
+
+	rt, err := transport.New(repo.Registry, auth, http.DefaultTransport, []string{repo.Scope(transport.PullScope)})
+	if err != nil {
+		return nil, fmt.Errorf("initialize transport: %w", err)
+	}
+
+	opts = append(opts, remote.WithTransport(rt))
+
+	return opts, nil
 }
 
 type ContentTrust struct {
@@ -132,15 +227,11 @@ func (ct *ContentTrust) PrepareConfigDir() (string, error) {
 }
 
 func (source *Source) Name() string {
-	return fmt.Sprintf("%s:%s", source.Repository, source.Tag())
-}
-
-func (source *Source) Tag() string {
-	if source.RawTag != "" {
-		return string(source.RawTag)
+	if source.Tag == "" {
+		return source.Repository
 	}
 
-	return DefaultTag
+	return fmt.Sprintf("%s:%s", source.Repository, source.Tag)
 }
 
 func (source *Source) Metadata() []MetadataField {
@@ -148,23 +239,6 @@ func (source *Source) Metadata() []MetadataField {
 		{
 			Name:  "repository",
 			Value: source.Repository,
-		},
-		{
-			Name:  "tag",
-			Value: source.Tag(),
-		},
-	}
-}
-
-func (source *Source) MetadataWithAdditionalTags(tags []string) []MetadataField {
-	return []MetadataField{
-		{
-			Name:  "repository",
-			Value: source.Repository,
-		},
-		{
-			Name:  "tags",
-			Value: strings.Join(append(tags, source.Tag()), " "),
 		},
 	}
 }
@@ -240,7 +314,12 @@ func (tag *Tag) UnmarshalJSON(b []byte) (err error) {
 	return err
 }
 
+func (tag Tag) String() string {
+	return string(tag)
+}
+
 type Version struct {
+	Tag    string `json:"tag"`
 	Digest string `json:"digest"`
 }
 
@@ -263,13 +342,20 @@ func (p GetParams) Format() string {
 }
 
 type PutParams struct {
-	Image          string `json:"image"`
+	// Path to an OCI image tarball to push.
+	Image string `json:"image"`
+
+	// Version number to publish. If a variant is configured, it will be
+	// appended to this value to form the tag.
+	Version string `json:"version"`
+
+	// Path to a file containing line-separated tags to push.
 	AdditionalTags string `json:"additional_tags"`
 }
 
-func (p *PutParams) ParseTags(src string) ([]string, error) {
+func (p *PutParams) ParseAdditionalTags(src string) ([]string, error) {
 	if p.AdditionalTags == "" {
-		return nil, nil
+		return []string{}, nil
 	}
 
 	filepath := filepath.Join(src, p.AdditionalTags)

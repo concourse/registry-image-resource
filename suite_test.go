@@ -117,7 +117,7 @@ func TestRegistryImageResource(t *testing.T) {
 }
 
 func latestDigest(ref string) string {
-	n, err := name.ParseReference(ref, name.WeakValidation)
+	n, err := name.ParseReference(ref)
 	Expect(err).ToNot(HaveOccurred())
 
 	desc, err := remote.Head(n)
@@ -127,7 +127,7 @@ func latestDigest(ref string) string {
 }
 
 func latestManifest(ref string) (string, *v1.Manifest) {
-	n, err := name.ParseReference(ref, name.WeakValidation)
+	n, err := name.ParseReference(ref)
 	Expect(err).ToNot(HaveOccurred())
 
 	image, err := remote.Image(n)
@@ -146,4 +146,9 @@ func cat(path string) string {
 	bytes, err := ioutil.ReadFile(path)
 	Expect(err).ToNot(HaveOccurred())
 	return string(bytes)
+}
+
+type registryTagsResponse struct {
+	Name string   `json:"name"`
+	Tags []string `json:"tags"`
 }

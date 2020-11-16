@@ -18,7 +18,7 @@ var _ = Describe("Source", func() {
 
 		err := json.Unmarshal(raw, &source)
 		Expect(err).ToNot(HaveOccurred())
-		Expect(source.Tag()).To(Equal("42.1"))
+		Expect(source.Tag.String()).To(Equal("42.1"))
 	})
 
 	It("should unmarshal tag int value into a string", func() {
@@ -27,7 +27,7 @@ var _ = Describe("Source", func() {
 
 		err := json.Unmarshal(raw, &source)
 		Expect(err).ToNot(HaveOccurred())
-		Expect(source.Tag()).To(Equal("42"))
+		Expect(source.Tag.String()).To(Equal("42"))
 	})
 
 	It("should unmarshal tag string value into a string", func() {
@@ -36,29 +36,11 @@ var _ = Describe("Source", func() {
 
 		err := json.Unmarshal(raw, &source)
 		Expect(err).ToNot(HaveOccurred())
-		Expect(source.Tag()).To(Equal("foo"))
-	})
-
-	It("should unmarshal tag '' value to latest", func() {
-		var source resource.Source
-		raw := []byte(`{ "tag": "" }`)
-
-		err := json.Unmarshal(raw, &source)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(source.Tag()).To(Equal("latest"))
-	})
-
-	It("should default unspecified tag to latest", func() {
-		var source resource.Source
-		raw := []byte(`{}`)
-
-		err := json.Unmarshal(raw, &source)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(source.Tag()).To(Equal("latest"))
+		Expect(source.Tag.String()).To(Equal("foo"))
 	})
 
 	It("should marshal a tag back out to a string", func() {
-		source := resource.Source{Repository: "foo", RawTag: "0"}
+		source := resource.Source{Repository: "foo", Tag: "0"}
 
 		json, err := json.Marshal(source)
 		Expect(err).ToNot(HaveOccurred())
@@ -70,7 +52,6 @@ var _ = Describe("Source", func() {
 		It("should exclude a registry id as part of the request for an authorization token when omitted", func() {
 			source := resource.Source{
 				Repository: "foo",
-				RawTag:     "0",
 				AwsCredentials: resource.AwsCredentials{
 					AwsAccessKeyId:     "foo",
 					AwsSecretAccessKey: "bar",
@@ -87,7 +68,6 @@ var _ = Describe("Source", func() {
 		It("should include a registry id as part of the request for an authorization token when specified", func() {
 			source := resource.Source{
 				Repository: "foo",
-				RawTag:     "0",
 				AwsCredentials: resource.AwsCredentials{
 					AwsAccessKeyId:     "foo",
 					AwsSecretAccessKey: "bar",

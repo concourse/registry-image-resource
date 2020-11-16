@@ -80,7 +80,10 @@ var _ = Describe("In", func() {
 	Describe("image metadata", func() {
 		BeforeEach(func() {
 			req.Source.Repository = "concourse/test-image-metadata"
-			req.Version.Digest = latestDigest(req.Source.Repository)
+			req.Version = resource.Version{
+				Tag:    "latest",
+				Digest: latestDigest(req.Source.Repository),
+			}
 		})
 
 		It("captures the env and user", func() {
@@ -106,7 +109,10 @@ var _ = Describe("In", func() {
 	Describe("response metadata", func() {
 		BeforeEach(func() {
 			req.Source.Repository = "concourse/test-image-metadata"
-			req.Version.Digest = latestDigest(req.Source.Repository)
+			req.Version = resource.Version{
+				Tag:    "latest",
+				Digest: latestDigest(req.Source.Repository),
+			}
 		})
 
 		It("returns metadata", func() {
@@ -129,7 +135,10 @@ var _ = Describe("In", func() {
 
 		BeforeEach(func() {
 			req.Source.Repository = "concourse/test-image-file-perms-mtime"
-			req.Version.Digest = latestDigest(req.Source.Repository)
+			req.Version = resource.Version{
+				Tag:    "latest",
+				Digest: latestDigest(req.Source.Repository),
+			}
 		})
 
 		JustBeforeEach(func() {
@@ -158,7 +167,10 @@ var _ = Describe("In", func() {
 	Describe("removed files in layers", func() {
 		BeforeEach(func() {
 			req.Source.Repository = "concourse/test-image-whiteout"
-			req.Version.Digest = latestDigest(req.Source.Repository)
+			req.Version = resource.Version{
+				Tag:    "latest",
+				Digest: latestDigest(req.Source.Repository),
+			}
 		})
 
 		It("does not restore files that were removed in later layers", func() {
@@ -201,7 +213,10 @@ var _ = Describe("In", func() {
 	Describe("a hardlink that is later removed", func() {
 		BeforeEach(func() {
 			req.Source.Repository = "concourse/test-image-removed-hardlinks"
-			req.Version.Digest = latestDigest(req.Source.Repository)
+			req.Version = resource.Version{
+				Tag:    "latest",
+				Digest: latestDigest(req.Source.Repository),
+			}
 		})
 
 		It("works", func() {
@@ -218,7 +233,10 @@ var _ = Describe("In", func() {
 	Describe("layers that replace symlinks with regular files", func() {
 		BeforeEach(func() {
 			req.Source.Repository = "concourse/test-image-symlinks"
-			req.Version.Digest = latestDigest(req.Source.Repository)
+			req.Version = resource.Version{
+				Tag:    "latest",
+				Digest: latestDigest(req.Source.Repository),
+			}
 		})
 
 		It("removes the symlink and writes to a new file rather than trying to open and write to it (thereby overwriting its target)", func() {
@@ -231,7 +249,7 @@ var _ = Describe("In", func() {
 		BeforeEach(func() {
 			req.Source = resource.Source{
 				Repository: dockerPrivateRepo,
-				RawTag:     "latest",
+				Tag:        "latest",
 
 				BasicCredentials: resource.BasicCredentials{
 					Username: dockerPrivateUsername,
@@ -242,6 +260,7 @@ var _ = Describe("In", func() {
 			checkDockerPrivateUserConfigured()
 
 			req.Version = resource.Version{
+				Tag:    "latest",
 				Digest: PRIVATE_LATEST_STATIC_DIGEST,
 			}
 		})
@@ -258,6 +277,7 @@ var _ = Describe("In", func() {
 			req.Source.Repository = "concourse/test-image-static"
 			req.Params.RawFormat = "oci"
 
+			req.Version.Tag = "latest"
 			req.Version.Digest, manifest = latestManifest(req.Source.Repository)
 		})
 
@@ -268,7 +288,7 @@ var _ = Describe("In", func() {
 			_, err = os.Stat(filepath.Join(destDir, "manifest.json"))
 			Expect(os.IsNotExist(err)).To(BeTrue())
 
-			tag, err := name.NewTag("concourse/test-image-static:latest", name.WeakValidation)
+			tag, err := name.NewTag("concourse/test-image-static:latest")
 			Expect(err).ToNot(HaveOccurred())
 
 			img, err := tarball.ImageFromPath(filepath.Join(destDir, "image.tar"), &tag)
@@ -288,6 +308,7 @@ var _ = Describe("In", func() {
 	Describe("saving the digest", func() {
 		BeforeEach(func() {
 			req.Source.Repository = "concourse/test-image-static"
+			req.Version.Tag = "latest"
 			req.Version.Digest = LATEST_STATIC_DIGEST
 		})
 
@@ -301,57 +322,46 @@ var _ = Describe("In", func() {
 	Describe("saving the tag", func() {
 		BeforeEach(func() {
 			req.Source.Repository = "concourse/test-image-static"
-			req.Version.Digest = LATEST_STATIC_DIGEST
+			req.Version = resource.Version{
+				Tag:    "tagged",
+				Digest: LATEST_STATIC_DIGEST,
+			}
 		})
 
-		Context("with no tag specified", func() {
-			BeforeEach(func() {
-				req.Source.RawTag = ""
-			})
-
-			It("assumes 'latest' and saves the tag to a file", func() {
-				digest, err := ioutil.ReadFile(filepath.Join(destDir, "tag"))
-				Expect(err).ToNot(HaveOccurred())
-				Expect(string(digest)).To(Equal("latest"))
-			})
-		})
-
-		Context("with a tag specified", func() {
-			BeforeEach(func() {
-				req.Source.RawTag = "tagged"
-				req.Version.Digest = LATEST_TAGGED_STATIC_DIGEST
-			})
-
-			It("saves the tag to a file", func() {
-				tag, err := ioutil.ReadFile(filepath.Join(destDir, "tag"))
-				Expect(err).ToNot(HaveOccurred())
-				Expect(string(tag)).To(Equal("tagged"))
-			})
+		It("saves the tag to a file", func() {
+			tag, err := ioutil.ReadFile(filepath.Join(destDir, "tag"))
+			Expect(err).ToNot(HaveOccurred())
+			Expect(string(tag)).To(Equal("tagged"))
 		})
 	})
 
-	Describe("skips the download", func() {
+	Describe("skipping the download", func() {
 		BeforeEach(func() {
 			req.Source.Repository = "concourse/test-image-static"
 			req.Params.SkipDownload = true
+			req.Version.Tag = "latest"
 			req.Version.Digest = LATEST_STATIC_DIGEST
 		})
 
-		It("does not save any files", func() {
+		It("does not download the image", func() {
 			_, err := os.Stat(filepath.Join(destDir, "rootfs"))
 			Expect(os.IsNotExist(err)).To(BeTrue())
 
 			_, err = os.Stat(filepath.Join(destDir, "manifest.json"))
 			Expect(os.IsNotExist(err)).To(BeTrue())
 
-			_, err = os.Stat(filepath.Join(destDir, "digest"))
-			Expect(os.IsNotExist(err)).To(BeTrue())
-
-			_, err = os.Stat(filepath.Join(destDir, "tag"))
-			Expect(os.IsNotExist(err)).To(BeTrue())
-
 			_, err = os.Stat(filepath.Join(destDir, "image.tar"))
 			Expect(os.IsNotExist(err)).To(BeTrue())
+		})
+
+		It("saves the tag and digest files", func() {
+			digest, err := ioutil.ReadFile(filepath.Join(destDir, "digest"))
+			Expect(err).ToNot(HaveOccurred())
+			Expect(string(digest)).To(Equal(LATEST_STATIC_DIGEST))
+
+			tag, err := ioutil.ReadFile(filepath.Join(destDir, "tag"))
+			Expect(err).ToNot(HaveOccurred())
+			Expect(string(tag)).To(Equal("latest"))
 		})
 	})
 
@@ -376,13 +386,27 @@ var _ = Describe("In", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			registry.AppendHandlers(
-				// immediate 429
+				// immediate 429 on transport setup
+				ghttp.CombineHandlers(
+					ghttp.VerifyRequest("GET", "/v2/"),
+					ghttp.RespondWith(http.StatusTooManyRequests, "calm down"),
+				),
+
+				// 429 following transport setup
+				ghttp.CombineHandlers(
+					ghttp.VerifyRequest("GET", "/v2/"),
+					ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
+				),
 				ghttp.CombineHandlers(
 					ghttp.VerifyRequest("GET", "/v2/"),
 					ghttp.RespondWith(http.StatusTooManyRequests, "calm down"),
 				),
 
 				// 429 on manifest fetch
+				ghttp.CombineHandlers(
+					ghttp.VerifyRequest("GET", "/v2/"),
+					ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
+				),
 				ghttp.CombineHandlers(
 					ghttp.VerifyRequest("GET", "/v2/"),
 					ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
@@ -398,6 +422,10 @@ var _ = Describe("In", func() {
 					ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
 				),
 				ghttp.CombineHandlers(
+					ghttp.VerifyRequest("GET", "/v2/"),
+					ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
+				),
+				ghttp.CombineHandlers(
 					ghttp.VerifyRequest("GET", "/v2/fake-image/manifests/"+digest.String()),
 					ghttp.RespondWith(http.StatusOK, manifest),
 				),
@@ -406,7 +434,19 @@ var _ = Describe("In", func() {
 					ghttp.RespondWith(http.StatusTooManyRequests, "calm down"),
 				),
 
-				// successful sequence following a pseudo-checkpoint
+				// successful sequence
+				ghttp.CombineHandlers(
+					ghttp.VerifyRequest("GET", "/v2/"),
+					ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
+				),
+				ghttp.CombineHandlers(
+					ghttp.VerifyRequest("GET", "/v2/"),
+					ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
+				),
+				ghttp.CombineHandlers(
+					ghttp.VerifyRequest("GET", "/v2/fake-image/manifests/"+digest.String()),
+					ghttp.RespondWith(http.StatusOK, manifest),
+				),
 				ghttp.CombineHandlers(
 					ghttp.VerifyRequest("GET", "/v2/fake-image/blobs/"+configDigest.String()),
 					ghttp.RespondWith(http.StatusOK, config),
@@ -417,6 +457,7 @@ var _ = Describe("In", func() {
 				Repository: registry.Addr() + "/fake-image",
 			}
 
+			req.Version.Tag = "latest"
 			req.Version.Digest = digest.String()
 		})
 
@@ -429,7 +470,7 @@ var _ = Describe("In", func() {
 		})
 	})
 
-	Describe("uses a mirror", func() {
+	Describe("using a mirror", func() {
 		var mirror *ghttp.Server
 
 		BeforeEach(func() {
@@ -441,7 +482,11 @@ var _ = Describe("In", func() {
 		})
 
 		Context("when the repository contains a registry host name prefixed image", func() {
+			var registry *ghttp.Server
+
 			BeforeEach(func() {
+				registry = ghttp.NewServer()
+
 				fakeImage := empty.Image
 
 				digest, err := fakeImage.Digest()
@@ -456,7 +501,11 @@ var _ = Describe("In", func() {
 				configDigest, err := fakeImage.ConfigName()
 				Expect(err).ToNot(HaveOccurred())
 
-				mirror.AppendHandlers(
+				registry.AppendHandlers(
+					ghttp.CombineHandlers(
+						ghttp.VerifyRequest("GET", "/v2/"),
+						ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
+					),
 					ghttp.CombineHandlers(
 						ghttp.VerifyRequest("GET", "/v2/"),
 						ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
@@ -472,9 +521,9 @@ var _ = Describe("In", func() {
 				)
 
 				req.Source = resource.Source{
-					Repository: mirror.Addr() + "/some/fake-image",
+					Repository: registry.Addr() + "/some/fake-image",
 					RegistryMirror: &resource.RegistryMirror{
-						Host: "thisregistrymirrordoesnotexist.nothing",
+						Host: mirror.Addr(),
 					},
 				}
 
@@ -483,6 +532,8 @@ var _ = Describe("In", func() {
 
 			It("pulls the image from the registry declared in the repository and not from the mirror", func() {
 				Expect(res.Version).To(Equal(req.Version))
+
+				Expect(mirror.ReceivedRequests()).To(BeEmpty())
 			})
 		})
 
@@ -496,6 +547,7 @@ var _ = Describe("In", func() {
 						Host: name.DefaultRegistry,
 					}
 
+					req.Version.Tag = "latest"
 					req.Version.Digest = LATEST_STATIC_DIGEST
 				})
 
@@ -533,6 +585,10 @@ var _ = Describe("In", func() {
 							ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
 						),
 						ghttp.CombineHandlers(
+							ghttp.VerifyRequest("GET", "/v2/"),
+							ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
+						),
+						ghttp.CombineHandlers(
 							ghttp.VerifyRequest("GET", "/v2/library/fake-image/manifests/"+digest.String()),
 							ghttp.RespondWith(http.StatusOK, manifest),
 						),
@@ -555,6 +611,20 @@ var _ = Describe("In", func() {
 				It("pulls the image from the library", func() {
 					Expect(res.Version).To(Equal(req.Version))
 				})
+
+				Context("saving an OCI tarball", func() {
+					BeforeEach(func() {
+						req.Params.RawFormat = "oci"
+					})
+
+					It("names the image with the original repository and tag, not the mirror", func() {
+						tag, err := name.NewTag("fake-image:latest")
+						Expect(err).ToNot(HaveOccurred())
+
+						_, err = tarball.ImageFromPath(filepath.Join(destDir, "image.tar"), &tag)
+						Expect(err).ToNot(HaveOccurred())
+					})
+				})
 			})
 		})
 
@@ -569,9 +639,14 @@ var _ = Describe("In", func() {
 				BeforeEach(func() {
 					req.Source.Repository = "concourse/test-image-static"
 
+					req.Version.Tag = "latest"
 					req.Version.Digest = LATEST_STATIC_DIGEST
 
 					mirror.AppendHandlers(
+						ghttp.CombineHandlers(
+							ghttp.VerifyRequest("GET", "/v2/"),
+							ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
+						),
 						ghttp.CombineHandlers(
 							ghttp.VerifyRequest("GET", "/v2/"),
 							ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
@@ -599,9 +674,14 @@ var _ = Describe("In", func() {
 				BeforeEach(func() {
 					req.Source.Repository = "busybox"
 
+					req.Version.Tag = "latest"
 					req.Version.Digest = latestDigest(req.Source.Repository)
 
 					mirror.AppendHandlers(
+						ghttp.CombineHandlers(
+							ghttp.VerifyRequest("GET", "/v2/"),
+							ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
+						),
 						ghttp.CombineHandlers(
 							ghttp.VerifyRequest("GET", "/v2/"),
 							ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
@@ -611,7 +691,6 @@ var _ = Describe("In", func() {
 							ghttp.RespondWith(http.StatusNotFound, nil),
 						),
 					)
-
 				})
 
 				It("pulls the image from the library", func() {

@@ -1,10 +1,11 @@
 package main
 
 import (
+	"os"
+
 	"github.com/concourse/registry-image-resource/commands"
 	color "github.com/fatih/color"
 	"github.com/sirupsen/logrus"
-	"os"
 )
 
 func main() {

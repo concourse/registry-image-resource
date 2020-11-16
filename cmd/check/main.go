@@ -1,10 +1,10 @@
 package main
 
 import (
-	"github.com/concourse/registry-image-resource/commands"
-	"github.com/fatih/color"
 	"os"
 
+	"github.com/concourse/registry-image-resource/commands"
+	"github.com/fatih/color"
 	"github.com/sirupsen/logrus"
 )
 
