@@ -107,81 +107,12 @@ func (o *Out) Execute() error {
 		tagsToPush = append(tagsToPush, repo.Tag(tag))
 
 		if req.Params.BumpAliases && ver.Prerelease() == "" {
-			auth := &authn.Basic{
-				Username: req.Source.Username,
-				Password: req.Source.Password,
-			}
-
-			imageOpts := []remote.Option{}
-
-			if auth.Username != "" && auth.Password != "" {
-				imageOpts = append(imageOpts, remote.WithAuth(auth))
-			}
-
-			versions, err := remote.List(repo, imageOpts...)
+			aliasTags, err := aliasesToBump(req, repo, ver)
 			if err != nil {
-				return fmt.Errorf("list repository tags: %w", err)
+				return fmt.Errorf("determine aliases: %w", err)
 			}
 
-			bumpLatest := true
-			bumpMajor := true
-			bumpMinor := true
-			for _, v := range versions {
-				versionStr := v
-				if req.Source.Variant != "" {
-					versionStr = strings.TrimSuffix(versionStr, "-"+req.Source.Variant)
-				}
-
-				remoteVer, err := semver.NewVersion(versionStr)
-				if err != nil {
-					continue
-				}
-
-				// don't compare to prereleases or other variants
-				if remoteVer.Prerelease() != "" {
-					continue
-				}
-
-				if remoteVer.GreaterThan(ver) {
-					bumpLatest = false
-				}
-
-				if remoteVer.Major() == ver.Major() && remoteVer.Minor() > ver.Minor() {
-					bumpMajor = false
-				}
-
-				if remoteVer.Major() == ver.Major() && remoteVer.Minor() == ver.Minor() && remoteVer.Patch() > ver.Patch() {
-					bumpMinor = false
-					bumpMajor = false
-				}
-			}
-
-			if bumpLatest {
-				latestTag := "latest"
-				if req.Source.Variant != "" {
-					latestTag = req.Source.Variant
-				}
-
-				tagsToPush = append(tagsToPush, repo.Tag(latestTag))
-			}
-
-			if bumpMajor {
-				tagName := fmt.Sprintf("%d", ver.Major())
-				if req.Source.Variant != "" {
-					tagName += "-" + req.Source.Variant
-				}
-
-				tagsToPush = append(tagsToPush, repo.Tag(tagName))
-			}
-
-			if bumpMinor {
-				tagName := fmt.Sprintf("%d.%d", ver.Major(), ver.Minor())
-				if req.Source.Variant != "" {
-					tagName += "-" + req.Source.Variant
-				}
-
-				tagsToPush = append(tagsToPush, repo.Tag(tagName))
-			}
+			tagsToPush = append(tagsToPush, aliasTags...)
 		}
 	}
 
@@ -295,4 +226,88 @@ func put(req resource.OutRequest, img v1.Image, tags []name.Tag) error {
 	}
 
 	return nil
+}
+
+func aliasesToBump(req resource.OutRequest, repo name.Repository, ver *semver.Version) ([]name.Tag, error) {
+	variant := req.Source.Variant
+
+	auth := &authn.Basic{
+		Username: req.Source.Username,
+		Password: req.Source.Password,
+	}
+
+	opts := []remote.Option{}
+
+	if auth.Username != "" && auth.Password != "" {
+		opts = append(opts, remote.WithAuth(auth))
+	}
+
+	versions, err := remote.List(repo, opts...)
+	if err != nil {
+		return nil, fmt.Errorf("list repository tags: %w", err)
+	}
+
+	aliases := []name.Tag{}
+
+	bumpLatest := true
+	bumpMajor := true
+	bumpMinor := true
+	for _, v := range versions {
+		versionStr := v
+		if variant != "" {
+			versionStr = strings.TrimSuffix(versionStr, "-"+variant)
+		}
+
+		remoteVer, err := semver.NewVersion(versionStr)
+		if err != nil {
+			continue
+		}
+
+		// don't compare to prereleases or other variants
+		if remoteVer.Prerelease() != "" {
+			continue
+		}
+
+		if remoteVer.GreaterThan(ver) {
+			bumpLatest = false
+		}
+
+		if remoteVer.Major() == ver.Major() && remoteVer.Minor() > ver.Minor() {
+			bumpMajor = false
+		}
+
+		if remoteVer.Major() == ver.Major() && remoteVer.Minor() == ver.Minor() && remoteVer.Patch() > ver.Patch() {
+			bumpMinor = false
+			bumpMajor = false
+		}
+	}
+
+	if bumpLatest {
+		latestTag := "latest"
+		if variant != "" {
+			latestTag = variant
+		}
+
+		aliases = append(aliases, repo.Tag(latestTag))
+	}
+
+	if bumpMajor {
+		tagName := fmt.Sprintf("%d", ver.Major())
+		if variant != "" {
+			tagName += "-" + variant
+		}
+
+		aliases = append(aliases, repo.Tag(tagName))
+	}
+
+	if bumpMinor {
+		tagName := fmt.Sprintf("%d.%d", ver.Major(), ver.Minor())
+		if variant != "" {
+			tagName += "-" + variant
+		}
+
+		aliases = append(aliases, repo.Tag(tagName))
+	}
+
+	return aliases, nil
 }
