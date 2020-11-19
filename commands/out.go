@@ -255,6 +255,11 @@ func aliasesToBump(req resource.OutRequest, repo name.Repository, ver *semver.Ve
 	for _, v := range versions {
 		versionStr := v
 		if variant != "" {
+			if !strings.HasSuffix(versionStr, "-"+variant) {
+				// don't compare across variants
+				continue
+			}
+
 			versionStr = strings.TrimSuffix(versionStr, "-"+variant)
 		}
 

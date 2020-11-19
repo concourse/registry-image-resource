@@ -230,7 +230,7 @@ var _ = Describe("Out", func() {
 				for _, t := range []string{"latest", "additional", "tags"} {
 					tag := parallelTag(t)
 
-					name, err := name.ParseReference(req.Source.Repository+":"+tag)
+					name, err := name.ParseReference(req.Source.Repository + ":" + tag)
 					Expect(err).ToNot(HaveOccurred())
 
 					auth := &authn.Basic{
@@ -471,17 +471,16 @@ var _ = DescribeTable("pushing semver tags",
 			PushedTags: []string{"1.2.3", "1.2", "1"},
 		},
 	),
-	Entry("not bumping major if a newer non-variant minor exists",
-		// rationale: tags are representing versions of a cohesive product, so
-		// its versions should be comparable across variants.
+	Entry("bumping everything even if a newer non-variant minor exists",
+		// rationale: 'lts' variants, which are intentionally older
 		SemverTagPushExample{
 			Tags: []string{"1.3.0"},
 
-			Variant:     "foo",
+			Variant:     "lts",
 			Version:     "1.2.3",
 			BumpAliases: true,
 
-			PushedTags: []string{"1.2.3-foo", "1.2-foo"},
+			PushedTags: []string{"1.2.3-lts", "1.2-lts", "1-lts", "lts"},
 		},
 	),
 	Entry("bumping everything if the only available version is a prerelease",
