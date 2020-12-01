@@ -243,6 +243,8 @@ Fetches an image at the exact digest specified by the version.
 
 The resource will produce the following files:
 
+* `./repository`: A file containing the image's full repository name, e.g. `concourse/concourse`. 
+  For ECR images, this will include the registry the image was pulled from.
 * `./tag`: A file containing the tag from the version.
 * `./digest`: A file containing the digest from the version, e.g. `sha256:...`.
 
