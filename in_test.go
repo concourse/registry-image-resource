@@ -343,9 +343,9 @@ var _ = Describe("In", func() {
 		})
 
 		It("saves the repository string to a file", func() {
-			digest, err := ioutil.ReadFile(filepath.Join(destDir, "repository"))
+			repository, err := ioutil.ReadFile(filepath.Join(destDir, "repository"))
 			Expect(err).ToNot(HaveOccurred())
-			Expect(string(digest)).To(Equal("concourse/test-image-static"))
+			Expect(string(repository)).To(Equal("concourse/test-image-static"))
 		})
 	})
 
