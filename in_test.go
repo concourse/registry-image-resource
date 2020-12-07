@@ -335,6 +335,20 @@ var _ = Describe("In", func() {
 		})
 	})
 
+	Describe("saving the repository", func() {
+		BeforeEach(func() {
+			req.Source.Repository = "concourse/test-image-static"
+			req.Version.Tag = "latest"
+			req.Version.Digest = LATEST_STATIC_DIGEST
+		})
+
+		It("saves the repository string to a file", func() {
+			repository, err := ioutil.ReadFile(filepath.Join(destDir, "repository"))
+			Expect(err).ToNot(HaveOccurred())
+			Expect(string(repository)).To(Equal("concourse/test-image-static"))
+		})
+	})
+
 	Describe("skipping the download", func() {
 		BeforeEach(func() {
 			req.Source.Repository = "concourse/test-image-static"
