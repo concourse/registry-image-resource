@@ -699,7 +699,7 @@ func (example SemverTagPushExample) Run() {
 
 		Expect(actualTags).To(ConsistOf(example.PushedTags))
 
-		Expect(res.Version.Tag).To(Equal(actualTags[0]))
+		Expect(res.Version.Tag).To(BeElementOf(actualTags))
 		Expect(res.Version.Digest).To(Equal(digest.String()))
 	}
 }
