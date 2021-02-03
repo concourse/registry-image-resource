@@ -203,6 +203,9 @@ func put(req resource.OutRequest, img v1.Image, tags []name.Tag) error {
 
 	if req.Source.ContentTrust != nil {
 		err = signImages(req, img, tags)
+		if err != nil {
+			return fmt.Errorf("signing image(s): %w", err)
+		}
 	}
 
 	return nil
