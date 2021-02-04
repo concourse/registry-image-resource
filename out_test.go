@@ -132,11 +132,11 @@ var _ = Describe("Out", func() {
 			Expect(actualErr).ToNot(HaveOccurred())
 
 			Expect(res.Metadata).To(Equal([]resource.MetadataField{
-				resource.MetadataField{
+				{
 					Name:  "repository",
 					Value: dockerPushRepo,
 				},
-				resource.MetadataField{
+				{
 					Name:  "tags",
 					Value: parallelTag("latest"),
 				},

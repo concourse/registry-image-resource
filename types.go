@@ -1,15 +1,24 @@
 package resource
 
 import (
+	"bytes"
+	"context"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
+	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
+	v2aws "github.com/aws/aws-sdk-go-v2/aws"
+	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/credentials/stscreds"
@@ -18,7 +27,16 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-const DefaultTag = "latest"
+const (
+	defaultTag               = "latest"
+	getCallerIdentityService = "sts"
+	getCallerIdentityRegion  = "us-east-1"
+	getCallerIdentityURL     = "https://sts.amazonaws.com?Action=GetCallerIdentity&Version=2011-06-15"
+
+	gcpScope                = "https://www.googleapis.com/auth/cloud-platform"
+	generateAccessTokenAPI  = "https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/%s:generateAccessToken"
+	identityPoolProviderAPI = "//iam.googleapis.com/projects/%s/locations/global/workloadIdentityPools/%s/providers/%s"
+)
 
 type Source struct {
 	Repository string `json:"repository"`
@@ -28,14 +46,18 @@ type Source struct {
 	Password     string        `json:"password,omitempty"`
 	ContentTrust *ContentTrust `json:"content_trust,omitempty"`
 
-	AwsAccessKeyId     string `json:"aws_access_key_id,omitempty"`
+	AwsAccessKeyID     string `json:"aws_access_key_id,omitempty"`
 	AwsSecretAccessKey string `json:"aws_secret_access_key,omitempty"`
 	AwsRegion          string `json:"aws_region,omitempty"`
 	AwsRoleArn         string `json:"aws_role_arn,omitempty"`
 
+	GcpIdentityPool         string `json:"gcp_identity_pool,omitempty"`
+	GcpIdentityPoolProvider string `json:"gcp_identity_pool_provider,omitempty"`
+	GcpProject              string `json:"gcp_project,omitempty"`
+	GcpServiceAccount       string `json:"gcp_service_account,omitempty"`
+
 	Debug bool `json:"debug,omitempty"`
 }
-
 type ContentTrust struct {
 	Server               string `json:"server"`
 	RepositoryKeyID      string `json:"repository_key_id"`
@@ -43,6 +65,35 @@ type ContentTrust struct {
 	RepositoryPassphrase string `json:"repository_passphrase"`
 	TLSKey               string `json:"tls_key"`
 	TLSCert              string `json:"tls_cert"`
+}
+type AWSExchangeToken struct {
+	URL     string              `json:"url"`
+	Method  string              `json:"method"`
+	Headers []map[string]string `json:"headers"`
+}
+
+type TokenExchangeRequest struct {
+	Audience           string `json:"audience"`
+	GrantType          string `json:"grantType"`
+	RequestedTokenType string `json:"requestedTokenType"`
+	Scope              string `json:"scope"`
+	SubjectTokenType   string `json:"subjectTokenType"`
+	SubjectToken       string `json:"subjectToken"`
+}
+
+type GenerateAccessTokenRequest struct {
+	Scope []string `json:"scope"`
+}
+
+type TokenExchangeResponse struct {
+	AccessToken string `json:"access_token"`
+	TokenType   string `json:"token_type"`
+	ExpiresIn   int64  `json:"expires_in"`
+}
+
+type SaAccessTokenResponse struct {
+	AccessToken string `json:"accessToken"`
+	ExpireTime  string `json:"expireTime"`
 }
 
 /* Create notary config directory with following structure
@@ -121,16 +172,16 @@ func (source *Source) Tag() string {
 		return string(source.RawTag)
 	}
 
-	return DefaultTag
+	return defaultTag
 }
 
 func (source *Source) Metadata() []MetadataField {
 	return []MetadataField{
-		MetadataField{
+		{
 			Name:  "repository",
 			Value: source.Repository,
 		},
-		MetadataField{
+		{
 			Name:  "tag",
 			Value: source.Tag(),
 		},
@@ -139,29 +190,229 @@ func (source *Source) Metadata() []MetadataField {
 
 func (source *Source) MetadataWithAdditionalTags(tags []string) []MetadataField {
 	return []MetadataField{
-		MetadataField{
+		{
 			Name:  "repository",
 			Value: source.Repository,
 		},
-		MetadataField{
+		{
 			Name:  "tags",
 			Value: strings.Join(append(tags, source.Tag()), " "),
 		},
 	}
 }
 
+func (source *Source) AuthenticateToGCP() bool {
+	logrus.Info("Using AWS Role to authenticate to GCP")
+
+	var sessionConfig aws.Config
+	if source.AwsAccessKeyID != "" && source.AwsSecretAccessKey != "" {
+		logrus.Info("Authenticating AWS Role with AccessKeyID & SecretAccessKey")
+		sessionConfig = aws.Config{
+			Region:      aws.String(source.AwsRegion),
+			Credentials: credentials.NewStaticCredentials(source.AwsAccessKeyID, source.AwsSecretAccessKey, ""),
+		}
+	} else {
+		logrus.Info("Authenticating AWS Role with container credentials")
+		sessionConfig = aws.Config{
+			Region: aws.String(source.AwsRegion),
+		}
+	}
+	mySession := session.Must(session.NewSession(&sessionConfig))
+
+	credentialsProvider := stscreds.NewCredentials(mySession, source.AwsRoleArn)
+	credentials, err := credentialsProvider.Get()
+	if err != nil {
+		logrus.Errorf("Failed to initialize AWS credentials for %s: %s", source.AwsRoleArn, err)
+		return false
+	}
+
+	// Build inner AWS sts request
+	callerIdentityRequest, err := source.buildGetCallerIdentityRequest(credentials)
+	if err != nil {
+		logrus.Error(err)
+		return false
+	}
+
+	// Build GCP request to encapsulate AWS sts request
+	tokenExchangeRequest, err := source.buildTokenExchangeRequest(callerIdentityRequest, credentialsProvider)
+	if err != nil {
+		logrus.Errorf("failed to build TokenExchangeRequest: %s", err)
+		return false
+	}
+
+	// Authenticate to GCP with encapsualted AWS sts request
+	resp, err := http.DefaultClient.Do(tokenExchangeRequest)
+	errMessage := "Failed to authenticate to GCP with Token Exchange Request"
+	if err != nil {
+		logrus.Errorf("%s: %s", errMessage, err)
+		return false
+	}
+	if resp.StatusCode != http.StatusOK {
+		logrus.Errorf("%s: %s", errMessage, resp.Status)
+		return false
+	}
+	bodyBytes, _ := ioutil.ReadAll(resp.Body)
+	defer resp.Body.Close()
+	tokenExchangeResponse := TokenExchangeResponse{}
+	json.Unmarshal(bodyBytes, &tokenExchangeResponse)
+
+	// Exchange GCP federated token for service account token
+	saRequest := source.buildGetServiceAccountTokenRequest(tokenExchangeResponse.AccessToken)
+	resp, err = http.DefaultClient.Do(saRequest)
+	if err != nil {
+		logrus.Errorf("Failed to exchange Federated token for GCP Service Account credentials: %s", err)
+		return false
+	}
+	saAccessTokenBody, _ := ioutil.ReadAll(resp.Body)
+	defer resp.Body.Close()
+	saAccessTokenResponse := SaAccessTokenResponse{}
+	json.Unmarshal(saAccessTokenBody, &saAccessTokenResponse)
+
+	// Set SA access token as login
+	source.Username = "oauth2accesstoken"
+	source.Password = saAccessTokenResponse.AccessToken
+
+	return true
+}
+
+func (source *Source) getGoogleResource() string {
+	return fmt.Sprintf(identityPoolProviderAPI, source.GcpProject, source.GcpIdentityPool, source.GcpIdentityPoolProvider)
+}
+
+func (source *Source) buildTokenExchangeRequest(req *http.Request, credentialsProvider *credentials.Credentials) (*http.Request, error) {
+	credentials, err := credentialsProvider.Get()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get AWS credentials from credentialProvider: %s", err)
+	}
+
+	googleResource := source.getGoogleResource()
+	headers := []map[string]string{
+		{
+			"key":   "Host",
+			"value": req.Header.Get("Host"),
+		},
+		{
+			"key":   "Authorization",
+			"value": req.Header.Get("Authorization"),
+		},
+		{
+			"key":   "x-amz-date",
+			"value": req.Header.Get("X-Amz-Date"),
+		},
+		{
+			"key":   "x-goog-cloud-target-resource",
+			"value": googleResource,
+		},
+		{
+			"key":   "x-amz-security-token",
+			"value": credentials.SessionToken,
+		},
+	}
+
+	googleToken := AWSExchangeToken{
+		URL:     getCallerIdentityURL,
+		Method:  http.MethodPost,
+		Headers: headers}
+
+	googleTokenBuffer := new(bytes.Buffer)
+	encoder := json.NewEncoder(googleTokenBuffer)
+	encoder.SetEscapeHTML(false)
+	encoder.Encode(googleToken)
+
+	googleTokenBytes, err := ioutil.ReadAll(googleTokenBuffer)
+
+	if err != nil {
+		logrus.Errorf("Failed to encode AWS exchange token: %s", err)
+	}
+
+	googleTokenEncoded := url.QueryEscape(string(googleTokenBytes))
+
+	tokenExchangeRequest := TokenExchangeRequest{
+		Audience:           googleResource,
+		GrantType:          "urn:ietf:params:oauth:grant-type:token-exchange",
+		RequestedTokenType: "urn:ietf:params:oauth:token-type:access_token",
+		Scope:              gcpScope,
+		SubjectTokenType:   "urn:ietf:params:aws:token-type:aws4_request",
+		SubjectToken:       googleTokenEncoded,
+	}
+
+	tokenExchangeRequestBytes, _ := json.Marshal(tokenExchangeRequest)
+
+	request, _ := http.NewRequest(http.MethodPost, "https://sts.googleapis.com/v1beta/token", bytes.NewReader(tokenExchangeRequestBytes))
+	request.Header.Set("Content-Type", "application/json; charset=utf-8")
+	request.Header.Set("Host", "https://sts.googleapis.com")
+
+	return request, nil
+}
+
+func (source *Source) buildGetCallerIdentityRequest(credentials credentials.Value) (*http.Request, error) {
+	host := getCallerIdentityURL
+	currentTime := time.Now()
+	amzDate := currentTime.Format("2006012T150405Z")
+
+	body := strings.NewReader("")
+	req, _ := http.NewRequest(http.MethodPost, host, body)
+	req.Header.Set("X-AMZ-Date", amzDate)
+	req.Header.Set("Host", "sts.amazonaws.com")
+	req.Header.Set("x-goog-cloud-target-resource", source.getGoogleResource())
+
+	h := sha256.New()
+	_, _ = io.Copy(h, body)
+	payloadHash := hex.EncodeToString(h.Sum(nil))
+
+	signer := v4.NewSigner()
+	err := signer.SignHTTP(
+		context.Background(),
+		v2aws.Credentials{
+			AccessKeyID:     credentials.AccessKeyID,
+			SecretAccessKey: credentials.SecretAccessKey,
+			SessionToken:    credentials.SessionToken,
+		},
+		req,
+		payloadHash,
+		getCallerIdentityService,
+		getCallerIdentityRegion,
+		currentTime,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to add the AWS v4 signature to the STS request: %s", err)
+	}
+
+	// Adding header post signing so it doesn't get added as part of the signed headers
+	// AWS doesn't care but Google validates the signature without this header before sending
+	req.Header.Set("Content-Type", "application/json; charset=utf-8")
+	return req, nil
+}
+
+func (source *Source) buildGetServiceAccountTokenRequest(token string) *http.Request {
+	body := GenerateAccessTokenRequest{
+		Scope: []string{
+			gcpScope,
+		},
+	}
+
+	bodyBytes, _ := json.Marshal(body)
+
+	saRequestURL := fmt.Sprintf(generateAccessTokenAPI, source.GcpServiceAccount)
+
+	request, _ := http.NewRequest(http.MethodPost, saRequestURL, bytes.NewReader(bodyBytes))
+	request.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
+
+	return request
+}
+
 func (source *Source) AuthenticateToECR() bool {
 	logrus.Warnln("ECR integration is experimental and untested")
 
 	var sessionConfig aws.Config
-	if source.AwsAccessKeyId != "" && source.AwsSecretAccessKey != "" {
- 		sessionConfig = aws.Config{
+	if source.AwsAccessKeyID != "" && source.AwsSecretAccessKey != "" {
+		sessionConfig = aws.Config{
 			Region:      aws.String(source.AwsRegion),
-			Credentials: credentials.NewStaticCredentials(source.AwsAccessKeyId, source.AwsSecretAccessKey, ""),
+			Credentials: credentials.NewStaticCredentials(source.AwsAccessKeyID, source.AwsSecretAccessKey, ""),
 		}
 	} else {
 		sessionConfig = aws.Config{
-			Region:      aws.String(source.AwsRegion),
+			Region: aws.String(source.AwsRegion),
 		}
 	}
 	mySession := session.Must(session.NewSession(&sessionConfig))

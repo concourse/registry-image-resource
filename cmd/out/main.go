@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
+	gcr "github.com/autonomic-ai/notary-gcr/pkg/gcr"
 	resource "github.com/concourse/registry-image-resource"
 	"github.com/fatih/color"
 	"github.com/google/go-containerregistry/pkg/authn"
@@ -16,7 +17,6 @@ import (
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/google/go-containerregistry/pkg/v1/tarball"
-	gcr "github.com/autonomic-ai/notary-gcr/pkg/gcr"
 	"github.com/sirupsen/logrus"
 )
 
@@ -63,7 +63,12 @@ func main() {
 
 	src := os.Args[1]
 
-	if req.Source.AwsRegion != "" {
+	if req.Source.GcpProject != "" {
+		if !req.Source.AuthenticateToGCP() {
+			os.Exit(1)
+			return
+		}
+	} else if req.Source.AwsRegion != "" {
 		if !req.Source.AuthenticateToECR() {
 			os.Exit(1)
 			return

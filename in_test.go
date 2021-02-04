@@ -112,11 +112,11 @@ var _ = Describe("In", func() {
 		It("returns metadata", func() {
 			Expect(res.Version).To(Equal(req.Version))
 			Expect(res.Metadata).To(Equal([]resource.MetadataField{
-				resource.MetadataField{
+				{
 					Name:  "repository",
 					Value: "concourse/test-image-metadata",
 				},
-				resource.MetadataField{
+				{
 					Name:  "tag",
 					Value: "latest",
 				},

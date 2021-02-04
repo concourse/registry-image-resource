@@ -42,7 +42,13 @@ func main() {
 		return
 	}
 
-	if req.Source.AwsRegion != "" {
+	// Use AWS to authenticate to GCP Artifact Registry
+	if req.Source.GcpProject != "" {
+		if !req.Source.AuthenticateToGCP() {
+			os.Exit(1)
+			return
+		}
+	} else if req.Source.AwsRegion != "" {
 		if !req.Source.AuthenticateToECR() {
 			os.Exit(1)
 			return

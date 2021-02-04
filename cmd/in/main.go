@@ -68,7 +68,12 @@ func main() {
 
 	dest := os.Args[1]
 
-	if req.Source.AwsRegion != "" {
+	if req.Source.GcpProject != "" {
+		if !req.Source.AuthenticateToGCP() {
+			os.Exit(1)
+			return
+		}
+	} else if req.Source.AwsRegion != "" {
 		if !req.Source.AuthenticateToECR() {
 			os.Exit(1)
 			return
