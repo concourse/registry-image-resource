@@ -186,61 +186,70 @@ func (o *Out) Execute() error {
 }
 
 func put(req resource.OutRequest, img v1.Image, tags []name.Tag) error {
-	auth := &authn.Basic{
-		Username: req.Source.Username,
-		Password: req.Source.Password,
-	}
-
-	var notaryConfigDir string
-	var err error
-	if req.Source.ContentTrust != nil {
-		notaryConfigDir, err = req.Source.ContentTrust.PrepareConfigDir()
-		if err != nil {
-			return fmt.Errorf("prepare notary-config-dir: %w", err)
-		}
-	}
-
+	images := map[name.Reference]remote.Taggable{}
+	var identifiers []string
 	for _, tag := range tags {
-		logrus.Infof("pushing to tag %s", tag.Identifier())
+		images[tag] = img
+		identifiers = append(identifiers, tag.Identifier())
+	}
 
-		err = remote.Write(tag, img, remote.WithAuth(auth))
+	logrus.Infof("pushing tag(s) %s", strings.Join(identifiers, ", "))
+	err := remote.MultiWrite(images, remote.WithAuth(createAuth(req)))
+	if err != nil {
+		return fmt.Errorf("pushing tag(s): %w", err)
+	}
+
+	logrus.Info("pushed")
+
+	if req.Source.ContentTrust != nil {
+		err = signImages(req, img, tags)
 		if err != nil {
-			return fmt.Errorf("tag image: %w", err)
-		}
-
-		logrus.Info("pushed")
-
-		if notaryConfigDir != "" {
-			trustedRepo, err := gcr.NewTrustedGcrRepository(notaryConfigDir, tag, auth)
-			if err != nil {
-				return fmt.Errorf("create TrustedGcrRepository: %w", err)
-			}
-
-			logrus.Info("signing image")
-
-			err = trustedRepo.SignImage(img)
-			if err != nil {
-				logrus.Errorf("failed to sign image: %s", err)
-			}
+			return fmt.Errorf("signing image(s): %w", err)
 		}
 	}
 
 	return nil
 }
 
-func aliasesToBump(req resource.OutRequest, repo name.Repository, ver *semver.Version) ([]name.Tag, error) {
-	variant := req.Source.Variant
+func signImages(req resource.OutRequest, img v1.Image, tags []name.Tag) error {
+	var notaryConfigDir string
+	var err error
+	notaryConfigDir, err = req.Source.ContentTrust.PrepareConfigDir()
+	if err != nil {
+		return fmt.Errorf("prepare notary-config-dir: %w", err)
+	}
 
-	auth := &authn.Basic{
+	for _, tag := range tags {
+		trustedRepo, err := gcr.NewTrustedGcrRepository(notaryConfigDir, tag, createAuth(req))
+		if err != nil {
+			return fmt.Errorf("create TrustedGcrRepository: %w", err)
+		}
+
+		logrus.Infof("signing image with tag: %s", tag.Identifier())
+
+		err = trustedRepo.SignImage(img)
+		if err != nil {
+			logrus.Errorf("failed to sign image: %s", err)
+		}
+	}
+
+	return nil
+}
+
+// It's okay if both are blank. It will become an Anonymous Authenticator in
+// that case.
+func createAuth(req resource.OutRequest) *authn.Basic {
+	return &authn.Basic{
 		Username: req.Source.Username,
 		Password: req.Source.Password,
 	}
+}
+
+func aliasesToBump(req resource.OutRequest, repo name.Repository, ver *semver.Version) ([]name.Tag, error) {
+	variant := req.Source.Variant
 
 	opts := []remote.Option{}
-
-	if auth.Username != "" && auth.Password != "" {
-		opts = append(opts, remote.WithAuth(auth))
-	}
+	opts = append(opts, remote.WithAuth(createAuth(req)))
 
 	versions, err := remote.List(repo, opts...)
 	if err != nil {

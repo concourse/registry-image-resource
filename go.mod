@@ -7,8 +7,7 @@ require (
 	github.com/cenkalti/backoff v2.2.1+incompatible
 	github.com/concourse/go-archive v1.0.1
 	github.com/fatih/color v1.9.0
-	github.com/google/go-containerregistry v0.1.3
-	github.com/kr/pretty v0.2.0 // indirect
+	github.com/google/go-containerregistry v0.4.0
 	github.com/lib/pq v1.2.0 // indirect
 	github.com/mattn/go-colorable v0.1.6 // indirect
 	github.com/mitchellh/mapstructure v1.3.1 // indirect
