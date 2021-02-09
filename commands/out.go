@@ -193,8 +193,18 @@ func put(req resource.OutRequest, img v1.Image, tags []name.Tag) error {
 		identifiers = append(identifiers, tag.Identifier())
 	}
 
+	repo, err := name.NewRepository(req.Source.Repository)
+	if err != nil {
+		return fmt.Errorf("resolve repository name: %w", err)
+	}
+
+	opts, err := req.Source.AuthOptions(repo)
+	if err != nil {
+		return err
+	}
+
 	logrus.Infof("pushing tag(s) %s", strings.Join(identifiers, ", "))
-	err := remote.MultiWrite(images, remote.WithAuth(createAuth(req)))
+	err = remote.MultiWrite(images, opts...)
 	if err != nil {
 		return fmt.Errorf("pushing tag(s): %w", err)
 	}
@@ -248,8 +258,15 @@ func createAuth(req resource.OutRequest) *authn.Basic {
 func aliasesToBump(req resource.OutRequest, repo name.Repository, ver *semver.Version) ([]name.Tag, error) {
 	variant := req.Source.Variant
 
-	opts := []remote.Option{}
-	opts = append(opts, remote.WithAuth(createAuth(req)))
+	repo, err := name.NewRepository(req.Source.Repository)
+	if err != nil {
+		return nil, fmt.Errorf("resolve repository name: %w", err)
+	}
+
+	opts, err := req.Source.AuthOptions(repo)
+	if err != nil {
+		return nil, err
+	}
 
 	versions, err := remote.List(repo, opts...)
 	if err != nil {
