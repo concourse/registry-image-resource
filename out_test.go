@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"sync"
 
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
@@ -665,7 +666,7 @@ func (example SemverTagPushExample) Run() {
 		ghttp.RespondWith(http.StatusCreated, "upload complete")(w, r)
 	})
 
-	actualTags := []string{}
+	pushedTags := new(sync.Map)
 	registry.RouteToHandler("PUT", regexp.MustCompile("/v2/test-image/manifests/.*"), func(w http.ResponseWriter, r *http.Request) {
 		tag := filepath.Base(r.URL.Path)
 
@@ -673,7 +674,7 @@ func (example SemverTagPushExample) Run() {
 		Expect(err).ToNot(HaveOccurred())
 		Expect(actualDigest.String()).To(Equal(digest.String()))
 
-		actualTags = append(actualTags, tag)
+		pushedTags.Store(tag, struct{}{})
 
 		ghttp.RespondWith(http.StatusOK, "manifest updated")(w, r)
 	})
@@ -696,6 +697,12 @@ func (example SemverTagPushExample) Run() {
 		Expect(err.Error()).To(ContainSubstring(example.Error))
 	} else {
 		Expect(err).ToNot(HaveOccurred())
+
+		actualTags := []string{}
+		pushedTags.Range(func(key, val interface{}) bool {
+			actualTags = append(actualTags, key.(string))
+			return true
+		})
 
 		Expect(actualTags).To(ConsistOf(example.PushedTags))
 
