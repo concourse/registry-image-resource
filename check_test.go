@@ -3,6 +3,7 @@ package resource_test
 import (
 	"bytes"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"net/http"
 	"os/exec"
@@ -20,6 +21,8 @@ import (
 )
 
 var _ = Describe("Check", func() {
+	var actualErr error
+
 	var req struct {
 		Source  resource.Source
 		Version *resource.Version
@@ -47,11 +50,11 @@ var _ = Describe("Check", func() {
 		cmd.Stdout = outBuf
 		cmd.Stderr = GinkgoWriter
 
-		err = cmd.Run()
-		Expect(err).ToNot(HaveOccurred())
-
-		err = json.Unmarshal(outBuf.Bytes(), &res)
-		Expect(err).ToNot(HaveOccurred())
+		actualErr = cmd.Run()
+		if actualErr == nil {
+			err = json.Unmarshal(outBuf.Bytes(), &res)
+			Expect(err).ToNot(HaveOccurred())
+		}
 	}
 
 	Describe("tracking a single tag", func() {
@@ -68,6 +71,8 @@ var _ = Describe("Check", func() {
 			})
 
 			It("returns the current digest", func() {
+				Expect(actualErr).ToNot(HaveOccurred())
+
 				Expect(res).To(Equal([]resource.Version{
 					{Tag: "latest", Digest: LATEST_STATIC_DIGEST},
 				}))
@@ -89,6 +94,8 @@ var _ = Describe("Check", func() {
 				})
 
 				It("returns the current digest", func() {
+					Expect(actualErr).ToNot(HaveOccurred())
+
 					Expect(res).To(Equal([]resource.Version{
 						{Tag: "latest", Digest: PRIVATE_LATEST_STATIC_DIGEST},
 					}))
@@ -138,9 +145,66 @@ var _ = Describe("Check", func() {
 				})
 
 				It("falls back on fetching the manifest", func() {
+					Expect(actualErr).ToNot(HaveOccurred())
+
 					Expect(res).To(Equal([]resource.Version{
 						{Tag: "latest", Digest: LATEST_FAKE_DIGEST},
 					}))
+				})
+			})
+
+			Context("using a registry with self-signed certificate", func() {
+				var registry *ghttp.Server
+
+				BeforeEach(func() {
+					registry = ghttp.NewTLSServer()
+
+					registry.AppendHandlers(
+						ghttp.CombineHandlers(
+							ghttp.VerifyRequest("GET", "/v2/"),
+							ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
+						),
+						ghttp.CombineHandlers(
+							ghttp.VerifyRequest("GET", "/v2/"),
+							ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
+						),
+						ghttp.CombineHandlers(
+							ghttp.VerifyRequest("HEAD", "/v2/some/fake-image/manifests/latest"),
+							ghttp.RespondWith(http.StatusOK, ``, LATEST_FAKE_HEADERS),
+						),
+					)
+
+					req.Source.Repository = registry.Addr() + "/some/fake-image"
+				})
+
+				AfterEach(func() {
+					registry.Close()
+				})
+
+				When("the certificate is provided in 'source'", func() {
+					BeforeEach(func() {
+						certPem := pem.EncodeToMemory(&pem.Block{
+							Type:  "CERTIFICATE",
+							Bytes: registry.HTTPTestServer.Certificate().Raw,
+						})
+						Expect(certPem).ToNot(BeEmpty())
+
+						req.Source.DomainCerts = []string{string(certPem)}
+					})
+
+					It("it checks and returns the current digest", func() {
+						Expect(actualErr).ToNot(HaveOccurred())
+
+						Expect(res).To(Equal([]resource.Version{
+							{Tag: "latest", Digest: LATEST_FAKE_DIGEST},
+						}))
+					})
+				})
+
+				When("the certificate is missing in 'source'", func() {
+					It("exits non-zero and returns an error", func() {
+						Expect(actualErr).To(HaveOccurred())
+					})
 				})
 			})
 
@@ -187,6 +251,8 @@ var _ = Describe("Check", func() {
 					})
 
 					It("it checks and returns the current digest using the registry declared in the repository and not using the mirror", func() {
+						Expect(actualErr).ToNot(HaveOccurred())
+
 						Expect(res).To(Equal([]resource.Version{
 							{Tag: "latest", Digest: LATEST_FAKE_DIGEST},
 						}))
@@ -216,6 +282,8 @@ var _ = Describe("Check", func() {
 					})
 
 					It("returns the current digest", func() {
+						Expect(actualErr).ToNot(HaveOccurred())
+
 						Expect(res).To(Equal([]resource.Version{
 							{Tag: "latest", Digest: LATEST_FAKE_DIGEST},
 						}))
@@ -244,6 +312,8 @@ var _ = Describe("Check", func() {
 					})
 
 					It("returns the current digest", func() {
+						Expect(actualErr).ToNot(HaveOccurred())
+
 						Expect(res).To(Equal([]resource.Version{
 							{Tag: "1.32.0", Digest: latestDigest(req.Source.Name())},
 						}))
@@ -266,6 +336,8 @@ var _ = Describe("Check", func() {
 			})
 
 			It("returns the given digest", func() {
+				Expect(actualErr).ToNot(HaveOccurred())
+
 				Expect(res).To(Equal([]resource.Version{
 					{Tag: "latest", Digest: LATEST_STATIC_DIGEST},
 				}))
@@ -277,6 +349,8 @@ var _ = Describe("Check", func() {
 				})
 
 				It("includes the tag in the response version", func() {
+					Expect(actualErr).ToNot(HaveOccurred())
+
 					Expect(res).To(Equal([]resource.Version{
 						{Tag: "latest", Digest: LATEST_STATIC_DIGEST},
 					}))
@@ -304,6 +378,8 @@ var _ = Describe("Check", func() {
 				})
 
 				It("returns the current digest", func() {
+					Expect(actualErr).ToNot(HaveOccurred())
+
 					Expect(res).To(Equal([]resource.Version{
 						{Tag: "latest", Digest: PRIVATE_LATEST_STATIC_DIGEST},
 					}))
@@ -351,6 +427,8 @@ var _ = Describe("Check", func() {
 					})
 
 					It("returns the current digest", func() {
+						Expect(actualErr).ToNot(HaveOccurred())
+
 						Expect(res).To(Equal([]resource.Version{
 							*req.Version,
 						}))
@@ -384,6 +462,8 @@ var _ = Describe("Check", func() {
 					})
 
 					It("returns the current digest", func() {
+						Expect(actualErr).ToNot(HaveOccurred())
+
 						Expect(res).To(Equal([]resource.Version{
 							*req.Version,
 						}))
@@ -407,6 +487,8 @@ var _ = Describe("Check", func() {
 			})
 
 			It("returns the previous digest and the current digest", func() {
+				Expect(actualErr).ToNot(HaveOccurred())
+
 				Expect(res).To(Equal([]resource.Version{
 					{Tag: "latest", Digest: OLDER_STATIC_DIGEST},
 					{Tag: "latest", Digest: LATEST_STATIC_DIGEST},
@@ -435,6 +517,8 @@ var _ = Describe("Check", func() {
 				})
 
 				It("returns the current digest", func() {
+					Expect(actualErr).ToNot(HaveOccurred())
+
 					Expect(res).To(Equal([]resource.Version{
 						{Tag: "latest", Digest: PRIVATE_OLDER_STATIC_DIGEST},
 						{Tag: "latest", Digest: PRIVATE_LATEST_STATIC_DIGEST},
@@ -488,6 +572,8 @@ var _ = Describe("Check", func() {
 					})
 
 					It("returns the current digest", func() {
+						Expect(actualErr).ToNot(HaveOccurred())
+
 						Expect(res).To(Equal([]resource.Version{
 							{Tag: "latest", Digest: OLDER_FAKE_DIGEST},
 							{Tag: "latest", Digest: LATEST_FAKE_DIGEST},
@@ -520,6 +606,8 @@ var _ = Describe("Check", func() {
 					})
 
 					It("returns the current digest", func() {
+						Expect(actualErr).ToNot(HaveOccurred())
+
 						Expect(res).To(Equal([]resource.Version{
 							{Tag: "1.32.0", Digest: OLDER_LIBRARY_DIGEST},
 							{Tag: "1.32.0", Digest: latestDigest(req.Source.Name())},
@@ -543,6 +631,8 @@ var _ = Describe("Check", func() {
 			})
 
 			It("returns only the current digest", func() {
+				Expect(actualErr).ToNot(HaveOccurred())
+
 				Expect(res).To(Equal([]resource.Version{
 					{Tag: "latest", Digest: LATEST_STATIC_DIGEST},
 				}))
@@ -564,6 +654,8 @@ var _ = Describe("Check", func() {
 				})
 
 				It("returns the current digest", func() {
+					Expect(actualErr).ToNot(HaveOccurred())
+
 					Expect(res).To(Equal([]resource.Version{
 						{Tag: "latest", Digest: PRIVATE_LATEST_STATIC_DIGEST},
 					}))
@@ -614,6 +706,8 @@ var _ = Describe("Check", func() {
 					})
 
 					It("returns the current digest", func() {
+						Expect(actualErr).ToNot(HaveOccurred())
+
 						Expect(res).To(Equal([]resource.Version{
 							{Tag: "latest", Digest: LATEST_FAKE_DIGEST},
 						}))
@@ -642,6 +736,8 @@ var _ = Describe("Check", func() {
 					})
 
 					It("returns the current digest", func() {
+						Expect(actualErr).ToNot(HaveOccurred())
+
 						Expect(res).To(Equal([]resource.Version{
 							{Tag: "1.32.0", Digest: latestDigest(req.Source.Name())},
 						}))
@@ -660,6 +756,8 @@ var _ = Describe("Check", func() {
 			})
 
 			It("returns empty digest", func() {
+				Expect(actualErr).ToNot(HaveOccurred())
+
 				Expect(res).To(Equal([]resource.Version{}))
 			})
 
@@ -679,6 +777,8 @@ var _ = Describe("Check", func() {
 				})
 
 				It("returns empty digest", func() {
+					Expect(actualErr).ToNot(HaveOccurred())
+
 					Expect(res).To(Equal([]resource.Version{}))
 				})
 			})

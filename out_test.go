@@ -3,6 +3,7 @@ package resource_test
 import (
 	"bytes"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -364,6 +365,99 @@ var _ = Describe("Out", func() {
 
 		It("retries", func() {
 			Expect(actualErr).ToNot(HaveOccurred())
+		})
+	})
+
+	Context("using a registry with self-signed certificate", func() {
+		var registry *ghttp.Server
+		var randomImage v1.Image
+
+		BeforeEach(func() {
+			registry = ghttp.NewTLSServer()
+
+			req.Source = resource.Source{
+				Repository: registry.Addr() + "/fake-image",
+				Tag:        "some-tag",
+			}
+
+			tag, err := name.NewTag(req.Source.Name())
+			Expect(err).ToNot(HaveOccurred())
+
+			randomImage, err = random.Image(1024, 1)
+			Expect(err).ToNot(HaveOccurred())
+
+			err = tarball.WriteToFile(filepath.Join(srcDir, "image.tar"), tag, randomImage)
+			Expect(err).ToNot(HaveOccurred())
+
+			req.Params.Image = "image.tar"
+
+			layers, err := randomImage.Layers()
+			Expect(err).ToNot(HaveOccurred())
+
+			configDigest, err := randomImage.ConfigName()
+			Expect(err).ToNot(HaveOccurred())
+
+			registry.RouteToHandler("GET", "/v2/", func(w http.ResponseWriter, r *http.Request) {
+				ghttp.RespondWith(http.StatusOK, "welcome to zombocom")(w, r)
+			})
+
+			registry.RouteToHandler("HEAD", "/v2/fake-image/blobs/"+configDigest.String(), func(w http.ResponseWriter, r *http.Request) {
+				ghttp.RespondWith(http.StatusOK, "blob totally exists")(w, r)
+			})
+
+			registry.RouteToHandler("POST", "/v2/fake-image/blobs/uploads/", func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Add("Location", "/upload/some-blob")
+				w.WriteHeader(http.StatusAccepted)
+			})
+
+			registry.RouteToHandler("PATCH", "/upload/some-blob", func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Add("Location", "/commit/some-blob")
+				w.WriteHeader(http.StatusAccepted)
+			})
+
+			registry.RouteToHandler("PUT", "/commit/some-blob", func(w http.ResponseWriter, r *http.Request) {
+				ghttp.RespondWith(http.StatusCreated, "upload complete")(w, r)
+
+			})
+
+			for _, l := range layers {
+				layerDigest, err := l.Digest()
+				Expect(err).ToNot(HaveOccurred())
+
+				registry.RouteToHandler("HEAD", "/v2/fake-image/blobs/"+layerDigest.String(), func(w http.ResponseWriter, r *http.Request) {
+					ghttp.RespondWith(http.StatusNotFound, "needs upload")(w, r)
+				})
+			}
+
+			registry.RouteToHandler("PUT", "/v2/fake-image/manifests/some-tag", func(w http.ResponseWriter, r *http.Request) {
+				ghttp.RespondWith(http.StatusOK, "manifest updated")(w, r)
+			})
+		})
+
+		AfterEach(func() {
+			registry.Close()
+		})
+
+		When("the certificate is provided in 'source'", func() {
+			BeforeEach(func() {
+				certPem := pem.EncodeToMemory(&pem.Block{
+					Type:  "CERTIFICATE",
+					Bytes: registry.HTTPTestServer.Certificate().Raw,
+				})
+				Expect(certPem).ToNot(BeEmpty())
+
+				req.Source.DomainCerts = []string{string(certPem)}
+			})
+
+			It("should not error", func() {
+				Expect(actualErr).ToNot(HaveOccurred())
+			})
+		})
+
+		When("the certificate is missing in 'source'", func() {
+			It("exits non-zero and returns an error", func() {
+				Expect(actualErr).To(HaveOccurred())
+			})
 		})
 	})
 })
