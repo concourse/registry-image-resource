@@ -1,6 +1,8 @@
 package resource
 
 import (
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -87,6 +89,8 @@ type Source struct {
 
 	ContentTrust *ContentTrust `json:"content_trust,omitempty"`
 
+	DomainCerts []string `json:"ca_certs,omitempty"`
+
 	Debug bool `json:"debug,omitempty"`
 }
 
@@ -138,9 +142,35 @@ func (source Source) AuthOptions(repo name.Repository) ([]remote.Option, error) 
 		auth = authn.Anonymous
 	}
 
-	opts := []remote.Option{remote.WithAuth(auth)}
+	tr := http.DefaultTransport.(*http.Transport)
+	// a cert was provided
+	if len(source.DomainCerts) > 0 {
+		rootCAs, err := x509.SystemCertPool()
+		if err != nil {
+			return nil, err
+		}
+		if rootCAs == nil {
+			rootCAs = x509.NewCertPool()
+		}
 
-	rt, err := transport.New(repo.Registry, auth, http.DefaultTransport, []string{repo.Scope(transport.PullScope)})
+		for _, cert := range source.DomainCerts {
+			// append our cert to the system pool
+			if ok := rootCAs.AppendCertsFromPEM([]byte(cert)); !ok {
+				return nil, fmt.Errorf("failed to append registry certificate: %w", err)
+			}
+		}
+
+		// trust the augmented cert pool in our client
+		config := &tls.Config{
+			RootCAs: rootCAs,
+		}
+
+		tr.TLSClientConfig = config
+	}
+
+	opts := []remote.Option{remote.WithAuth(auth), remote.WithTransport(tr)}
+
+	rt, err := transport.New(repo.Registry, auth, tr, []string{repo.Scope(transport.PullScope)})
 	if err != nil {
 		return nil, fmt.Errorf("initialize transport: %w", err)
 	}

@@ -3,6 +3,7 @@ package resource_test
 import (
 	"bytes"
 	"encoding/json"
+	"encoding/pem"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -23,7 +24,10 @@ import (
 )
 
 var _ = Describe("In", func() {
-	var destDir string
+	var (
+		actualErr error
+		destDir   string
+	)
 
 	var req struct {
 		Source  resource.Source    `json:"source"`
@@ -70,11 +74,11 @@ var _ = Describe("In", func() {
 		cmd.Stdout = outBuf
 		cmd.Stderr = GinkgoWriter
 
-		err = cmd.Run()
-		Expect(err).ToNot(HaveOccurred())
-
-		err = json.Unmarshal(outBuf.Bytes(), &res)
-		Expect(err).ToNot(HaveOccurred())
+		actualErr = cmd.Run()
+		if actualErr == nil {
+			err = json.Unmarshal(outBuf.Bytes(), &res)
+			Expect(err).ToNot(HaveOccurred())
+		}
 	})
 
 	Describe("image metadata", func() {
@@ -87,6 +91,8 @@ var _ = Describe("In", func() {
 		})
 
 		It("captures the env and user", func() {
+			Expect(actualErr).ToNot(HaveOccurred())
+
 			var meta struct {
 				User string   `json:"user"`
 				Env  []string `json:"env"`
@@ -116,6 +122,8 @@ var _ = Describe("In", func() {
 		})
 
 		It("returns metadata", func() {
+			Expect(actualErr).ToNot(HaveOccurred())
+
 			Expect(res.Version).To(Equal(req.Version))
 			Expect(res.Metadata).To(Equal([]resource.MetadataField{
 				{
@@ -148,11 +156,15 @@ var _ = Describe("In", func() {
 		})
 
 		It("keeps file permissions and file modified times", func() {
+			Expect(actualErr).ToNot(HaveOccurred())
+
 			Expect(stat.Mode()).To(Equal(os.FileMode(0603)))
 			Expect(stat.ModTime()).To(BeTemporally("==", time.Date(1991, 06, 03, 05, 30, 30, 0, time.UTC)))
 		})
 
 		It("keeps file ownership", func() {
+			Expect(actualErr).ToNot(HaveOccurred())
+
 			if os.Geteuid() != 0 {
 				Skip("Must be run as root to validate file ownership")
 			}
@@ -174,6 +186,8 @@ var _ = Describe("In", func() {
 		})
 
 		It("does not restore files that were removed in later layers", func() {
+			Expect(actualErr).ToNot(HaveOccurred())
+
 			infos, err := ioutil.ReadDir(rootfsPath("top-dir-1"))
 			Expect(err).ToNot(HaveOccurred())
 			Expect(infos).To(HaveLen(2))
@@ -220,6 +234,8 @@ var _ = Describe("In", func() {
 		})
 
 		It("works", func() {
+			Expect(actualErr).ToNot(HaveOccurred())
+
 			lstat, err := os.Lstat(rootfsPath("usr", "libexec", "git-core", "git"))
 			Expect(err).ToNot(HaveOccurred())
 			Expect(lstat.Mode() & os.ModeSymlink).To(BeZero())
@@ -240,6 +256,8 @@ var _ = Describe("In", func() {
 		})
 
 		It("removes the symlink and writes to a new file rather than trying to open and write to it (thereby overwriting its target)", func() {
+			Expect(actualErr).ToNot(HaveOccurred())
+
 			Expect(cat(rootfsPath("a"))).To(Equal("symlinked\n"))
 			Expect(cat(rootfsPath("b"))).To(Equal("replaced\n"))
 		})
@@ -266,6 +284,8 @@ var _ = Describe("In", func() {
 		})
 
 		It("works", func() {
+			Expect(actualErr).ToNot(HaveOccurred())
+
 			Expect(cat(rootfsPath("Dockerfile"))).To(ContainSubstring("hello!"))
 		})
 	})
@@ -282,6 +302,8 @@ var _ = Describe("In", func() {
 		})
 
 		It("saves the tagged image as image.tar instead of saving the rootfs", func() {
+			Expect(actualErr).ToNot(HaveOccurred())
+
 			_, err := os.Stat(filepath.Join(destDir, "rootfs"))
 			Expect(os.IsNotExist(err)).To(BeTrue())
 
@@ -313,6 +335,8 @@ var _ = Describe("In", func() {
 		})
 
 		It("saves the digest to a file", func() {
+			Expect(actualErr).ToNot(HaveOccurred())
+
 			digest, err := ioutil.ReadFile(filepath.Join(destDir, "digest"))
 			Expect(err).ToNot(HaveOccurred())
 			Expect(string(digest)).To(Equal(req.Version.Digest))
@@ -329,6 +353,8 @@ var _ = Describe("In", func() {
 		})
 
 		It("saves the tag to a file", func() {
+			Expect(actualErr).ToNot(HaveOccurred())
+
 			tag, err := ioutil.ReadFile(filepath.Join(destDir, "tag"))
 			Expect(err).ToNot(HaveOccurred())
 			Expect(string(tag)).To(Equal("tagged"))
@@ -343,6 +369,8 @@ var _ = Describe("In", func() {
 		})
 
 		It("saves the repository string to a file", func() {
+			Expect(actualErr).ToNot(HaveOccurred())
+
 			repository, err := ioutil.ReadFile(filepath.Join(destDir, "repository"))
 			Expect(err).ToNot(HaveOccurred())
 			Expect(string(repository)).To(Equal("concourse/test-image-static"))
@@ -358,6 +386,8 @@ var _ = Describe("In", func() {
 		})
 
 		It("does not download the image", func() {
+			Expect(actualErr).ToNot(HaveOccurred())
+
 			_, err := os.Stat(filepath.Join(destDir, "rootfs"))
 			Expect(os.IsNotExist(err)).To(BeTrue())
 
@@ -369,6 +399,8 @@ var _ = Describe("In", func() {
 		})
 
 		It("saves the tag and digest files", func() {
+			Expect(actualErr).ToNot(HaveOccurred())
+
 			digest, err := ioutil.ReadFile(filepath.Join(destDir, "digest"))
 			Expect(err).ToNot(HaveOccurred())
 			Expect(string(digest)).To(Equal(LATEST_STATIC_DIGEST))
@@ -480,7 +512,84 @@ var _ = Describe("In", func() {
 		})
 
 		It("retries", func() {
+			Expect(actualErr).ToNot(HaveOccurred())
+
 			Expect(res.Version).To(Equal(req.Version))
+		})
+	})
+
+	Describe("using a registry with self-signed certificate", func() {
+		var registry *ghttp.Server
+
+		BeforeEach(func() {
+			registry = ghttp.NewTLSServer()
+
+			fakeImage := empty.Image
+
+			digest, err := fakeImage.Digest()
+			Expect(err).ToNot(HaveOccurred())
+
+			manifest, err := fakeImage.RawManifest()
+			Expect(err).ToNot(HaveOccurred())
+
+			config, err := fakeImage.RawConfigFile()
+			Expect(err).ToNot(HaveOccurred())
+
+			configDigest, err := fakeImage.ConfigName()
+			Expect(err).ToNot(HaveOccurred())
+
+			registry.AppendHandlers(
+				ghttp.CombineHandlers(
+					ghttp.VerifyRequest("GET", "/v2/"),
+					ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
+				),
+				ghttp.CombineHandlers(
+					ghttp.VerifyRequest("GET", "/v2/"),
+					ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
+				),
+				ghttp.CombineHandlers(
+					ghttp.VerifyRequest("GET", "/v2/some/fake-image/manifests/"+digest.String()),
+					ghttp.RespondWith(http.StatusOK, manifest),
+				),
+				ghttp.CombineHandlers(
+					ghttp.VerifyRequest("GET", "/v2/some/fake-image/blobs/"+configDigest.String()),
+					ghttp.RespondWith(http.StatusOK, config),
+				),
+			)
+
+			req.Source = resource.Source{
+				Repository: registry.Addr() + "/some/fake-image",
+			}
+
+			req.Version.Digest = digest.String()
+		})
+
+		AfterEach(func() {
+			registry.Close()
+		})
+
+		When("the certificate is provided in 'source'", func() {
+			BeforeEach(func() {
+				certPem := pem.EncodeToMemory(&pem.Block{
+					Type:  "CERTIFICATE",
+					Bytes: registry.HTTPTestServer.Certificate().Raw,
+				})
+				Expect(certPem).ToNot(BeEmpty())
+
+				req.Source.DomainCerts = []string{string(certPem)}
+			})
+
+			It("pulls the image from the registry", func() {
+				Expect(actualErr).ToNot(HaveOccurred())
+
+				Expect(res.Version).To(Equal(req.Version))
+			})
+		})
+
+		When("the certificate is missing in 'source'", func() {
+			It("exits non-zero and returns an error", func() {
+				Expect(actualErr).To(HaveOccurred())
+			})
 		})
 	})
 
@@ -545,6 +654,8 @@ var _ = Describe("In", func() {
 			})
 
 			It("pulls the image from the registry declared in the repository and not from the mirror", func() {
+				Expect(actualErr).ToNot(HaveOccurred())
+
 				Expect(res.Version).To(Equal(req.Version))
 
 				Expect(mirror.ReceivedRequests()).To(BeEmpty())
@@ -566,6 +677,8 @@ var _ = Describe("In", func() {
 				})
 
 				It("saves the rootfs and metadata", func() {
+					Expect(actualErr).ToNot(HaveOccurred())
+
 					_, err := os.Stat(rootfsPath("Dockerfile"))
 					Expect(err).ToNot(HaveOccurred())
 
@@ -623,6 +736,8 @@ var _ = Describe("In", func() {
 				})
 
 				It("pulls the image from the library", func() {
+					Expect(actualErr).ToNot(HaveOccurred())
+
 					Expect(res.Version).To(Equal(req.Version))
 				})
 
@@ -632,6 +747,8 @@ var _ = Describe("In", func() {
 					})
 
 					It("names the image with the original repository and tag, not the mirror", func() {
+						Expect(actualErr).ToNot(HaveOccurred())
+
 						tag, err := name.NewTag("fake-image:latest")
 						Expect(err).ToNot(HaveOccurred())
 
@@ -673,6 +790,8 @@ var _ = Describe("In", func() {
 				})
 
 				It("saves the rootfs and metadata", func() {
+					Expect(actualErr).ToNot(HaveOccurred())
+
 					_, err := os.Stat(rootfsPath("Dockerfile"))
 					Expect(err).ToNot(HaveOccurred())
 
@@ -708,6 +827,8 @@ var _ = Describe("In", func() {
 				})
 
 				It("pulls the image from the library", func() {
+					Expect(actualErr).ToNot(HaveOccurred())
+
 					Expect(res.Version).To(Equal(req.Version))
 				})
 			})

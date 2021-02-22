@@ -88,6 +88,24 @@ differences:
   * `tls_key`: *Optional. Default `""`* TLS key for the notary server.
   * `tls_cert`: *Optional. Default `""`* TLS certificate for the notary server.
 
+* `ca_certs`: *Optional.* An array of PEM-encoded CA certificates:
+
+  ```yaml
+  ca_certs:
+  - |
+    -----BEGIN CERTIFICATE-----
+    ...
+    -----END CERTIFICATE-----
+  - |
+    -----BEGIN CERTIFICATE-----
+    ...
+    -----END CERTIFICATE-----
+  ```
+
+  Each entry specifies the x509 CA certificate for the trusted docker registry.
+  This is used to validate the certificate of the docker registry when the
+  registry's certificate is signed by a custom authority (or itself).
+
 ### Signing with Docker Hub 
 
 Configure Docker Content Trust for use with the [Docker Hub](https:/hub.docker.io) and Notary service by specifying the above source parameters as follows:
