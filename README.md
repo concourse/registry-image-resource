@@ -378,8 +378,8 @@ will stop the build.
 Run the tests with the following commands for both `alpine` and `ubuntu` images:
 
 ```sh
-docker build -t registry-image-resource -f dockerfiles/alpine/Dockerfile .
-docker build -t registry-image-resource -f dockerfiles/ubuntu/Dockerfile .
+docker build -t registry-image-resource --target tests -f dockerfiles/alpine/Dockerfile .
+docker build -t registry-image-resource --target tests -f dockerfiles/ubuntu/Dockerfile .
 ```
 
 #### Integration tests
@@ -390,7 +390,7 @@ step requires setting `--build-args` so the integration will run.
 Run the tests with the following command:
 
 ```sh
-docker build . -t registry-image-resource -f dockerfiles/alpine/Dockerfile \
+docker build . -t registry-image-resource --target tests -f dockerfiles/alpine/Dockerfile \
   --build-arg DOCKER_PRIVATE_USERNAME="some-username" \
   --build-arg DOCKER_PRIVATE_PASSWORD="some-password" \
   --build-arg DOCKER_PRIVATE_REPO="some/repo" \
@@ -398,7 +398,7 @@ docker build . -t registry-image-resource -f dockerfiles/alpine/Dockerfile \
   --build-arg DOCKER_PUSH_PASSWORD="some-password" \
   --build-arg DOCKER_PUSH_REPO="some/repo"
 
-docker build . -t registry-image-resource -f dockerfiles/ubuntu/Dockerfile \
+docker build . -t registry-image-resource --target tests -f dockerfiles/ubuntu/Dockerfile \
   --build-arg DOCKER_PRIVATE_USERNAME="some-username" \
   --build-arg DOCKER_PRIVATE_PASSWORD="some-password" \
   --build-arg DOCKER_PRIVATE_REPO="some/repo" \
