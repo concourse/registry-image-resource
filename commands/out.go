@@ -14,6 +14,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
+	"github.com/google/go-containerregistry/pkg/v1/remote/transport"
 	"github.com/google/go-containerregistry/pkg/v1/tarball"
 	"github.com/simonshyu/notary-gcr/pkg/gcr"
 	"github.com/sirupsen/logrus"
@@ -198,7 +199,7 @@ func put(req resource.OutRequest, img v1.Image, tags []name.Tag) error {
 		return fmt.Errorf("resolve repository name: %w", err)
 	}
 
-	opts, err := req.Source.AuthOptions(repo)
+	opts, err := req.Source.AuthOptions(repo, []string{transport.PushScope})
 	if err != nil {
 		return err
 	}
@@ -263,7 +264,7 @@ func aliasesToBump(req resource.OutRequest, repo name.Repository, ver *semver.Ve
 		return nil, fmt.Errorf("resolve repository name: %w", err)
 	}
 
-	opts, err := req.Source.AuthOptions(repo)
+	opts, err := req.Source.AuthOptions(repo, []string{transport.PullScope})
 	if err != nil {
 		return nil, err
 	}

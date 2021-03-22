@@ -92,7 +92,7 @@ func check(source resource.Source, from *resource.Version) (resource.CheckRespon
 		return resource.CheckResponse{}, fmt.Errorf("resolve repository: %w", err)
 	}
 
-	opts, err := source.AuthOptions(repo)
+	opts, err := source.AuthOptions(repo, []string{transport.PullScope})
 	if err != nil {
 		return resource.CheckResponse{}, err
 	}
