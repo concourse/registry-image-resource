@@ -13,6 +13,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
+	"github.com/google/go-containerregistry/pkg/v1/remote/transport"
 	"github.com/google/go-containerregistry/pkg/v1/tarball"
 	"github.com/sirupsen/logrus"
 )
@@ -129,7 +130,7 @@ func downloadWithRetry(tag name.Tag, source resource.Source, params resource.Get
 	}
 
 	return resource.RetryOnRateLimit(func() error {
-		opts, err := source.AuthOptions(repo)
+		opts, err := source.AuthOptions(repo, []string{transport.PullScope})
 		if err != nil {
 			return err
 		}

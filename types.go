@@ -131,7 +131,7 @@ func (source Source) Mirror() (Source, bool, error) {
 	return copy, true, nil
 }
 
-func (source Source) AuthOptions(repo name.Repository) ([]remote.Option, error) {
+func (source Source) AuthOptions(repo name.Repository, scopeActions []string) ([]remote.Option, error) {
 	var auth authn.Authenticator
 	if source.Username != "" && source.Password != "" {
 		auth = &authn.Basic{
@@ -168,16 +168,17 @@ func (source Source) AuthOptions(repo name.Repository) ([]remote.Option, error) 
 		tr.TLSClientConfig = config
 	}
 
-	opts := []remote.Option{remote.WithAuth(auth), remote.WithTransport(tr)}
+	scopes := make([]string, len(scopeActions))
+	for i, action := range scopeActions {
+		scopes[i] = repo.Scope(action)
+	}
 
-	rt, err := transport.New(repo.Registry, auth, tr, []string{repo.Scope(transport.PullScope)})
+	rt, err := transport.New(repo.Registry, auth, tr, scopes)
 	if err != nil {
 		return nil, fmt.Errorf("initialize transport: %w", err)
 	}
 
-	opts = append(opts, remote.WithTransport(rt))
-
-	return opts, nil
+	return []remote.Option{remote.WithAuth(auth), remote.WithTransport(rt)}, nil
 }
 
 type ContentTrust struct {

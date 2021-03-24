@@ -384,8 +384,9 @@ docker build -t registry-image-resource --target tests -f dockerfiles/ubuntu/Doc
 
 #### Integration tests
 
-The integration requires 2 docker repos, one private and one public. The `docker build`
-step requires setting `--build-args` so the integration will run.
+The integration requires 3 docker repos: one private dockerhub repo, one public
+dockerhub repo, and one GCR repo. The `docker build` step requires setting
+`--build-args` so the integration will run.
 
 Run the tests with the following command:
 
@@ -396,7 +397,9 @@ docker build . -t registry-image-resource --target tests -f dockerfiles/alpine/D
   --build-arg DOCKER_PRIVATE_REPO="some/repo" \
   --build-arg DOCKER_PUSH_USERNAME="some-username" \
   --build-arg DOCKER_PUSH_PASSWORD="some-password" \
-  --build-arg DOCKER_PUSH_REPO="some/repo"
+  --build-arg DOCKER_PUSH_REPO="some/repo" \
+  --build-arg GCR_PUSH_SERVICE_ACCOUNT_KEY='{"some":"json"}' \
+  --build-arg GCR_PUSH_REPO="some/repo"
 
 docker build . -t registry-image-resource --target tests -f dockerfiles/ubuntu/Dockerfile \
   --build-arg DOCKER_PRIVATE_USERNAME="some-username" \
@@ -404,8 +407,13 @@ docker build . -t registry-image-resource --target tests -f dockerfiles/ubuntu/D
   --build-arg DOCKER_PRIVATE_REPO="some/repo" \
   --build-arg DOCKER_PUSH_USERNAME="some-username" \
   --build-arg DOCKER_PUSH_PASSWORD="some-password" \
-  --build-arg DOCKER_PUSH_REPO="some/repo"
+  --build-arg DOCKER_PUSH_REPO="some/repo" \
+  --build-arg GCR_PUSH_SERVICE_ACCOUNT_KEY='{"some":"json"}' \
+  --build-arg GCR_PUSH_REPO="some/repo"
 ```
+
+Note that you may omit any of the repo credentials in order to skip those
+integration tests.
 
 ### Contributing
 
