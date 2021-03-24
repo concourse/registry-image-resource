@@ -264,7 +264,7 @@ var _ = Describe("Out", func() {
 
 				BasicCredentials: resource.BasicCredentials{
 					Username: "_json_key",
-					Password: gcrPushPassword,
+					Password: gcrPushServiceAccountKey,
 				},
 			}
 

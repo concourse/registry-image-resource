@@ -61,7 +61,7 @@ var dockerPushPassword = os.Getenv("DOCKER_PUSH_PASSWORD")
 
 // a repo in GCR to which random images will be pushed when testing 'out'
 var gcrPushRepo = os.Getenv("GCR_PUSH_REPO")
-var gcrPushPassword = os.Getenv("GCR_PUSH_PASSWORD")
+var gcrPushServiceAccountKey = os.Getenv("GCR_PUSH_SERVICE_ACCOUNT_KEY")
 
 func checkDockerPrivateUserConfigured() {
 	if dockerPrivateRepo == "" || dockerPrivateUsername == "" || dockerPrivatePassword == "" {
@@ -76,8 +76,8 @@ func checkDockerPushUserConfigured() {
 }
 
 func checkGCRPushUserConfigured() {
-	if gcrPushRepo == "" || gcrPushPassword == "" {
-		Skip("must specify $GCR_PUSH_REPO and $GCR_PUSH_PASSWORD")
+	if gcrPushRepo == "" || gcrPushServiceAccountKey == "" {
+		Skip("must specify $GCR_PUSH_REPO and $GCR_PUSH_SERVICE_ACCOUNT_KEY")
 	}
 }
 
