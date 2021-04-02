@@ -95,8 +95,8 @@ var _ = Describe("Out", func() {
 				Tag:        resource.Tag(parallelTag("latest")),
 
 				BasicCredentials: resource.BasicCredentials{
-					Username: dockerPrivateUsername,
-					Password: dockerPrivatePassword,
+					Username: dockerPushUsername,
+					Password: dockerPushPassword,
 				},
 			}
 
@@ -148,6 +148,40 @@ var _ = Describe("Out", func() {
 					Value: parallelTag("latest"),
 				},
 			}))
+		})
+
+		Context("When using bump_aliases", func() {
+			BeforeEach(func() {
+				req.Params.BumpAliases = true
+				req.Params.Version = "1.0.0"
+			})
+
+			It("Push the right tags", func() {
+				Expect(actualErr).ToNot(HaveOccurred())
+
+				tags := []string{"1.0.0", "1.0", "1", req.Source.Tag.String()}
+
+				for _, tag := range tags {
+					name, err := name.ParseReference(dockerPushRepo + ":" + tag)
+					Expect(err).ToNot(HaveOccurred())
+
+					auth := &authn.Basic{
+						Username: req.Source.Username,
+						Password: req.Source.Password,
+					}
+
+					image, err := remote.Image(name, remote.WithAuth(auth))
+					Expect(err).ToNot(HaveOccurred())
+
+					pushedDigest, err := image.Digest()
+					Expect(err).ToNot(HaveOccurred())
+
+					randomDigest, err := randomImage.Digest()
+					Expect(err).ToNot(HaveOccurred())
+
+					Expect(pushedDigest).To(Equal(randomDigest))
+				}
+			})
 		})
 
 		Context("when the requested tarball is provided as a glob pattern", func() {
