@@ -129,6 +129,14 @@ func checkRepository(repo name.Repository, source resource.Source, from *resourc
 		})
 	}
 
+	var constraint *semver.Constraints
+	if source.SemverConstraint != "" {
+		constraint, err = semver.NewConstraint(source.SemverConstraint)
+		if err != nil {
+			return resource.CheckResponse{}, fmt.Errorf("parse semver constraint: %w", err)
+		}
+	}
+
 	for _, identifier := range tags {
 		var ver *semver.Version
 		if identifier == bareTag {
@@ -146,6 +154,11 @@ func checkRepository(repo name.Repository, source resource.Source, from *resourc
 			ver, err = semver.NewVersion(verStr)
 			if err != nil {
 				// not a version
+				continue
+			}
+
+			if constraint != nil && !constraint.Check(ver) {
+				// semver constraint not met
 				continue
 			}
 
@@ -246,7 +259,7 @@ func checkRepository(repo name.Repository, source resource.Source, from *resourc
 		digest := tagDigests[latestTag]
 
 		_, existsAsSemver := digestVersions[digest]
-		if !existsAsSemver {
+		if !existsAsSemver && constraint == nil {
 			response = append(response, resource.Version{
 				Tag:    latestTag,
 				Digest: digest,

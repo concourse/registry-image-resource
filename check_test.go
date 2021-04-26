@@ -862,6 +862,20 @@ var _ = DescribeTable("tracking semver tags",
 			Versions: []string{"1.0.0", "1.2.1", "2.0.0"},
 		},
 	),
+	Entry("semver constraint",
+		SemverTagCheckExample{
+			Tags: map[string]string{
+				"1.0.0": "random-1",
+				"1.2.1": "random-3",
+				"1.2.2": "random-4",
+				"2.0.0": "random-5",
+				// Does not include bare tag
+				"latest": "random-6",
+			},
+			SemverConstraint: "1.2.x",
+			Versions:         []string{"1.2.1", "1.2.2"},
+		},
+	),
 	Entry("prereleases ignored by default",
 		SemverTagCheckExample{
 			Tags: map[string]string{
@@ -1109,6 +1123,8 @@ type SemverTagCheckExample struct {
 	PreReleases bool
 	Variant     string
 
+	SemverConstraint string
+
 	Repository     string
 	RegistryMirror string
 	WorkingMirror  bool
@@ -1141,9 +1157,10 @@ func (example SemverTagCheckExample) Run() {
 
 	req := resource.CheckRequest{
 		Source: resource.Source{
-			Repository:  repo.Name(),
-			PreReleases: example.PreReleases,
-			Variant:     example.Variant,
+			Repository:       repo.Name(),
+			PreReleases:      example.PreReleases,
+			Variant:          example.Variant,
+			SemverConstraint: example.SemverConstraint,
 		},
 	}
 

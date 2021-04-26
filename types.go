@@ -80,6 +80,8 @@ type Source struct {
 	PreReleases bool   `json:"pre_releases,omitempty"`
 	Variant     string `json:"variant,omitempty"`
 
+	SemverConstraint string `json:"semver_constraint,omitempty"`
+
 	Tag Tag `json:"tag,omitempty"`
 
 	BasicCredentials
