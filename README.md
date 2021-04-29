@@ -54,6 +54,10 @@ differences:
   would be used for tags like `1.2.3-stretch`. This is typically used *without*
   `tag` - if it is set, this value will only used for pushing, not checking.
 
+* `semver_constraint`: *Optional.* Constrain the returned semver tags according
+  to a semver constraint, e.g. `"~1.2.x"`, `">= 1.2 < 3.0.0 || >= 4.2.3"`.
+  Follows the rules outlined in https://github.com/Masterminds/semver#checking-version-constraints.
+
 * `username` and `password`: *Optional.* A username and password to use when
   authenticating to the registry. Must be specified for private repos or when
   using `put`.
