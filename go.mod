@@ -21,6 +21,7 @@ require (
 	github.com/spf13/jwalterweatherman v1.1.0 // indirect
 	github.com/spf13/viper v1.7.0 // indirect
 	github.com/vbauerster/mpb v3.4.0+incompatible
+	golang.org/x/crypto v0.0.0-20210513164829-c07d793c2f9a // indirect
 	gopkg.in/ini.v1 v1.56.0 // indirect
 )
 
