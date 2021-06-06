@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -79,11 +80,22 @@ func (o *Out) Execute() error {
 		tagsToPush = append(tagsToPush, repo.Tag(req.Source.Tag.String()))
 	}
 
-	if req.Params.Version != "" {
-		ver, err := semver.NewVersion(req.Params.Version)
+	version := strings.TrimSpace(req.Params.Version)
+	if version != "" {
+		filePath := filepath.Join(src, version)
+
+		if stat, err := os.Stat(filePath); err == nil && !stat.IsDir() {
+			content, err := ioutil.ReadFile(filePath)
+			if err != nil {
+				return fmt.Errorf("failed to read file at %q: %s", filePath, err)
+			}
+
+			version =  strings.TrimSpace(string(content))
+		}
+		ver, err := semver.NewVersion(version)
 		if err != nil {
 			if err == semver.ErrInvalidSemVer {
-				return fmt.Errorf("invalid semantic version: %q", req.Params.Version)
+				return fmt.Errorf("invalid semantic version: %q", version)
 			}
 
 			return fmt.Errorf("failed to parse version: %w", err)

@@ -247,6 +247,40 @@ var _ = Describe("Out", func() {
 			})
 		})
 
+		Context("with version provided as a file", func() {
+			BeforeEach(func() {
+				req.Params.Version = "version-file"
+
+				err := ioutil.WriteFile(
+					filepath.Join(srcDir, req.Params.Version),
+					[]byte("0.8.0"),
+					0644,
+				)
+				Expect(err).ToNot(HaveOccurred())
+			})
+
+			It("pushes provided version as the tag", func() {
+				randomDigest, err := randomImage.Digest()
+				Expect(err).ToNot(HaveOccurred())
+
+				name, err := name.ParseReference(req.Source.Repository + ":0.8.0")
+				Expect(err).ToNot(HaveOccurred())
+
+				auth := &authn.Basic{
+					Username: req.Source.Username,
+					Password: req.Source.Password,
+				}
+
+				image, err := remote.Image(name, remote.WithAuth(auth))
+				Expect(err).ToNot(HaveOccurred())
+
+				pushedDigest, err := image.Digest()
+				Expect(err).ToNot(HaveOccurred())
+
+				Expect(pushedDigest).To(Equal(randomDigest))
+			})
+		})
+
 		Context("with additional_tags (newline separator)", func() {
 			BeforeEach(func() {
 				req.Params.AdditionalTags = "tags"

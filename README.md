@@ -314,7 +314,8 @@ Tags may be specified in multiple ways:
 * `image`: *Required.* The path to the OCI image tarball to upload. Expanded
   with [`filepath.Glob`](https://golang.org/pkg/path/filepath/#Glob).
 
-* `version`: *Optional.* A version number to use as a tag.
+* `version`: *Optional.* A version number to use as a tag (can be a version string
+  or a path to file containing the version number).
 
 * `bump_aliases`: *Optional. Default `false`.* When set to `true` and `version`
   is specified, automatically bump alias tags for the version.
