@@ -221,6 +221,14 @@ var _ = Describe("In", func() {
 
 			stat, err = os.Stat(rootfsPath("top-dir-2"))
 			Expect(err).To(HaveOccurred())
+
+			infos, err = ioutil.ReadDir(rootfsPath("top-dir-3"))
+			Expect(err).ToNot(HaveOccurred())
+			Expect(infos).To(HaveLen(1))
+
+			stat, err = os.Stat(rootfsPath("top-dir-3", "nested-dir"))
+			Expect(err).ToNot(HaveOccurred())
+			Expect(stat.IsDir()).To(BeTrue())
 		})
 	})
 

@@ -11,13 +11,14 @@ import (
 
 	"github.com/concourse/go-archive/tarfs"
 	"github.com/fatih/color"
-	"github.com/google/go-containerregistry/pkg/v1"
+	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/sirupsen/logrus"
 	"github.com/vbauerster/mpb"
 	"github.com/vbauerster/mpb/decor"
 )
 
 const whiteoutPrefix = ".wh."
+const whiteoutOpaqueDir = whiteoutPrefix + whiteoutPrefix + ".opq"
 
 func unpackImage(dest string, img v1.Image, debug bool, out io.Writer) error {
 	layers, err := img.Layers()
@@ -102,7 +103,24 @@ func extractLayer(dest string, layer v1.Layer, bar *mpb.Bar, chown bool) error {
 
 		log.Debug("unpacking")
 
-		if strings.HasPrefix(base, whiteoutPrefix) {
+		if base == whiteoutOpaqueDir {
+			fi, err := os.Lstat(dir)
+			if err != nil && !os.IsNotExist(err) {
+				return err
+			}
+
+			log.Debugf("removing contents of %s", dir)
+
+			if err := os.RemoveAll(dir); err != nil {
+				return err
+
+			}
+			if err := os.Mkdir(dir, fi.Mode()&os.ModePerm); err != nil {
+				return err
+			}
+
+			continue
+		} else if strings.HasPrefix(base, whiteoutPrefix) {
 			// layer has marked a file as deleted
 			name := strings.TrimPrefix(base, whiteoutPrefix)
 			removedPath := filepath.Join(dir, name)
