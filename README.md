@@ -73,8 +73,16 @@ differences:
 
 * `aws_region`: *Optional. Default `""`.* The region to use for accessing ECR. This is required if you are using ECR. This region will help determine the full repository URL you are accessing (e.g., `012345678910.dkr.ecr.us-east-1.amazonaws.com`)
 
+* `aws_ec2_credentials`: *Optional. Default `false`.* If set, allows the retrieval of
+   AWS credentials from the EC2 metadata.
+
 * `aws_role_arn`: *Optional. Default `""`.* If set, then this role will be
-  assumed before authenticating to ECR.
+   assumed before authenticating to ECR. It is overridden by `aws_role_arns` if
+   latter is also specified. This is kept for backward compatibility.
+
+* `aws_role_arns`: *Optional. Default `""`.* A comma-delimited list of AWS IAM roles.
+  If set, these roles will be assumed in the specified order before authenticating to ECR.
+  It overrides `aws_role_arn`.
 
 * `debug`: *Optional. Default `false`.* If set, progress bars will be disabled
   and debugging output will be printed instead.
@@ -110,7 +118,7 @@ differences:
   This is used to validate the certificate of the docker registry when the
   registry's certificate is signed by a custom authority (or itself).
 
-### Signing with Docker Hub 
+### Signing with Docker Hub
 
 Configure Docker Content Trust for use with the [Docker Hub](https:/hub.docker.io) and Notary service by specifying the above source parameters as follows:
 
@@ -265,7 +273,7 @@ Fetches an image at the exact digest specified by the version.
 
 The resource will produce the following files:
 
-* `./repository`: A file containing the image's full repository name, e.g. `concourse/concourse`. 
+* `./repository`: A file containing the image's full repository name, e.g. `concourse/concourse`.
   For ECR images, this will include the registry the image was pulled from.
 * `./tag`: A file containing the tag from the version.
 * `./digest`: A file containing the digest from the version, e.g. `sha256:...`.

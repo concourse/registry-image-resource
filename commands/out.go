@@ -62,7 +62,8 @@ func (o *Out) Execute() error {
 
 	src := o.args[1]
 
-	if req.Source.AwsAccessKeyId != "" && req.Source.AwsSecretAccessKey != "" && req.Source.AwsRegion != "" {
+	if ((req.Source.AwsAccessKeyId != "" && req.Source.AwsSecretAccessKey != "") ||
+	    (req.Source.AwsEC2Credentials)) && req.Source.AwsRegion != "" {
 		if !req.Source.AuthenticateToECR() {
 			return fmt.Errorf("cannot authenticate with ECR")
 		}
