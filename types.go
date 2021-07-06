@@ -15,7 +15,9 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
+	"github.com/aws/aws-sdk-go/aws/credentials/ec2rolecreds"
 	"github.com/aws/aws-sdk-go/aws/credentials/stscreds"
+	"github.com/aws/aws-sdk-go/aws/ec2metadata"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ecr"
 	"github.com/aws/aws-sdk-go/service/ecr/ecriface"
@@ -55,12 +57,13 @@ type OutResponse struct {
 }
 
 type AwsCredentials struct {
+	AwsEC2Credentials  bool   `json:"aws_ec2_credentials,omitempty"`
 	AwsAccessKeyId     string `json:"aws_access_key_id,omitempty"`
 	AwsSecretAccessKey string `json:"aws_secret_access_key,omitempty"`
 	AwsSessionToken    string `json:"aws_session_token,omitempty"`
 	AwsRegion          string `json:"aws_region,omitempty"`
 	AWSECRRegistryId   string `json:"aws_ecr_registry_id,omitempty"`
-	AwsRoleArn         string `json:"aws_role_arn,omitempty"`
+	AwsRoleArns        string `json:"aws_role_arns,omitempty"`
 }
 
 type BasicCredentials struct {
@@ -278,16 +281,41 @@ func (source *Source) Metadata() []MetadataField {
 
 func (source *Source) AuthenticateToECR() bool {
 	logrus.Warnln("ECR integration is experimental and untested")
-	mySession := session.Must(session.NewSession(&aws.Config{
-		Region:      aws.String(source.AwsRegion),
-		Credentials: credentials.NewStaticCredentials(source.AwsAccessKeyId, source.AwsSecretAccessKey, source.AwsSessionToken),
-	}))
+
+	var mySession *session.Session = nil
+
+  if source.AwsEC2Credentials {
+		mySession = session.Must(session.NewSession(&aws.Config{
+			Region:      aws.String(source.AwsRegion),
+			Credentials: credentials.NewCredentials( &ec2rolecreds.EC2RoleProvider{Client: ec2metadata.New(session.New()),} ),
+		}))
+
+	} else {
+		mySession = session.Must(session.NewSession(&aws.Config{
+			Region:      aws.String(source.AwsRegion),
+			Credentials: credentials.NewStaticCredentials(source.AwsAccessKeyId, source.AwsSecretAccessKey, source.AwsSessionToken),
+		}))
+	}
+
+
 
 	var config aws.Config
 
 	// If a role arn has been supplied, then assume role and get a new session
-	if source.AwsRoleArn != "" {
-		config = aws.Config{Credentials: stscreds.NewCredentials(mySession, source.AwsRoleArn)}
+	if source.AwsRoleArns != "" {
+		awsRoleArnsList := strings.Split(source.AwsRoleArns, ",")
+
+		for roleIndex, roleArn := range (awsRoleArnsList) {
+			if (roleIndex < len(awsRoleArnsList)-1) {
+				mySession = session.Must(session.NewSession(&aws.Config{
+					Region:      aws.String(source.AwsRegion),
+					Credentials: stscreds.NewCredentials(mySession, roleArn),
+				}))
+			} else {
+				config = aws.Config{Credentials: stscreds.NewCredentials(mySession, roleArn)}
+			}
+		}
+
 	}
 
 	client := ecr.New(mySession, &config)
