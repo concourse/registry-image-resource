@@ -12,6 +12,7 @@ require (
 	github.com/simonshyu/notary-gcr v0.0.0-20200416053715-76bd7435b4a6
 	github.com/sirupsen/logrus v1.7.0
 	github.com/vbauerster/mpb v3.4.0+incompatible
+	golang.org/x/crypto v0.0.0-20210513164829-c07d793c2f9a // indirect
 )
 
 go 1.13
