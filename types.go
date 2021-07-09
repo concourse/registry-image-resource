@@ -24,6 +24,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/google/go-containerregistry/pkg/v1/remote/transport"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/oauth2/google"
 )
 
 type CheckRequest struct {
@@ -95,6 +96,8 @@ type Source struct {
 	DomainCerts []string `json:"ca_certs,omitempty"`
 
 	Debug bool `json:"debug,omitempty"`
+
+	GcpAuth bool `json:"gcp_auth,omitempty"`
 }
 
 func (source Source) Mirror() (Source, bool, error) {
@@ -275,6 +278,23 @@ func (source *Source) Metadata() []MetadataField {
 			Value: source.Repository,
 		},
 	}
+}
+
+func (source *Source) AuthenticateToGCP() bool {
+	logrus.Warnln("GCP integration is experimental and untested")
+	logrus.Info("Using GCP service account credentials to authenticate to GCP")
+
+	oauthToken := google.ComputeTokenSource("")
+	token, err := oauthToken.Token()
+
+	if err != nil || token == nil {
+		logrus.Errorf("Failed to get access token for GCP: %s", err)
+		return false
+	}
+
+	source.Username = "oauth2accesstoken"
+	source.Password = token.AccessToken
+	return true
 }
 
 func (source *Source) AuthenticateToECR() bool {

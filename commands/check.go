@@ -49,6 +49,12 @@ func (c *Check) Execute() error {
 		return fmt.Errorf("invalid payload: %s", err)
 	}
 
+	if req.Source.GcpAuth {
+		if !req.Source.AuthenticateToGCP() {
+			return fmt.Errorf("cannot authenticate with GCP")
+		}
+	}
+
 	if req.Source.AwsAccessKeyId != "" && req.Source.AwsSecretAccessKey != "" && req.Source.AwsRegion != "" {
 		if !req.Source.AuthenticateToECR() {
 			return fmt.Errorf("cannot authenticate with ECR")
