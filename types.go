@@ -55,12 +55,13 @@ type OutResponse struct {
 }
 
 type AwsCredentials struct {
-	AwsAccessKeyId     string `json:"aws_access_key_id,omitempty"`
-	AwsSecretAccessKey string `json:"aws_secret_access_key,omitempty"`
-	AwsSessionToken    string `json:"aws_session_token,omitempty"`
-	AwsRegion          string `json:"aws_region,omitempty"`
-	AWSECRRegistryId   string `json:"aws_ecr_registry_id,omitempty"`
-	AwsRoleArn         string `json:"aws_role_arn,omitempty"`
+	AwsAccessKeyId     string   `json:"aws_access_key_id,omitempty"`
+	AwsSecretAccessKey string   `json:"aws_secret_access_key,omitempty"`
+	AwsSessionToken    string   `json:"aws_session_token,omitempty"`
+	AwsRegion          string   `json:"aws_region,omitempty"`
+	AWSECRRegistryId   string   `json:"aws_ecr_registry_id,omitempty"`
+	AwsRoleArn         string   `json:"aws_role_arn,omitempty"`
+	AwsRoleArns        []string `json:"aws_role_arns,omitempty"`
 }
 
 type BasicCredentials struct {
@@ -278,19 +279,33 @@ func (source *Source) Metadata() []MetadataField {
 
 func (source *Source) AuthenticateToECR() bool {
 	logrus.Warnln("ECR integration is experimental and untested")
+
+	if source.AwsRoleArn != "" && len(source.AwsRoleArns) != 0 {
+		logrus.Errorf("`aws_role_arn` cannot be set at the same time as `aws_role_arns`")
+		return false
+	}
+
 	mySession := session.Must(session.NewSession(&aws.Config{
 		Region:      aws.String(source.AwsRegion),
 		Credentials: credentials.NewStaticCredentials(source.AwsAccessKeyId, source.AwsSecretAccessKey, source.AwsSessionToken),
 	}))
 
-	var config aws.Config
-
-	// If a role arn has been supplied, then assume role and get a new session
+	// Note: This implementation gives precedence to `aws_role_arn` since it
+	// assumes that we've errored if both `aws_role_arn` and `aws_role_arns`
+	// are set
+	awsRoleArns := source.AwsRoleArns
 	if source.AwsRoleArn != "" {
-		config = aws.Config{Credentials: stscreds.NewCredentials(mySession, source.AwsRoleArn)}
+		awsRoleArns = []string{source.AwsRoleArn}
+	}
+	for _, roleArn := range awsRoleArns {
+		logrus.Debugf("assuming new role: %s", roleArn)
+		mySession = session.Must(session.NewSession(&aws.Config{
+			Region:      aws.String(source.AwsRegion),
+			Credentials: stscreds.NewCredentials(mySession, roleArn),
+		}))
 	}
 
-	client := ecr.New(mySession, &config)
+	client := ecr.New(mySession)
 	result, err := source.GetECRAuthorizationToken(client)
 	if err != nil {
 		logrus.Errorf("failed to authenticate to ECR: %s", err)
