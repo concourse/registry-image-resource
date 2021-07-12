@@ -57,14 +57,14 @@ type OutResponse struct {
 }
 
 type AwsCredentials struct {
-	AwsEC2Credentials  bool   `json:"aws_ec2_credentials,omitempty"`
-	AwsAccessKeyId     string `json:"aws_access_key_id,omitempty"`
-	AwsSecretAccessKey string `json:"aws_secret_access_key,omitempty"`
-	AwsSessionToken    string `json:"aws_session_token,omitempty"`
-	AwsRegion          string `json:"aws_region,omitempty"`
-	AWSECRRegistryId   string `json:"aws_ecr_registry_id,omitempty"`
-	AwsRoleArn         string `json:"aws_role_arn,omitempty"`
-	AwsRoleArns        string `json:"aws_role_arns,omitempty"`
+	AwsAccessKeyId     string   `json:"aws_access_key_id,omitempty"`
+	AwsSecretAccessKey string   `json:"aws_secret_access_key,omitempty"`
+	AwsSessionToken    string   `json:"aws_session_token,omitempty"`
+	AwsRegion          string   `json:"aws_region,omitempty"`
+	AWSECRRegistryId   string   `json:"aws_ecr_registry_id,omitempty"`
+	AwsEC2Credentials  bool     `json:"aws_ec2_credentials,omitempty"`
+	AwsRoleArn         string   `json:"aws_role_arn,omitempty"`
+	AwsRoleArns        []string `json:"aws_role_arns,omitempty"`
 }
 
 type BasicCredentials struct {
@@ -283,6 +283,11 @@ func (source *Source) Metadata() []MetadataField {
 func (source *Source) AuthenticateToECR() bool {
 	logrus.Warnln("ECR integration is experimental and untested")
 
+	if source.AwsRoleArn != "" && len(source.AwsRoleArns) != 0 {
+		logrus.Errorf("`aws_role_arn` cannot be set at the same time as `aws_role_arns`")
+		return false
+	}
+
 	var mySession *session.Session
 
 	if source.AwsEC2Credentials {
@@ -298,23 +303,18 @@ func (source *Source) AuthenticateToECR() bool {
 		}))
 	}
 
-	// If aws role arns chain has been supplied, then assume roles in turn and get a new session
-	if source.AwsRoleArns != "" {
-		logrus.Warnln("Using `aws_role_arns` rather than `aws_role_arn`, see documentation")
-		awsRoleArnsList := strings.Split(source.AwsRoleArns, ",")
-
-		for _, roleArn := range awsRoleArnsList {
-			logrus.Debugf("assuming new role: %s", roleArn)
-			mySession = session.Must(session.NewSession(&aws.Config{
-				Region:      aws.String(source.AwsRegion),
-				Credentials: stscreds.NewCredentials(mySession, roleArn),
-			}))
-		}
-	} else if source.AwsRoleArn != "" { //Assume one aws role only, kept for backward compatibility.
-		logrus.Debugf("assuming new role: %s", source.AwsRoleArn)
+	// Note: This implementation gives precedence to `aws_role_arn` since it
+	// assumes that we've errored if both `aws_role_arn` and `aws_role_arns`
+	// are set
+	awsRoleArns := source.AwsRoleArns
+	if source.AwsRoleArn != "" {
+		awsRoleArns = []string{source.AwsRoleArn}
+	}
+	for _, roleArn := range awsRoleArns {
+		logrus.Debugf("assuming new role: %s", roleArn)
 		mySession = session.Must(session.NewSession(&aws.Config{
 			Region:      aws.String(source.AwsRegion),
-			Credentials: stscreds.NewCredentials(mySession, source.AwsRoleArn),
+			Credentials: stscreds.NewCredentials(mySession, roleArn),
 		}))
 	}
 

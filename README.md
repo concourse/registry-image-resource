@@ -77,12 +77,12 @@ differences:
    AWS credentials from the EC2 metadata.
 
 * `aws_role_arn`: *Optional. Default `""`.* If set, then this role will be
-   assumed before authenticating to ECR. It is overridden by `aws_role_arns` if
-   latter is also specified. This is kept for backward compatibility.
+   assumed before authenticating to ECR. An error will occur if `aws_role_arns`
+   is also specified. This is kept for backward compatibility.
 
-* `aws_role_arns`: *Optional. Default `""`.* A comma-delimited list of AWS IAM roles.
+* `aws_role_arns`: *Optional. Default `""`.* An array of AWS IAM roles.
   If set, these roles will be assumed in the specified order before authenticating to ECR.
-  It overrides `aws_role_arn`.
+  An error will occur if `aws_role_arn` is also specified.
 
 * `debug`: *Optional. Default `false`.* If set, progress bars will be disabled
   and debugging output will be printed instead.
