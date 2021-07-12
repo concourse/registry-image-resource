@@ -20,6 +20,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/partial"
 	"github.com/google/go-containerregistry/pkg/v1/random"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
+	"github.com/google/go-containerregistry/pkg/v1/remote/transport"
 	"github.com/google/go-containerregistry/pkg/v1/tarball"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
@@ -601,6 +602,22 @@ var _ = DescribeTable("pushing semver tags",
 			Error: "no tag specified",
 		},
 	),
+	Entry("bumping aliases with no existing image",
+		SemverTagPushExample{
+			TagsResponseError: &transport.Error{
+				StatusCode: http.StatusNotFound,
+				Errors: []transport.Diagnostic{
+					{Code: "NAME_UNKNOWN"},
+				},
+			},
+
+			Variant:     "",
+			Version:     "1.2.3",
+			BumpAliases: true,
+
+			PushedTags: []string{"1.2.3", "1.2", "1", "latest"},
+		},
+	),
 	Entry("bumping aliases with no existing tags",
 		SemverTagPushExample{
 			Tags: []string{},
@@ -701,6 +718,22 @@ var _ = DescribeTable("pushing semver tags",
 			PushedTags: []string{"1.2.3-hello", "1.2-hello", "1-hello", "hello"},
 		},
 	),
+	Entry("bumping variant aliases with no existing image",
+		SemverTagPushExample{
+			TagsResponseError: &transport.Error{
+				StatusCode: http.StatusNotFound,
+				Errors: []transport.Diagnostic{
+					{Code: "NOT_FOUND"},
+				},
+			},
+
+			Variant:     "hello",
+			Version:     "1.2.3",
+			BumpAliases: true,
+
+			PushedTags: []string{"1.2.3-hello", "1.2-hello", "1-hello", "hello"},
+		},
+	),
 	Entry("bumping variant aliases with no existing tags",
 		SemverTagPushExample{
 			Tags: []string{},
@@ -770,7 +803,8 @@ var _ = DescribeTable("pushing semver tags",
 )
 
 type SemverTagPushExample struct {
-	Tags []string
+	Tags              []string
+	TagsResponseError *transport.Error
 
 	Variant string
 
@@ -821,13 +855,20 @@ func (example SemverTagPushExample) Run() {
 		ghttp.RespondWith(http.StatusOK, ""),
 	)
 
+	var response http.HandlerFunc
+	if example.TagsResponseError == nil {
+		response = ghttp.RespondWithJSONEncoded(http.StatusOK, registryTagsResponse{
+			Name: "some-name",
+			Tags: example.Tags,
+		})
+	} else {
+		response = ghttp.RespondWithJSONEncoded(example.TagsResponseError.StatusCode, example.TagsResponseError)
+	}
+
 	registry.RouteToHandler(
 		"GET",
 		"/v2/"+repo.RepositoryStr()+"/tags/list",
-		ghttp.RespondWithJSONEncoded(http.StatusOK, registryTagsResponse{
-			Name: "some-name",
-			Tags: example.Tags,
-		}),
+		response,
 	)
 
 	registry.RouteToHandler("HEAD", "/v2/test-image/blobs/"+digest.String(), func(w http.ResponseWriter, r *http.Request) {
