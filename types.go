@@ -97,7 +97,7 @@ type Source struct {
 
 	Debug bool `json:"debug,omitempty"`
 
-	GcpAuth bool `json:"gcp_auth,omitempty"`
+	GcpTokenSource *string `json:"gcp_token_source,omitempty"`
 }
 
 func (source Source) Mirror() (Source, bool, error) {
@@ -280,11 +280,11 @@ func (source *Source) Metadata() []MetadataField {
 	}
 }
 
-func (source *Source) AuthenticateToGCP() bool {
+func (source *Source) AuthenticateToGCP(tokenSource string) bool {
 	logrus.Warnln("GCP integration is experimental and untested")
 	logrus.Info("Using GCP service account credentials to authenticate to GCP")
 
-	oauthToken := google.ComputeTokenSource("")
+	oauthToken := google.ComputeTokenSource(tokenSource)
 	token, err := oauthToken.Token()
 
 	if err != nil || token == nil {

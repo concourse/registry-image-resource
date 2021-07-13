@@ -49,8 +49,8 @@ func (c *Check) Execute() error {
 		return fmt.Errorf("invalid payload: %s", err)
 	}
 
-	if req.Source.GcpAuth {
-		if !req.Source.AuthenticateToGCP() {
+	if req.Source.GcpTokenSource != nil {
+		if !req.Source.AuthenticateToGCP(*req.Source.GcpTokenSource) {
 			return fmt.Errorf("cannot authenticate with GCP")
 		}
 	}
