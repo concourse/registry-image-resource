@@ -18,6 +18,7 @@ RUN set -e; for pkg in $(go list ./...); do \
 	done
 
 FROM ${base_image} AS resource
+RUN apk update && apk upgrade
 RUN apk add --no-cache bash tzdata ca-certificates unzip zip gzip tar
 COPY --from=builder assets/ /opt/resource/
 RUN chmod +x /opt/resource/*
