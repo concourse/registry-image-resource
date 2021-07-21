@@ -19,8 +19,9 @@ RUN set -e; for pkg in $(go list ./...); do \
 
 FROM ${base_image} AS resource
 ENV DEBIAN_FRONTEND=noninteractive
-RUN apt-get update \
-      && apt-get install -y --no-install-recommends \
+RUN apt update && apt upgrade -y -o Dpkg::Options::="--force-confdef"
+RUN apt update \
+      && apt install -y --no-install-recommends \
         tzdata \
         ca-certificates \
         unzip \
