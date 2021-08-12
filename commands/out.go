@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -270,7 +271,7 @@ func aliasesToBump(req resource.OutRequest, repo name.Repository, ver *semver.Ve
 	}
 
 	versions, err := remote.List(repo, opts...)
-	if err != nil {
+	if err != nil && !isNewImage(err) {
 		return nil, fmt.Errorf("list repository tags: %w", err)
 	}
 
@@ -342,4 +343,12 @@ func aliasesToBump(req resource.OutRequest, repo name.Repository, ver *semver.Ve
 	}
 
 	return aliases, nil
+}
+
+func isNewImage(err error) bool {
+	if e, ok := err.(*transport.Error); ok && e.StatusCode == http.StatusNotFound {
+		return e.Errors[0].Code == transport.NameUnknownErrorCode || e.Errors[0].Code == "NOT_FOUND"
+	}
+
+	return false
 }
