@@ -63,10 +63,10 @@ differences:
   using `put`.
 
 * `aws_access_key_id`: *Optional. Default `""`.* The access key ID to use for
-  authenticating with ECR.
+  authenticating with ECR.  When using Instance Profiles this can be left blank.
 
 * `aws_secret_access_key`: *Optional. Default `""`.* The secret access key to
-  use for authenticating with ECR.
+  use for authenticating with ECR.  When using Instance Profiles this can be left blank.
 
 * `aws_session_token`: *Optional. Default `""`.* The session token to use
   for authenticating with STS credentials with ECR.

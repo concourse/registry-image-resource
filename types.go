@@ -285,10 +285,19 @@ func (source *Source) AuthenticateToECR() bool {
 		return false
 	}
 
-	mySession := session.Must(session.NewSession(&aws.Config{
-		Region:      aws.String(source.AwsRegion),
-		Credentials: credentials.NewStaticCredentials(source.AwsAccessKeyId, source.AwsSecretAccessKey, source.AwsSessionToken),
-	}))
+	var mySession *session.Session
+
+	if source.AwsAccessKeyId != "" && source.AwsSecretAccessKey != "" {
+		mySession = session.Must(session.NewSession(&aws.Config{
+			Region:      aws.String(source.AwsRegion),
+			Credentials: credentials.NewStaticCredentials(source.AwsAccessKeyId, source.AwsSecretAccessKey, source.AwsSessionToken),
+		}))
+	} else {
+		// Without an access key id or secret access key we assume an Instance Profile is being used
+		mySession = session.Must(session.NewSession(&aws.Config{
+			Region:      aws.String(source.AwsRegion),
+		}))
+	}
 
 	// Note: This implementation gives precedence to `aws_role_arn` since it
 	// assumes that we've errored if both `aws_role_arn` and `aws_role_arns`
