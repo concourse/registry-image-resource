@@ -45,7 +45,7 @@ var _ = Describe("Source", func() {
 		json, err := json.Marshal(source)
 		Expect(err).ToNot(HaveOccurred())
 
-		Expect(json).To(MatchJSON(`{"repository":"foo","tag":"0"}`))
+		Expect(json).To(MatchJSON(`{"repository":"foo","insecure":false,"tag":"0"}`))
 	})
 
 	Describe("ecr", func() {
