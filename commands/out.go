@@ -195,7 +195,12 @@ func put(req resource.OutRequest, img v1.Image, tags []name.Tag) error {
 		identifiers = append(identifiers, tag.Identifier())
 	}
 
-	repo, err := name.NewRepository(req.Source.Repository)
+	var repoOpts []name.Option
+	if req.Source.Insecure {
+		repoOpts = append(repoOpts, name.Insecure)
+	}
+
+	repo, err := name.NewRepository(req.Source.Repository, repoOpts...)
 	if err != nil {
 		return fmt.Errorf("resolve repository name: %w", err)
 	}

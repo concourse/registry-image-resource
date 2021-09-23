@@ -46,6 +46,8 @@ differences:
   *Note: If using ecr you only need the repository name, not the full URI e.g.
   `alpine` not `012345678910.dkr.ecr.us-east-1.amazonaws.com/alpine`*
 
+* `insecure`: *Optional. Default `false`* Allow insecure registry.
+
 * `tag`: *Optional.* Instead of monitoring semver tags, monitor a single tag
   for changes (based on digest).
 
