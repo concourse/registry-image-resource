@@ -71,7 +71,12 @@ func (o *Out) Execute() error {
 
 	tagsToPush := []name.Tag{}
 
-	repo, err := name.NewRepository(req.Source.Repository)
+	var repoOpts []name.Option
+	if req.Source.Insecure {
+		repoOpts = append(repoOpts, name.Insecure)
+	}
+
+	repo, err := name.NewRepository(req.Source.Repository, repoOpts...)
 	if err != nil {
 		return fmt.Errorf("could not resolve repository: %w", err)
 	}
@@ -265,7 +270,12 @@ func createAuth(req resource.OutRequest) *authn.Basic {
 func aliasesToBump(req resource.OutRequest, repo name.Repository, ver *semver.Version) ([]name.Tag, error) {
 	variant := req.Source.Variant
 
-	repo, err := name.NewRepository(req.Source.Repository)
+	var repoOpts []name.Option
+	if req.Source.Insecure {
+		repoOpts = append(repoOpts, name.Insecure)
+	}
+
+	repo, err := name.NewRepository(req.Source.Repository, repoOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("resolve repository name: %w", err)
 	}
