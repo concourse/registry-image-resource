@@ -20,10 +20,10 @@ func setupLogging(stderr io.Writer) {
 	logs.Warn = log.New(stderr, "", log.LstdFlags)
 }
 
-func getRepoOpts(source resource.Source) []name.Option {
-	var repoOpts []name.Option
+func repoOpts(source resource.Source) []name.Option {
+	var opts []name.Option
 	if source.Insecure {
-		repoOpts = append(repoOpts, name.Insecure)
+		opts = append(opts, name.Insecure)
 	}
-	return repoOpts
+	return opts
 }
