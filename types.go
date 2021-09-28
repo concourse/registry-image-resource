@@ -186,6 +186,18 @@ func (source Source) AuthOptions(repo name.Repository, scopeActions []string) ([
 	return []remote.Option{remote.WithAuth(auth), remote.WithTransport(rt)}, nil
 }
 
+func (source Source) NewRepository() (name.Repository, error) {
+	return name.NewRepository(source.Repository, source.RepositoryOptions()...)
+}
+
+func (source Source) RepositoryOptions() []name.Option {
+	var opts []name.Option
+	if source.Insecure {
+		opts = append(opts, name.Insecure)
+	}
+	return opts
+}
+
 type ContentTrust struct {
 	Server               string `json:"server"`
 	RepositoryKeyID      string `json:"repository_key_id"`
