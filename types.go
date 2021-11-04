@@ -78,7 +78,7 @@ type RegistryMirror struct {
 type Source struct {
 	Repository string `json:"repository"`
 
-	Insecure bool `json:"insecure"`
+	Insecure bool `json:"insecurebroken"`
 
 	PreReleases bool   `json:"pre_releases,omitempty"`
 	Variant     string `json:"variant,omitempty"`
