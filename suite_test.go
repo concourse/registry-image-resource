@@ -29,11 +29,13 @@ const LATEST_FAKE_DIGEST = "sha256:c4c25c2cd70e3071f08cf124c4b5c656c061dd38247d1
 var OLDER_FAKE_HEADERS = http.Header{
 	"Docker-Content-Digest": {OLDER_FAKE_DIGEST},
 	"Content-Length":        {strconv.Itoa(len(`{"fake":"manifest"}`))},
+	"Content-Type":          {"dummy"},
 }
 
 var LATEST_FAKE_HEADERS = http.Header{
 	"Docker-Content-Digest": {LATEST_FAKE_DIGEST},
 	"Content-Length":        {strconv.Itoa(len(`{"fake":"outdated"}`))},
+	"Content-Type":          {"dummy"},
 }
 
 const OLDER_LIBRARY_DIGEST = "sha256:2131f09e4044327fd101ca1fd4043e6f3ad921ae7ee901e9142e6e36b354a907"
