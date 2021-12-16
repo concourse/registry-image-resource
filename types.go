@@ -62,7 +62,7 @@ type AwsCredentials struct {
 	AWSECRRegistryId   string   `json:"aws_ecr_registry_id,omitempty"`
 	AwsRoleArn         string   `json:"aws_role_arn,omitempty"`
 	AwsRoleArns        []string `json:"aws_role_arns,omitempty"`
-	AwsUseInstanceRole string   `json:"aws_use_instance_role"`
+	AwsUseInstanceRole bool     `json:"aws_use_instance_role"`
 }
 
 type BasicCredentials struct {
