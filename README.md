@@ -83,7 +83,7 @@ differences:
   If set, these roles will be assumed in the specified order before authenticating to ECR.
   An error will occur if `aws_role_arn` is also specified.
 
-  `aws_use_instance_role`: *Optional. Default `""`.* If set to `true` the EC2 Iam role will be used, `aws_region` must be set. If this is set `aws_role_arn` and `aws_role_arns` will be ignored. 
+* `aws_use_instance_role`: *Optional. Default `""`.* If set to `true` the EC2 Iam role will be used, `aws_region` must be set. If this is set `aws_role_arn` and `aws_role_arns` will be ignored. 
 
 * `debug`: *Optional. Default `false`.* If set, progress bars will be disabled
   and debugging output will be printed instead.
