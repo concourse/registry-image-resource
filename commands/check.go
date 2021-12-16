@@ -49,7 +49,7 @@ func (c *Check) Execute() error {
 		return fmt.Errorf("invalid payload: %s", err)
 	}
 
-	if (req.Source.AwsAccessKeyId != "" && req.Source.AwsSecretAccessKey != "" && req.Source.AwsRegion != "") || (req.Source.AwsRegion != "" && req.Source.AwsUseInstanceRole) {
+	if (req.Source.AwsAccessKeyId != "" && req.Source.AwsSecretAccessKey != "" && req.Source.AwsRegion != "") || (req.Source.AwsRegion != "" && req.Source.AwsUseInstanceRole == "true") {
 		if !req.Source.AuthenticateToECR() {
 			return fmt.Errorf("cannot authenticate with ECR")
 		}
