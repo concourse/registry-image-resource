@@ -62,6 +62,7 @@ type AwsCredentials struct {
 	AWSECRRegistryId   string   `json:"aws_ecr_registry_id,omitempty"`
 	AwsRoleArn         string   `json:"aws_role_arn,omitempty"`
 	AwsRoleArns        []string `json:"aws_role_arns,omitempty"`
+	AwsUseInstanceRole bool     `json:"aws_use_instance_role,omitempty"`
 }
 
 type BasicCredentials struct {
@@ -299,10 +300,15 @@ func (source *Source) AuthenticateToECR() bool {
 		return false
 	}
 
-	mySession := session.Must(session.NewSession(&aws.Config{
-		Region:      aws.String(source.AwsRegion),
-		Credentials: credentials.NewStaticCredentials(source.AwsAccessKeyId, source.AwsSecretAccessKey, source.AwsSessionToken),
-	}))
+	if !source.AwsUseInstanceRole {
+		mySession := session.Must(session.NewSession(&aws.Config{
+			Region:      aws.String(source.AwsRegion),
+			Credentials: credentials.NewStaticCredentials(source.AwsAccessKeyId, source.AwsSecretAccessKey, source.AwsSessionToken),
+		}))
+	else {
+		mySession := session.Must(session.NewSession(&aws.Config{
+			Region:      aws.String(source.AwsRegion)}))
+	}
 
 	// Note: This implementation gives precedence to `aws_role_arn` since it
 	// assumes that we've errored if both `aws_role_arn` and `aws_role_arns`
