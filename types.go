@@ -62,7 +62,7 @@ type AwsCredentials struct {
 	AWSECRRegistryId   string   `json:"aws_ecr_registry_id,omitempty"`
 	AwsRoleArn         string   `json:"aws_role_arn,omitempty"`
 	AwsRoleArns        []string `json:"aws_role_arns,omitempty"`
-	AwsUseInstanceRole string   `json:"aws_use_instance_role,omitempty"`
+	AwsUseInstanceRole string   `json:"aws_use_instance_role"`
 }
 
 type BasicCredentials struct {
@@ -306,7 +306,7 @@ func (source *Source) AuthenticateToECR() bool {
 	}))
 
 	// Override mySession if aws_use_instance_role is set
-	if source.AwsUseInstanceRole == "true" {
+	if source.AwsUseInstanceRole {
 		mySession = session.Must(session.NewSession(&aws.Config{
 			Region: aws.String(source.AwsRegion)}))
 	}
