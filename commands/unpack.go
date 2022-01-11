@@ -178,5 +178,7 @@ func extractLayer(dest string, layer v1.Layer, bar *mpb.Bar, chown bool) error {
 		return err
 	}
 
+	bar.SetTotal(bar.Current(), true)
+
 	return nil
 }
