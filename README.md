@@ -14,6 +14,10 @@ With `tag` omitted, `check` will instead detect tags based on semver versions
 `check` will only detect semver tags that include the variant suffix (e.g.
 `1.2.3-stretch`).
 
+_This resource comes with Concourse by default. You can override the version
+you use within your pipeline if the built-in one is not working for you for
+some reason_
+
 ## Comparison to `docker-image` resource
 
 This resource is intended as a replacement for the [Docker Image
@@ -40,82 +44,194 @@ differences:
 
 ## Source Configuration
 
-* `repository`: *Required.* The name of the repository, e.g. `alpine` or
-  `concourse/concourse`.
+<table>
+<thead>
+  <tr>
+    <th>Field Name</th>
+    <th>Description</th>
+  </tr>
+</thead>
+<tbody>
+  <tr>
+    <td><code>repository</code> <em>(Required)</em></td>
+    <td>
+    The URI of the image repository, e.g. <code>alpine</code> or
+    <code>ghcr.io/package/image</code>. Defaults to checking
+    <code>docker.io</code> if no hostname is provided in the URI.
+    <br>
+    <em><strong>Note:</strong> If using ecr you only need the repository name,
+    not the full URI e.g. <code>alpine</code> not
+    <code>012345678910.dkr.ecr.us-east-1.amazonaws.com/alpine</code></em>
+    </td>
+  </tr>
+  <tr>
+    <td><code>insecure</code> <em>(Optional)<br>Default: false</em></td>
+    <td>
+    Allow insecure registry.
+    </td>
+  </tr>
+  <tr>
+    <td><code>tag</code> <em>(Optional)<br>Default: <code>latest</code></em></td>
+    <td>
+    Instead of monitoring semver tags, monitor a single tag for changes (based
+    on digest).
+    </td>
+  </tr>
+  <tr>
+    <td><code>variant</code> <em>(Optional)</em></td>
+    <td>
+    Detect only tags matching this variant suffix, and push version tags with
+    this suffix applied. For example, a value of <code>stretch</code> would be
+    used for tags like <code>1.2.3-stretch</code>. This is typically used
+    <em>without</em> <code>tag</code> - if it is set, this value will only used
+    for pushing, not checking.
+    </td>
+  </tr>
+  <tr>
+    <td><code>semver_constraint</code> <em>(Optional)</em></td>
+    <td>
+    Constrain the returned semver tags according to a semver constraint, e.g.
+    <code>"~1.2.x"</code>, <code>">= 1.2 < 3.0.0 || >= 4.2.3"</code>.
+    <br>
+    Follows the rules outlined in
+    https://github.com/Masterminds/semver#checking-version-constraints
+    </td>
+  </tr>
+  <tr>
+    <td><code>username</code> and <code>password</code> <em>(Optional)</em></td>
+    <td>
+    A username and password to use when authenticating to the registry. Must be
+    specified for private repos or when using <code>put</code>.
+    </td>
+  </tr>
+  <tr>
+    <td><code>aws_access_key_id</code> <em>(Optional)</em></td>
+    <td>
+    The access key ID to use for authenticating with ECR.
+    </td>
+  </tr>
+  <tr>
+    <td><code>aws_secret_access_key</code> <em>(Optional)</em></td>
+    <td>
+    The secret access key to use for authenticating with ECR.
+    </td>
+  </tr>
+  <tr>
+    <td><code>aws_session_token</code> <em>(Optional)</em></td>
+    <td>
+    The session token to use for authenticating with STS credentials with ECR.
+    </td>
+  </tr>
+  <tr>
+    <td><code>aws_region</code> <em>(Optional)</em></td>
+    <td>
+    The region to use for accessing ECR. This is required if you are using ECR.
+    This region will help determine the full repository URL you are accessing
+    (e.g., <code>012345678910.dkr.ecr.us-east-1.amazonaws.com</code>)
+    </td>
+  </tr>
+  <tr>
+    <td><code>aws_role_arn</code> <em>(Optional)</em></td>
+    <td>
+    If set, then this role will be assumed before authenticating to ECR. An
+    error will occur if <code>aws_role_arns</code> is also specified. This is
+    kept for backward compatibility.
+    </td>
+  </tr>
+  <tr>
+    <td><code>aws_role_arns</code> <em>(Optional)</em></td>
+    <td>
+    An array of AWS IAM roles. If set, these roles will be assumed in the
+    specified order before authenticating to ECR. An error will occur if
+    <code>aws_role_arn</code> is also specified.
+    </td>
+  </tr>
+  <tr>
+    <td><code>debug</code> <em>(Optional)<br>Default: false</em></td>
+    <td>
+    If set, progress bars will be disabled and debugging output will be printed
+    instead.
+    </td>
+  </tr>
+  <tr>
+    <td><code>registry_mirror</code> <em>(Optional)</em></td>
+    <td>
+      <ul>
+        <li>
+          <code>host</code> <em>(Required)</em>: 
+          A hostname pointing to a Docker registry mirror service. Note that this
+          is only used if no registry hostname prefix is specified in the
+          <code>repository</code> key. If the <code>repository</code> contains a
+          registry hostname, such as <code>my-registry.com/foo/bar</code>, the
+          <code>registry_mirror</code> is ignored and the explicitly declared
+          registry in the <code>repository</code> key is used.
+        </li>
+        <li>
+          <code>username</code> and <code>password</code> <em>(Optional)</em>: 
+          A username and password to use when authenticating to the mirror.
+        </li>
+      </ul>
+    </td>
+  </tr>
+  <tr>
+    <td><code>content_trust</code> <em>(Optional)</em></td>
+    <td>
+      <ul>
+        <li>
+          <code>server</code> <em>(Optional)</em>: 
+          URL for the notary server. (equal to
+          <code>DOCKER_CONTENT_TRUST_SERVER</code>)
+        </li>
+        <li>
+          <code>repository_key_id</code> <em>(Required)</em>: 
+          Target key's ID used to sign the trusted collection, could be retrieved
+          by <code>notary key list</code>
+        </li>
+        <li>
+          <code>repository_key</code> <em>(Required)</em>: 
+          Target key used to sign the trusted collection.
+        </li>
+        <li>
+          <code>repository_passphrase</code> <em>(Required)</em>: 
+          The passphrase of the signing/target key. (equal to
+          <code>DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE</code>)
+        </li>
+        <li>
+          <code>tls_key</code> <em>(Optional)</em>: 
+          TLS key for the notary server.
+        </li>
+        <li>
+          <code>tls_cert</code> <em>(Optional)</em>: 
+          TLS certificate for the notary server.
+        </li>
+      </ul>
+    </td>
+  </tr>
+  <tr>
+    <td><code>ca_certs</code><em>(Optional)</em></td>
+    <td>
+    An array of PEM-encoded CA certificates.
+    Example:
+    <pre lang="yaml">
+ca_certs:
+- |
+  -----BEGIN CERTIFICATE-----
+  ...
+  -----END CERTIFICATE-----
+- |
+  -----BEGIN CERTIFICATE-----
+  ...
+  -----END CERTIFICATE-----
+    </pre>
 
-  *Note: If using ecr you only need the repository name, not the full URI e.g.
-  `alpine` not `012345678910.dkr.ecr.us-east-1.amazonaws.com/alpine`*
-
-* `insecure`: *Optional. Default `false`* Allow insecure registry.
-
-* `tag`: *Optional.* Instead of monitoring semver tags, monitor a single tag
-  for changes (based on digest).
-
-* `variant`: *Optional.* Detect only tags matching this variant suffix, and
-  push version tags with this suffix applied. For example, a value of `stretch`
-  would be used for tags like `1.2.3-stretch`. This is typically used *without*
-  `tag` - if it is set, this value will only used for pushing, not checking.
-
-* `semver_constraint`: *Optional.* Constrain the returned semver tags according
-  to a semver constraint, e.g. `"~1.2.x"`, `">= 1.2 < 3.0.0 || >= 4.2.3"`.
-  Follows the rules outlined in https://github.com/Masterminds/semver#checking-version-constraints.
-
-* `username` and `password`: *Optional.* A username and password to use when
-  authenticating to the registry. Must be specified for private repos or when
-  using `put`.
-
-* `aws_access_key_id`: *Optional. Default `""`.* The access key ID to use for
-  authenticating with ECR.
-
-* `aws_secret_access_key`: *Optional. Default `""`.* The secret access key to
-  use for authenticating with ECR.
-
-* `aws_session_token`: *Optional. Default `""`.* The session token to use
-  for authenticating with STS credentials with ECR.
-
-* `aws_region`: *Optional. Default `""`.* The region to use for accessing ECR. This is required if you are using ECR. This region will help determine the full repository URL you are accessing (e.g., `012345678910.dkr.ecr.us-east-1.amazonaws.com`)
-
-* `aws_role_arn`: *Optional. Default `""`.* If set, then this role will be
-   assumed before authenticating to ECR. An error will occur if `aws_role_arns`
-   is also specified. This is kept for backward compatibility.
-
-* `aws_role_arns`: *Optional. Default `""`.* An array of AWS IAM roles.
-  If set, these roles will be assumed in the specified order before authenticating to ECR.
-  An error will occur if `aws_role_arn` is also specified.
-
-* `debug`: *Optional. Default `false`.* If set, progress bars will be disabled
-  and debugging output will be printed instead.
-
-* `registry_mirror`: *Optional.*
-  * `host`: *Required.* A hostname pointing to a Docker registry mirror service. Note that this is only used if no registry hostname prefix is specified in the `repository`. If the `repository` contains a registry hostname prefix -- such as `my-registry.com/foo/bar` -- the `registry_mirror` is ignored and the explicitly declared registry in the `repository` value is used.
-  * `username` and `password`: *Optional.* A username and password to use when
-  authenticating to the mirror.
-
-* `content_trust`: *Optional.* Configuration about content trust.
-  * `server`: *Optional.* URL for the notary server. (equal to `DOCKER_CONTENT_TRUST_SERVER`)
-  * `repository_key_id`: *Required.* Target key's ID used to sign the trusted collection, could be retrieved by `notary key list`
-  * `repository_key`: *Required.* Target key used to sign the trusted collection.
-  * `repository_passphrase`: *Required.* The passphrase of the signing/target key. (equal to `DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE`)
-  * `tls_key`: *Optional. Default `""`* TLS key for the notary server.
-  * `tls_cert`: *Optional. Default `""`* TLS certificate for the notary server.
-
-* `ca_certs`: *Optional.* An array of PEM-encoded CA certificates:
-
-  ```yaml
-  ca_certs:
-  - |
-    -----BEGIN CERTIFICATE-----
-    ...
-    -----END CERTIFICATE-----
-  - |
-    -----BEGIN CERTIFICATE-----
-    ...
-    -----END CERTIFICATE-----
-  ```
-
-  Each entry specifies the x509 CA certificate for the trusted docker registry.
-  This is used to validate the certificate of the docker registry when the
-  registry's certificate is signed by a custom authority (or itself).
+  Each entry specifies the x509 CA certificate for the trusted docker
+  registry. This is used to validate the certificate of the docker registry
+  when the registry's certificate is signed by a custom authority (or
+  itself).
+    </td>
+  </tr>
+</tbody>
+</table>
 
 ### Signing with Docker Hub
 
@@ -159,12 +275,12 @@ registry_key: |
 
 ## Behavior
 
-### `check` with `tag`: discover new digests for the tag
+### `check` Step (`check` script) with `tag`: discover new digests for the tag
 
 Reports the current digest that the registry has for the tag configured in
 `source`.
 
-### `check` without `tag`: discover semver tags
+### `check` Step (`check` script) without `tag`: discover semver tags
 
 Detects tags which contain semver version numbers. Version numbers do not
 need to contain all 3 segments (major/minor/patch).
@@ -258,17 +374,36 @@ this reason, the resource will only consider prerelease data starting with
 a variant.
 
 
-### `in`: fetch an image
+### `get` Step (`in` script): fetch an image
 
 Fetches an image at the exact digest specified by the version.
 
-#### Parameters
+#### `get` Step `params`
 
-* `format`: *Optional. Default `rootfs`.* The format to fetch as.
-* `skip_download`: *Optional. Default `false`.* Skip downloading the image.
-  Useful only to trigger a job without using the object.
+<table>
+<thead>
+  <tr>
+    <th>Parameter</th>
+    <th>Description</th>
+  </tr>
+</thead>
+<tbody>
+  <tr>
+    <td><code>format</code> <em>(Optional)<br>Default: <code>rootfs</code></em></td>
+    <td>The format to fetch the image as. Accepted values are: <code>rootfs</code>, <code>oci</code></td>
+  </tr>
+  <tr>
+    <td><code>skip_download</code> <em>(Optional)<br>Default: false</em></td>
+    <td>
+      Skip downloading the image. Useful if you want to trigger a job without
+      using the object or when running after a <code>put</code> step and not
+      needing to download the image you just uploaded.
+    </td>
+  </tr>
+</tbody>
+</table>
 
-#### Files created by the resource
+#### Files created by the `get` step
 
 The resource will produce the following files:
 
@@ -279,7 +414,7 @@ The resource will produce the following files:
 
 The remaining files depend on the configuration value for `format`:
 
-##### `rootfs`
+##### `rootfs` Format
 
 The `rootfs` format will fetch and unpack the image for use by Concourse task
 and resource type images.
@@ -291,7 +426,7 @@ In this format, the resource will produce the following files:
 * `./rootfs/...`: the unpacked rootfs produced by the image.
 * `./metadata.json`: the runtime information to propagate to Concourse.
 
-##### `oci`
+##### `oci` Format
 
 The `oci` format will fetch the image and write it to disk in OCI format. This
 is analogous to running `docker save`.
@@ -301,7 +436,7 @@ In this format, the resource will produce the following files:
 * `./image.tar`: the OCI image tarball, suitable for passing to `docker load`.
 
 
-### `out`: push and tag an image
+### `put` Step (`out` script): push and tag an image
 
 Pushes an image to the registry as the specified tags.
 
@@ -316,36 +451,61 @@ Tags may be specified in multiple ways:
 * With `additional_tags` given in `params`, the image will be pushed as each
   tag listed in the file (whitespace separated).
 
-#### Parameters
+#### `put` Steps `params`
 
-* `image`: *Required.* The path to the OCI image tarball to upload. Expanded
-  with [`filepath.Glob`](https://golang.org/pkg/path/filepath/#Glob).
-
-* `version`: *Optional.* A version number to use as a tag.
-
-* `bump_aliases`: *Optional. Default `false`.* When set to `true` and `version`
-  is specified, automatically bump alias tags for the version.
-
-  For example, when pushing version `1.2.3`, push the same image to the
-  following tags:
-
-  * `1.2`, if 1.2.3 is the latest version of 1.2.x.
-  * `1`, if 1.2.3 is the latest version of 1.x.
-  * `latest`, if 1.2.3 is the latest version overall.
-
-  If `variant` is configured as `foo`, push the same image to the following
-  tags:
-
-  * `1.2-foo`, if 1.2.3 is the latest version of 1.2.x with `foo`.
-  * `1-foo`, if 1.2.3 is the latest version of 1.x with `foo`.
-  * `foo`, if 1.2.3 is the latest version overall for `foo`.
-
-  Determining which tags to bump is done by comparing to the existing tags
-  that exist on the registry.
-
-* `additional_tags`: *Optional.* The path to a file with whitespace-separated
-  list of tag values to tag the image with (in addition to the tag configured
-  in `source`).
+<table>
+<thead>
+  <tr>
+    <th>Parameter</th>
+    <th>Description</th>
+  </tr>
+</thead>
+<tbody>
+  <tr>
+    <td><code>image</code> <em>(Required)</em></td>
+    <td>
+    The path to the <code>oci</code> image tarball to upload. Expanded with
+    <a href="https://golang.org/pkg/path/filepath/#Glob"><code>filepath.Glob</code></a>
+    </td>
+  </tr>
+  <tr>
+    <td><code>version</code> <em>(Optional)</em></td>
+    <td>
+    A version number to use as a tag.
+    </td>
+  </tr>
+  <tr>
+    <td><code>bump_aliases</code> <em>(Optional)<br>Default: false</em></td>
+    <td>
+    When set to <code>true</code> and <code>version</code> is specified,
+    automatically bump alias tags for the version.
+    For example, when pushing version <code>1.2.3</code>, push the same image
+    to the following tags:
+    <ul>
+      <li><code>1.2</code>, if 1.2.3 is the latest version of 1.2.x.</li>
+      <li><code>1</code>, if 1.2.3 is the latest version of 1.x.</li>
+      <li><code>latest</code>, if 1.2.3 is the latest version overall.</li>
+    </ul>
+    If <code>variant</code> is configured as <code>foo</code>, push the same
+    image to the following tags:
+    <ul>
+    <li><code>1.2-foo</code>, if 1.2.3 is the latest version of 1.2.x with <code>foo</code>.</li>
+    <li><code>1-foo</code>, if 1.2.3 is the latest version of 1.x with <code>foo</code>.</li>
+    <li><code>foo</code>, if 1.2.3 is the latest version overall for <code>foo</code>.</li>
+    </ul>
+    Determining which tags to bump is done by comparing to the existing tags
+    that exist on the registry.
+    </td>
+  </tr>
+  <tr>
+    <td><code>additional_tags</code> <em>(Optional)</em></td>
+    <td>
+    The path to a file with whitespace-separated list of tag values to tag the
+    image with (in addition to the tag configured in <code>source</code>).
+    </td>
+  </tr>
+</tbody>
+</table>
 
 ### Use in tasks
 
