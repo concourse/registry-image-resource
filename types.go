@@ -205,6 +205,9 @@ type ContentTrust struct {
 	RepositoryPassphrase string `json:"repository_passphrase"`
 	TLSKey               string `json:"tls_key"`
 	TLSCert              string `json:"tls_cert"`
+	Scopes               string `json:"scopes,omitempty"`
+
+	BasicCredentials
 }
 
 /* Create notary config directory with following structure
@@ -227,6 +230,11 @@ func (ct *ContentTrust) PrepareConfigDir() (string, error) {
 	configObj["server_url"] = ct.Server
 	configObj["root_passphrase"] = ""
 	configObj["repository_passphrase"] = ct.RepositoryPassphrase
+	if ct.Scopes == "" {
+		configObj["scopes"] = transport.PushScope
+	} else {
+		configObj["scopes"] = ct.Scopes
+	}
 
 	configData, err := json.Marshal(configObj)
 	if err != nil {
