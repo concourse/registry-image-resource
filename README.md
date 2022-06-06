@@ -204,6 +204,18 @@ differences:
           <code>tls_cert</code> <em>(Optional)</em>: 
           TLS certificate for the notary server.
         </li>
+        <li>
+          <code>username</code> <em>(Optional)</em>:
+          Username for authorize Docker Registry with a Notary server(`content_trust.server`) attached.
+        </li>
+        <li>
+          <code>password</code> <em>(Optional)</em>:
+          Password for authorize Docker Registry with a Notary server(`content_trust.server`) attached.
+        </li>
+        <li>
+          <code>scopes</code> <em>(Optional)</em>:
+          What access for the resources requested, should be one of ['pull', 'push,pull', 'catalog']
+        </li>
       </ul>
     </td>
   </tr>
