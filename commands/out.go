@@ -232,7 +232,7 @@ func signImages(req resource.OutRequest, img v1.Image, tags []name.Tag) error {
 	}
 
 	for _, tag := range tags {
-		trustedRepo, err := gcr.NewTrustedGcrRepository(notaryConfigDir, tag, createAuth(req))
+		trustedRepo, err := gcr.NewTrustedGcrRepository(notaryConfigDir, tag, createRegistryAuth(req), createNotaryAuth(req))
 		if err != nil {
 			return fmt.Errorf("create TrustedGcrRepository: %w", err)
 		}
@@ -250,7 +250,21 @@ func signImages(req resource.OutRequest, img v1.Image, tags []name.Tag) error {
 
 // It's okay if both are blank. It will become an Anonymous Authenticator in
 // that case.
-func createAuth(req resource.OutRequest) *authn.Basic {
+func createRegistryAuth(req resource.OutRequest) *authn.Basic {
+	return &authn.Basic{
+		Username: req.Source.Username,
+		Password: req.Source.Password,
+	}
+}
+
+func createNotaryAuth(req resource.OutRequest) *authn.Basic {
+	if req.Source.ContentTrust.Username != "" || req.Source.ContentTrust.Password != "" {
+		return &authn.Basic{
+			Username: req.Source.ContentTrust.Username,
+			Password: req.Source.ContentTrust.Password,
+		}
+	}
+	// keep compatibility, fallback to using source.username & source.password
 	return &authn.Basic{
 		Username: req.Source.Username,
 		Password: req.Source.Password,

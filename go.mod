@@ -11,11 +11,9 @@ require (
 	github.com/google/go-containerregistry v0.8.0
 	github.com/onsi/ginkgo v1.16.4
 	github.com/onsi/gomega v1.19.0
-	github.com/simonshyu/notary-gcr v0.0.0-20211109021545-380a129b0e83
+	github.com/simonshyu/notary-gcr v0.0.0-20220601090547-d99a631aa58b
 	github.com/sirupsen/logrus v1.8.1
 	github.com/vbauerster/mpb v3.4.0+incompatible
 )
-
-replace github.com/simonshyu/notary-gcr => github.com/xtremerui/notary-gcr v0.0.0-20220307174448-84487b5997d2
 
 go 1.16
