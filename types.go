@@ -64,9 +64,42 @@ type AwsCredentials struct {
 	AwsRoleArns        []string `json:"aws_role_arns,omitempty"`
 }
 
+func (c *AwsCredentials) Inherit(parent AwsCredentials) {
+	if c.AwsAccessKeyId == "" {
+		c.AwsAccessKeyId = parent.AwsAccessKeyId
+	}
+	if c.AwsSecretAccessKey == "" {
+		c.AwsSecretAccessKey = parent.AwsSecretAccessKey
+	}
+	if c.AwsSessionToken == "" {
+		c.AwsSessionToken = parent.AwsSessionToken
+	}
+	if c.AwsRegion == "" {
+		c.AwsRegion = parent.AwsRegion
+	}
+	if c.AWSECRRegistryId == "" {
+		c.AWSECRRegistryId = parent.AWSECRRegistryId
+	}
+	if c.AwsRoleArn == "" {
+		c.AwsRoleArn = parent.AwsRoleArn
+	}
+	if len(c.AwsRoleArns) == 0 {
+		c.AwsRoleArns = parent.AwsRoleArns
+	}
+}
+
 type BasicCredentials struct {
 	Username string `json:"username,omitempty"`
 	Password string `json:"password,omitempty"`
+}
+
+func (c *BasicCredentials) Inherit(parent BasicCredentials) {
+	if c.Username == "" {
+		c.Username = parent.Username
+	}
+	if c.Password == "" {
+		c.Password = parent.Password
+	}
 }
 
 type RegistryMirror struct {
@@ -399,6 +432,11 @@ type MetadataField struct {
 }
 
 type GetParams struct {
+	// Allow overriding credentials during put events, primarily beneficial for
+	// using short-lived credentials for cloud environments.
+	BasicCredentials
+	AwsCredentials
+
 	RawFormat    string `json:"format"`
 	SkipDownload bool   `json:"skip_download"`
 }
@@ -412,6 +450,11 @@ func (p GetParams) Format() string {
 }
 
 type PutParams struct {
+	// Allow overriding credentials during put events, primarily beneficial for
+	// using short-lived credentials for cloud environments.
+	BasicCredentials
+	AwsCredentials
+
 	// Path to an OCI image tarball to push.
 	Image string `json:"image"`
 

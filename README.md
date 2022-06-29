@@ -41,7 +41,6 @@ differences:
   too many ways to build and publish Docker images. It will be easier to
   support many smaller resources + tasks rather than one huge interface.
 
-
 ## Source Configuration
 
 <table>
@@ -158,7 +157,7 @@ differences:
     <td>
       <ul>
         <li>
-          <code>host</code> <em>(Required)</em>: 
+          <code>host</code> <em>(Required)</em>:
           A hostname pointing to a Docker registry mirror service. Note that this
           is only used if no registry hostname prefix is specified in the
           <code>repository</code> key. If the <code>repository</code> contains a
@@ -167,7 +166,7 @@ differences:
           registry in the <code>repository</code> key is used.
         </li>
         <li>
-          <code>username</code> and <code>password</code> <em>(Optional)</em>: 
+          <code>username</code> and <code>password</code> <em>(Optional)</em>:
           A username and password to use when authenticating to the mirror.
         </li>
       </ul>
@@ -178,30 +177,30 @@ differences:
     <td>
       <ul>
         <li>
-          <code>server</code> <em>(Optional)</em>: 
+          <code>server</code> <em>(Optional)</em>:
           URL for the notary server. (equal to
           <code>DOCKER_CONTENT_TRUST_SERVER</code>)
         </li>
         <li>
-          <code>repository_key_id</code> <em>(Required)</em>: 
+          <code>repository_key_id</code> <em>(Required)</em>:
           Target key's ID used to sign the trusted collection, could be retrieved
           by <code>notary key list</code>
         </li>
         <li>
-          <code>repository_key</code> <em>(Required)</em>: 
+          <code>repository_key</code> <em>(Required)</em>:
           Target key used to sign the trusted collection.
         </li>
         <li>
-          <code>repository_passphrase</code> <em>(Required)</em>: 
+          <code>repository_passphrase</code> <em>(Required)</em>:
           The passphrase of the signing/target key. (equal to
           <code>DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE</code>)
         </li>
         <li>
-          <code>tls_key</code> <em>(Optional)</em>: 
+          <code>tls_key</code> <em>(Optional)</em>:
           TLS key for the notary server.
         </li>
         <li>
-          <code>tls_cert</code> <em>(Optional)</em>: 
+          <code>tls_cert</code> <em>(Optional)</em>:
           TLS certificate for the notary server.
         </li>
         <li>
@@ -301,7 +300,7 @@ Each unique digest will be returned only once, with the most specific version
 tag available. This is to handle "alias" tags like `1`, `1.2` pointing to
 `1.2.3`.
 
-Note: the initial `check` call will return *all valid versions*, which is
+Note: the initial `check` call will return _all valid versions_, which is
 unlike most resources which only return the latest version. This is an
 intentional choice which will become the normal behavior for resources in
 the future (per concourse/rfcs#38).
@@ -341,7 +340,7 @@ With a `variant` value specified, only semver tags with the matching variant
 will be detected. With `variant` omitted, tags which include a variant are
 ignored.
 
-Note: some image tags actually include *mutliple* variants, e.g.
+Note: some image tags actually include _mutliple_ variants, e.g.
 `1.2.3-php7.3-apache`. With a variant of only `apache` configured, these tags
 will be skipped to avoid accidentally using multiple variants. In order to
 use these tags, you must specify the full variant combination, e.g.
@@ -385,6 +384,11 @@ this reason, the resource will only consider prerelease data starting with
 `alpha`, `beta`, or `rc` as a proper prerelease, treating anything else as
 a variant.
 
+### Usage of dynamically generated credentials for `get` and `put` steps
+
+Both the `get` and `put` steps allow you to override `username`/`password` as well
+as `aws_*` fields. This is primarily beneficial when you are unable to generate
+persistent credentials, and must use on-demand generated credentials.
 
 ### `get` Step (`in` script): fetch an image
 
@@ -446,7 +450,6 @@ is analogous to running `docker save`.
 In this format, the resource will produce the following files:
 
 * `./image.tar`: the OCI image tarball, suitable for passing to `docker load`.
-
 
 ### `put` Step (`out` script): push and tag an image
 
@@ -529,8 +532,7 @@ Anonymous resources can specify
 [a version](https://concourse-ci.org/tasks.html#schema.anonymous_resource.version),
 which is the image digest. For example:
 
-
-```
+```yaml
 image_resource:
   type: docker-image
   source:
@@ -546,8 +548,8 @@ going to be re-used.
 
 ### Prerequisites
 
-* golang is *required* - version 1.11.x or above is required for go mod to work
-* docker is *required* - version 17.06.x is tested; earlier versions may also
+* golang is _required_ - version 1.11.x or above is required for go mod to work
+* docker is _required_ - version 17.06.x is tested; earlier versions may also
   work.
 * go mod is used for dependency management of the golang packages.
 
