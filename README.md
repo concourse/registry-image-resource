@@ -390,6 +390,51 @@ Both the `get` and `put` steps allow you to override `username`/`password` as we
 as `aws_*` fields. This is primarily beneficial when you are unable to generate
 persistent credentials, and must use on-demand generated credentials.
 
+An example of what this may look like is shown below:
+
+```yaml
+resources:
+  - name: src
+    type: git
+    source: {}
+  - name: registry
+    type: registry-image
+    check_every: never
+    source:
+      repository: ((aws-registry))
+      tag: latest
+      aws_region: ((aws-region))
+
+jobs:
+  - name: push-to-ecr
+    plan:
+      - get: src
+      - get: repo-task-aws-deploy
+        params: { depth: 1 }
+      - task: build-image
+        # build your image here.
+      - task: get-credentials # write your credentials to credentials/example.json
+        config:
+          platform: linux
+          inputs: [{ name: src }]
+          outputs: [{ name: credentials }]
+          params: {}
+          run: { path: src/some-credential-script.sh }
+      - load_var: creds
+        file: credentials/example.json
+      - put: registry
+        params:
+          image: image/image.tar
+          aws_access_key_id: ((.:creds.aws_access_key_id))
+          aws_secret_access_key: ((.:creds.aws_secret_access_key))
+          aws_session_token: ((.:creds.aws_session_token))
+        get_params:
+          skip_download: true
+          aws_access_key_id: ((.:creds.aws_access_key_id))
+          aws_secret_access_key: ((.:creds.aws_secret_access_key))
+          aws_session_token: ((.:creds.aws_session_token))
+```
+
 ### `get` Step (`in` script): fetch an image
 
 Fetches an image at the exact digest specified by the version.
