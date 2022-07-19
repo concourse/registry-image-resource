@@ -311,7 +311,7 @@ func (source *Source) AuthenticateToECR() bool {
 		Region: aws.String(source.AwsRegion),
 	}
 
-	if source.AwsAccessKeyId != "" && source.AwsSecretAccessKey != "" && source.AwsSessionToken != "" {
+	if source.AwsAccessKeyId != "" && source.AwsSecretAccessKey != "" {
 		awsConfig.Credentials = credentials.NewStaticCredentials(source.AwsAccessKeyId, source.AwsSecretAccessKey, source.AwsSessionToken)
 	}
 
