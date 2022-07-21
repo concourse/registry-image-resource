@@ -61,7 +61,9 @@ differences:
     <br>
     <em><strong>Note:</strong> If using ecr you only need the repository name,
     not the full URI e.g. <code>alpine</code> not
-    <code>012345678910.dkr.ecr.us-east-1.amazonaws.com/alpine</code></em>
+    <code>012345678910.dkr.ecr.us-east-1.amazonaws.com/alpine</code>. ECR usage
+    is NOT automatically detected. You must set the <code>aws_region</code> to
+    tell the resource to automatically use ECR.</em>
     </td>
   </tr>
   <tr>
