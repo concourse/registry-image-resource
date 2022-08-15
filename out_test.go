@@ -17,6 +17,8 @@ import (
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
+	"github.com/google/go-containerregistry/pkg/v1/empty"
+	"github.com/google/go-containerregistry/pkg/v1/layout"
 	"github.com/google/go-containerregistry/pkg/v1/partial"
 	"github.com/google/go-containerregistry/pkg/v1/random"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
@@ -279,6 +281,110 @@ var _ = Describe("Out", func() {
 					Expect(err).ToNot(HaveOccurred())
 
 					pushedDigest, err := image.Digest()
+					Expect(err).ToNot(HaveOccurred())
+
+					Expect(pushedDigest).To(Equal(randomDigest))
+				}
+			})
+		})
+	})
+
+	Context("pushing an OCI imageIndex (multi-arch) image to dockerhub", func() {
+		var randomImageIndex v1.ImageIndex
+
+		BeforeEach(func() {
+			checkDockerPushUserConfigured()
+
+			req.Source = resource.Source{
+				Repository: dockerPushRepo,
+				Tag:        resource.Tag(parallelTag("latest")),
+
+				BasicCredentials: resource.BasicCredentials{
+					Username: dockerPushUsername,
+					Password: dockerPushPassword,
+				},
+			}
+
+			var err error
+
+			randomImageIndex, err = random.Index(1024, 1, 2)
+			Expect(err).ToNot(HaveOccurred())
+
+			path := filepath.Join(srcDir, "multi-arch")
+			p, err := layout.Write(path, empty.Index)
+			Expect(err).ToNot(HaveOccurred())
+
+			err = p.AppendIndex(randomImageIndex)
+			Expect(err).ToNot(HaveOccurred())
+
+			req.Params.Image = "multi-arch"
+		})
+
+		It("works", func() {
+			Expect(actualErr).ToNot(HaveOccurred())
+
+			name, err := name.ParseReference(req.Source.Name())
+			Expect(err).ToNot(HaveOccurred())
+
+			auth := &authn.Basic{
+				Username: req.Source.Username,
+				Password: req.Source.Password,
+			}
+
+			index, err := remote.Index(name, remote.WithAuth(auth))
+			Expect(err).ToNot(HaveOccurred())
+
+			pushedDigest, err := index.Digest()
+			Expect(err).ToNot(HaveOccurred())
+
+			randomDigest, err := randomImageIndex.Digest()
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(pushedDigest).To(Equal(randomDigest))
+		})
+
+		It("returns metadata", func() {
+			Expect(actualErr).ToNot(HaveOccurred())
+
+			Expect(res.Metadata).To(Equal([]resource.MetadataField{
+				{
+					Name:  "repository",
+					Value: dockerPushRepo,
+				},
+				{
+					Name:  "tags",
+					Value: parallelTag("latest"),
+				},
+			}))
+		})
+
+		Context("When using bump_aliases", func() {
+			BeforeEach(func() {
+				req.Params.BumpAliases = true
+				req.Params.Version = "1.0.0"
+			})
+
+			It("Push the right tags", func() {
+				Expect(actualErr).ToNot(HaveOccurred())
+
+				tags := []string{"1.0.0", "1.0", "1", req.Source.Tag.String()}
+
+				for _, tag := range tags {
+					name, err := name.ParseReference(dockerPushRepo + ":" + tag)
+					Expect(err).ToNot(HaveOccurred())
+
+					auth := &authn.Basic{
+						Username: req.Source.Username,
+						Password: req.Source.Password,
+					}
+
+					index, err := remote.Index(name, remote.WithAuth(auth))
+					Expect(err).ToNot(HaveOccurred())
+
+					pushedDigest, err := index.Digest()
+					Expect(err).ToNot(HaveOccurred())
+
+					randomDigest, err := randomImageIndex.Digest()
 					Expect(err).ToNot(HaveOccurred())
 
 					Expect(pushedDigest).To(Equal(randomDigest))
