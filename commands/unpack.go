@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/concourse/go-archive/tarfs"
@@ -118,7 +119,13 @@ func extractLayer(dest string, layer v1.Layer, bar *mpb.Bar, chown bool) error {
 			if err := os.Mkdir(dir, fi.Mode()&os.ModePerm); err != nil {
 				return err
 			}
-
+			// Fix issue introduced by https://github.com/concourse/registry-image-resource/pull/284
+			if runtime.GOOS != "windows" && chown {
+				err = os.Lchown(dir, hdr.Uid, hdr.Gid)
+				if err != nil {
+					return err
+				}
+			}
 			continue
 		} else if strings.HasPrefix(base, whiteoutPrefix) {
 			// layer has marked a file as deleted
