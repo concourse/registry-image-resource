@@ -229,6 +229,18 @@ var _ = Describe("In", func() {
 			stat, err = os.Stat(rootfsPath("top-dir-3", "nested-dir"))
 			Expect(err).ToNot(HaveOccurred())
 			Expect(stat.IsDir()).To(BeTrue())
+
+			stat, err = os.Stat(rootfsPath("top-dir-4"))
+			Expect(err).ToNot(HaveOccurred())
+			Expect(stat.IsDir()).To(BeTrue())
+
+			if os.Geteuid() != 0 {
+				Skip("Must be run as root to validate file ownership")
+			}
+			sys, ok := stat.Sys().(*syscall.Stat_t)
+			Expect(ok).To(BeTrue())
+			Expect(sys.Uid).To(Equal(uint32(1000)))
+			Expect(sys.Gid).To(Equal(uint32(1000)))
 		})
 	})
 

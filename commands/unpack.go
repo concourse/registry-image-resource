@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/concourse/go-archive/tarfs"
@@ -119,6 +120,12 @@ func extractLayer(dest string, layer v1.Layer, bar *mpb.Bar, chown bool) error {
 				return err
 			}
 
+			if runtime.GOOS != "windows" && chown {
+				err = os.Lchown(dir, hdr.Uid, hdr.Gid)
+				if err != nil {
+					return err
+				}
+			}
 			continue
 		} else if strings.HasPrefix(base, whiteoutPrefix) {
 			// layer has marked a file as deleted
