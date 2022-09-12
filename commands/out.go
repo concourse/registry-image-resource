@@ -14,6 +14,8 @@ import (
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
+	"github.com/google/go-containerregistry/pkg/v1/layout"
+	"github.com/google/go-containerregistry/pkg/v1/partial"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/google/go-containerregistry/pkg/v1/remote/transport"
 	"github.com/google/go-containerregistry/pkg/v1/tarball"
@@ -152,18 +154,35 @@ func (o *Out) Execute() error {
 		return fmt.Errorf("too many files match glob '%s': %v", req.Params.Image, matches)
 	}
 
-	img, err := tarball.ImageFromPath(matches[0], nil)
+	img, err := loadImage(matches[0])
 	if err != nil {
 		return fmt.Errorf("could not load image from path '%s': %w", req.Params.Image, err)
 	}
 
-	digest, err := img.Digest()
+	var h v1.Hash
+	switch t := img.(type) {
+	case v1.Image:
+		if h, err = t.Digest(); err != nil {
+			return fmt.Errorf("failed to get image digest: %w", err)
+		}
+	case v1.ImageIndex:
+		if h, err = t.Digest(); err != nil {
+			return fmt.Errorf("failed to get index digest: %w", err)
+		}
+	default:
+		return fmt.Errorf("cannot get digest for type (%T)", img)
+	}
+
+	opts := req.Source.NewOptions()
+	err = resource.RetryOnRateLimit(func() error {
+		return req.Source.SetOptions(&opts)
+	})
 	if err != nil {
-		return fmt.Errorf("failed to get image digest: %w", err)
+		return fmt.Errorf("failed to set repo/auth options: %w", err)
 	}
 
 	err = resource.RetryOnRateLimit(func() error {
-		return put(req, img, tagsToPush)
+		return put(req, img, tagsToPush, opts)
 	})
 	if err != nil {
 		return fmt.Errorf("pushing image failed: %w", err)
@@ -174,10 +193,11 @@ func (o *Out) Execute() error {
 		pushedTags = append(pushedTags, tag.TagStr())
 	}
 
+	digest := opts.Repository.Digest(h.String())
 	err = json.NewEncoder(os.Stdout).Encode(resource.OutResponse{
 		Version: resource.Version{
 			Tag:    tagsToPush[0].TagStr(),
-			Digest: digest.String(),
+			Digest: digest.DigestStr(),
 		},
 		Metadata: append(req.Source.Metadata(), resource.MetadataField{
 			Name:  "tags",
@@ -191,7 +211,7 @@ func (o *Out) Execute() error {
 	return nil
 }
 
-func put(req resource.OutRequest, img v1.Image, tags []name.Tag) error {
+func put(req resource.OutRequest, img partial.WithRawManifest, tags []name.Tag, opts resource.Options) error {
 	images := map[name.Reference]remote.Taggable{}
 	var identifiers []string
 	for _, tag := range tags {
@@ -199,18 +219,8 @@ func put(req resource.OutRequest, img v1.Image, tags []name.Tag) error {
 		identifiers = append(identifiers, tag.Identifier())
 	}
 
-	repo, err := req.Source.NewRepository()
-	if err != nil {
-		return fmt.Errorf("resolve repository name: %w", err)
-	}
-
-	opts, err := req.Source.AuthOptions(repo, []string{transport.PushScope})
-	if err != nil {
-		return err
-	}
-
 	logrus.Infof("pushing tag(s) %s", strings.Join(identifiers, ", "))
-	err = remote.MultiWrite(images, opts...)
+	err := remote.MultiWrite(images, opts.Remote...)
 	if err != nil {
 		return fmt.Errorf("pushing tag(s): %w", err)
 	}
@@ -218,13 +228,55 @@ func put(req resource.OutRequest, img v1.Image, tags []name.Tag) error {
 	logrus.Info("pushed")
 
 	if req.Source.ContentTrust != nil {
-		err = signImages(req, img, tags)
-		if err != nil {
-			return fmt.Errorf("signing image(s): %w", err)
+		switch t := img.(type) {
+		case v1.Image:
+			err = signImages(req, t, tags)
+			if err != nil {
+				return fmt.Errorf("signing image(s): %w", err)
+			}
+		default:
+			return fmt.Errorf("cannot sign type (%T)", img)
 		}
 	}
 
 	return nil
+}
+
+func loadImage(path string) (partial.WithRawManifest, error) {
+	stat, err := os.Stat(path)
+	if err != nil {
+		return nil, err
+	}
+
+	if !stat.IsDir() {
+		img, err := tarball.ImageFromPath(path, nil)
+		if err != nil {
+			return nil, fmt.Errorf("loading %s as tarball: %w", path, err)
+		}
+		return img, nil
+	}
+
+	ii, err := layout.ImageIndexFromPath(path)
+	if err != nil {
+		return nil, fmt.Errorf("loading %s as OCI layout: %w", path, err)
+	}
+
+	m, err := ii.IndexManifest()
+	if err != nil {
+		return nil, err
+	}
+	if len(m.Manifests) != 1 {
+		return nil, fmt.Errorf("layout contains %d entries", len(m.Manifests))
+	}
+
+	desc := m.Manifests[0]
+	if desc.MediaType.IsImage() {
+		return ii.Image(desc.Digest)
+	} else if desc.MediaType.IsIndex() {
+		return ii.ImageIndex(desc.Digest)
+	}
+
+	return nil, fmt.Errorf("layout contains non-image (mediaType: %q)", desc.MediaType)
 }
 
 func signImages(req resource.OutRequest, img v1.Image, tags []name.Tag) error {

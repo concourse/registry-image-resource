@@ -1,5 +1,5 @@
 ARG base_image=alpine:latest
-ARG builder_image=concourse/golang-builder
+ARG builder_image=golang
 
 FROM ${builder_image} as builder
 WORKDIR /src

@@ -169,6 +169,33 @@ func (source Source) Mirror() (Source, bool, error) {
 	return copy, true, nil
 }
 
+type Options struct {
+	Name       []name.Option
+	Remote     []remote.Option
+	Repository name.Repository
+}
+
+func (source Source) NewOptions() Options {
+	return Options{}
+}
+
+func (source Source) SetOptions(opts *Options) error {
+	opts.Name = source.RepositoryOptions()
+
+	r, err := name.NewRepository(source.Repository, opts.Name...)
+	if err != nil {
+		return fmt.Errorf("resolve repository name: %w", err)
+	}
+	opts.Repository = r
+
+	opts.Remote, err = source.AuthOptions(r, []string{transport.PushScope})
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (source Source) AuthOptions(repo name.Repository, scopeActions []string) ([]remote.Option, error) {
 	var auth authn.Authenticator
 	if source.Username != "" && source.Password != "" {
@@ -340,10 +367,15 @@ func (source *Source) AuthenticateToECR() bool {
 		return false
 	}
 
-	mySession := session.Must(session.NewSession(&aws.Config{
-		Region:      aws.String(source.AwsRegion),
-		Credentials: credentials.NewStaticCredentials(source.AwsAccessKeyId, source.AwsSecretAccessKey, source.AwsSessionToken),
-	}))
+	awsConfig := aws.Config{
+		Region: aws.String(source.AwsRegion),
+	}
+
+	if source.AwsAccessKeyId != "" && source.AwsSecretAccessKey != "" {
+		awsConfig.Credentials = credentials.NewStaticCredentials(source.AwsAccessKeyId, source.AwsSecretAccessKey, source.AwsSessionToken)
+	}
+
+	mySession := session.Must(session.NewSession(&awsConfig))
 
 	// Note: This implementation gives precedence to `aws_role_arn` since it
 	// assumes that we've errored if both `aws_role_arn` and `aws_role_arns`
