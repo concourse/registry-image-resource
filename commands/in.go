@@ -135,7 +135,14 @@ func downloadWithRetry(tag name.Tag, source resource.Source, params resource.Get
 			return err
 		}
 
-		image, err := remote.Image(repo.Digest(version.Digest), opts...)
+		var ref name.Reference
+		if version.Digest != "" {
+			ref = repo.Digest(version.Digest)
+		} else {
+			ref = repo.Tag(version.Tag)
+		}
+
+		image, err := remote.Image(ref, opts...)
 		if err != nil {
 			return fmt.Errorf("get image: %w", err)
 		}
