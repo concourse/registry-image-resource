@@ -82,6 +82,10 @@ func (o *Out) Execute() error {
 		tagsToPush = append(tagsToPush, repo.Tag(req.Source.Tag.String()))
 	}
 
+	if req.Params.Tag != "" {
+		tagsToPush = append(tagsToPush, repo.Tag(req.Params.Tag))
+	}
+
 	if req.Params.Version != "" {
 		ver, err := semver.NewVersion(req.Params.Version)
 		if err != nil {

@@ -451,6 +451,9 @@ type PutParams struct {
 	// appended to this value to form the tag.
 	Version string `json:"version"`
 
+	// Tag to push additionally to what has been configured in source
+	Tag string `json:"tag"`
+
 	// Bump additional alias tags after pushing the version's tag.
 	//
 	// Given a version without a prerelease, say 1.2.3:
