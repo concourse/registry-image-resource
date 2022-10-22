@@ -2,6 +2,7 @@ package resource_test
 
 import (
 	"encoding/json"
+	"runtime"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -81,6 +82,26 @@ var _ = Describe("Source", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(m.getAuthorizationInput.RegistryIds)).To(Equal(1))
 			Expect(*m.getAuthorizationInput.RegistryIds[0]).To(Equal(source.AwsCredentials.AWSECRRegistryId))
+		})
+	})
+
+	Describe("platform", func() {
+		It("should set platform to default if not specified", func() {
+			source := resource.Source{
+				RawPlatform: &resource.PlatformField{OS: "some-os", Architecture: "some-arch"},
+			}
+
+			platform := source.Platform()
+			Expect(platform.Architecture).To(Equal("some-arch"))
+			Expect(platform.OS).To(Equal("some-os"))
+		})
+
+		It("should set platform to default if not specified", func() {
+			var source resource.Source
+
+			platform := source.Platform()
+			Expect(platform.Architecture).To(Equal(runtime.GOARCH))
+			Expect(platform.OS).To(Equal(runtime.GOOS))
 		})
 	})
 })
