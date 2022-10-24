@@ -149,6 +149,23 @@ differences:
     </td>
   </tr>
   <tr>
+    <td><code>platform</code> <em>(Optional)<br>(Experimental)</em></td>
+    <td>
+      <ul>
+        <li>
+          <code>architecture</code> <em>(Optional)</em>:
+          Architecture the image is built for (e.g. `amd64`, `arm64/v8`). If not
+          specified, will default to https://pkg.go.dev/runtime#GOARCH.
+        </li>
+        <li>
+          <code>os</code> <em>(Optional)</em>:
+          OS the image is built for (e.g. `linux`, `darwin`, `windows`). If not
+          specified, will default to https://pkg.go.dev/runtime#GOOS.
+        </li>
+      </ul>
+    </td>
+  </tr>
+  <tr>
     <td><code>debug</code> <em>(Optional)<br>Default: false</em></td>
     <td>
     If set, progress bars will be disabled and debugging output will be printed
