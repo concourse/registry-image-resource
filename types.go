@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -21,6 +22,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/ecr/ecriface"
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
+	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/google/go-containerregistry/pkg/v1/remote/transport"
 	"github.com/sirupsen/logrus"
@@ -75,6 +77,11 @@ type RegistryMirror struct {
 	BasicCredentials
 }
 
+type PlatformField struct {
+	Architecture string `json:"architecture,omitempty"`
+	OS           string `json:"os,omitempty"`
+}
+
 type Source struct {
 	Repository string `json:"repository"`
 
@@ -95,6 +102,8 @@ type Source struct {
 	ContentTrust *ContentTrust `json:"content_trust,omitempty"`
 
 	DomainCerts []string `json:"ca_certs,omitempty"`
+
+	RawPlatform *PlatformField `json:"platform,omitempty"`
 
 	Debug bool `json:"debug,omitempty"`
 }
@@ -210,7 +219,33 @@ func (source Source) AuthOptions(repo name.Repository, scopeActions []string) ([
 		return nil, fmt.Errorf("initialize transport: %w", err)
 	}
 
-	return []remote.Option{remote.WithAuth(auth), remote.WithTransport(rt)}, nil
+	plat := source.Platform()
+	v1plat := v1.Platform{
+		Architecture: plat.Architecture,
+		OS:           plat.OS,
+	}
+
+	return []remote.Option{remote.WithAuth(auth), remote.WithTransport(rt), remote.WithPlatform(v1plat)}, nil
+}
+
+func (source *Source) Platform() PlatformField {
+	DefaultArchitecture := runtime.GOARCH
+	DefaultOS := runtime.GOOS
+
+	p := source.RawPlatform
+	if p == nil {
+		p = &PlatformField{}
+	}
+
+	if p.Architecture == "" {
+		p.Architecture = DefaultArchitecture
+	}
+
+	if p.OS == "" {
+		p.OS = DefaultOS
+	}
+
+	return *p
 }
 
 func (source Source) NewRepository() (name.Repository, error) {
@@ -237,12 +272,17 @@ type ContentTrust struct {
 	BasicCredentials
 }
 
-/* Create notary config directory with following structure
+/*
+	Create notary config directory with following structure
+
 ├── gcr-config.json
 └── trust
+
 	└── private
 		└── <private-key-id>.key
+
 └── tls
+
 	└── <notary-host>
 		├── client.cert
 		└── client.key
