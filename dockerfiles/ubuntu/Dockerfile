@@ -18,6 +18,12 @@ RUN set -e; for pkg in $(go list ./...); do \
 	done
 
 FROM ${base_image} AS resource
+
+RUN ln -s /usr/bin/dpkg-split /usr/sbin/dpkg-split
+RUN ln -s /usr/bin/dpkg-deb /usr/sbin/dpkg-deb
+RUN ln -s /bin/rm /usr/sbin/rm
+RUN ln -s /bin/tar /usr/sbin/tar
+
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt update && apt upgrade -y -o Dpkg::Options::="--force-confdef"
 RUN apt update \
