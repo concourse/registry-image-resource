@@ -120,18 +120,10 @@ var _ = Describe("Check", func() {
 							ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
 						),
 						ghttp.CombineHandlers(
-							ghttp.VerifyRequest("GET", "/v2/"),
-							ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
-						),
-						ghttp.CombineHandlers(
 							ghttp.VerifyRequest("HEAD", "/v2/fake-image/manifests/latest"),
 							ghttp.RespondWith(http.StatusOK, ``, http.Header{
 								"Content-Length": LATEST_FAKE_HEADERS["Content-Length"],
 							}),
-						),
-						ghttp.CombineHandlers(
-							ghttp.VerifyRequest("GET", "/v2/"),
-							ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
 						),
 						ghttp.CombineHandlers(
 							ghttp.VerifyRequest("GET", "/v2/fake-image/manifests/latest"),
@@ -160,10 +152,6 @@ var _ = Describe("Check", func() {
 					registry = ghttp.NewTLSServer()
 
 					registry.AppendHandlers(
-						ghttp.CombineHandlers(
-							ghttp.VerifyRequest("GET", "/v2/"),
-							ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
-						),
 						ghttp.CombineHandlers(
 							ghttp.VerifyRequest("GET", "/v2/"),
 							ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
@@ -235,10 +223,6 @@ var _ = Describe("Check", func() {
 								ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
 							),
 							ghttp.CombineHandlers(
-								ghttp.VerifyRequest("GET", "/v2/"),
-								ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
-							),
-							ghttp.CombineHandlers(
 								ghttp.VerifyRequest("HEAD", "/v2/some/fake-image/manifests/latest"),
 								ghttp.RespondWith(http.StatusOK, ``, LATEST_FAKE_HEADERS),
 							),
@@ -269,10 +253,6 @@ var _ = Describe("Check", func() {
 								ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
 							),
 							ghttp.CombineHandlers(
-								ghttp.VerifyRequest("GET", "/v2/"),
-								ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
-							),
-							ghttp.CombineHandlers(
 								ghttp.VerifyRequest("HEAD", "/v2/library/fake-image/manifests/latest"),
 								ghttp.RespondWith(http.StatusOK, ``, LATEST_FAKE_HEADERS),
 							),
@@ -293,10 +273,6 @@ var _ = Describe("Check", func() {
 				Context("which is missing the image", func() {
 					BeforeEach(func() {
 						mirror.AppendHandlers(
-							ghttp.CombineHandlers(
-								ghttp.VerifyRequest("GET", "/v2/"),
-								ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
-							),
 							ghttp.CombineHandlers(
 								ghttp.VerifyRequest("GET", "/v2/"),
 								ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
@@ -409,10 +385,6 @@ var _ = Describe("Check", func() {
 								ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
 							),
 							ghttp.CombineHandlers(
-								ghttp.VerifyRequest("GET", "/v2/"),
-								ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
-							),
-							ghttp.CombineHandlers(
 								ghttp.VerifyRequest("HEAD", "/v2/library/fake-image/manifests/latest"),
 								ghttp.RespondWith(http.StatusOK, ``, LATEST_FAKE_HEADERS),
 							),
@@ -438,10 +410,6 @@ var _ = Describe("Check", func() {
 				Context("which is missing the image", func() {
 					BeforeEach(func() {
 						mirror.AppendHandlers(
-							ghttp.CombineHandlers(
-								ghttp.VerifyRequest("GET", "/v2/"),
-								ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
-							),
 							ghttp.CombineHandlers(
 								ghttp.VerifyRequest("GET", "/v2/"),
 								ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
@@ -549,16 +517,8 @@ var _ = Describe("Check", func() {
 								ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
 							),
 							ghttp.CombineHandlers(
-								ghttp.VerifyRequest("GET", "/v2/"),
-								ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
-							),
-							ghttp.CombineHandlers(
 								ghttp.VerifyRequest("HEAD", "/v2/library/fake-image/manifests/latest"),
 								ghttp.RespondWith(http.StatusOK, ``, LATEST_FAKE_HEADERS),
-							),
-							ghttp.CombineHandlers(
-								ghttp.VerifyRequest("GET", "/v2/"),
-								ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
 							),
 							ghttp.CombineHandlers(
 								ghttp.VerifyRequest("HEAD", "/v2/library/fake-image/manifests/"+OLDER_FAKE_DIGEST),
@@ -584,10 +544,6 @@ var _ = Describe("Check", func() {
 				Context("which is missing the image", func() {
 					BeforeEach(func() {
 						mirror.AppendHandlers(
-							ghttp.CombineHandlers(
-								ghttp.VerifyRequest("GET", "/v2/"),
-								ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
-							),
 							ghttp.CombineHandlers(
 								ghttp.VerifyRequest("GET", "/v2/"),
 								ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
@@ -685,16 +641,8 @@ var _ = Describe("Check", func() {
 								ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
 							),
 							ghttp.CombineHandlers(
-								ghttp.VerifyRequest("GET", "/v2/"),
-								ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
-							),
-							ghttp.CombineHandlers(
 								ghttp.VerifyRequest("HEAD", "/v2/library/fake-image/manifests/latest"),
 								ghttp.RespondWith(http.StatusOK, ``, LATEST_FAKE_HEADERS),
-							),
-							ghttp.CombineHandlers(
-								ghttp.VerifyRequest("GET", "/v2/"),
-								ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
 							),
 							ghttp.CombineHandlers(
 								ghttp.VerifyRequest("HEAD", "/v2/library/fake-image/manifests/"+req.Version.Digest),
@@ -717,10 +665,6 @@ var _ = Describe("Check", func() {
 				Context("which is missing the image", func() {
 					BeforeEach(func() {
 						mirror.AppendHandlers(
-							ghttp.CombineHandlers(
-								ghttp.VerifyRequest("GET", "/v2/"),
-								ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
-							),
 							ghttp.CombineHandlers(
 								ghttp.VerifyRequest("GET", "/v2/"),
 								ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),

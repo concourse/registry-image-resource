@@ -445,10 +445,10 @@ var _ = Describe("In", func() {
 			manifest, err := fakeImage.RawManifest()
 			Expect(err).ToNot(HaveOccurred())
 
-			config, err := fakeImage.RawConfigFile()
+			configDigest, err := fakeImage.ConfigName()
 			Expect(err).ToNot(HaveOccurred())
 
-			configDigest, err := fakeImage.ConfigName()
+			config, err := fakeImage.RawConfigFile()
 			Expect(err).ToNot(HaveOccurred())
 
 			registry.AppendHandlers(
@@ -461,18 +461,10 @@ var _ = Describe("In", func() {
 				// 429 following transport setup
 				ghttp.CombineHandlers(
 					ghttp.VerifyRequest("GET", "/v2/"),
-					ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
-				),
-				ghttp.CombineHandlers(
-					ghttp.VerifyRequest("GET", "/v2/"),
 					ghttp.RespondWith(http.StatusTooManyRequests, "calm down"),
 				),
 
 				// 429 on manifest fetch
-				ghttp.CombineHandlers(
-					ghttp.VerifyRequest("GET", "/v2/"),
-					ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
-				),
 				ghttp.CombineHandlers(
 					ghttp.VerifyRequest("GET", "/v2/"),
 					ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
@@ -488,10 +480,6 @@ var _ = Describe("In", func() {
 					ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
 				),
 				ghttp.CombineHandlers(
-					ghttp.VerifyRequest("GET", "/v2/"),
-					ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
-				),
-				ghttp.CombineHandlers(
 					ghttp.VerifyRequest("GET", "/v2/fake-image/manifests/"+digest.String()),
 					ghttp.RespondWith(http.StatusOK, manifest),
 				),
@@ -501,10 +489,6 @@ var _ = Describe("In", func() {
 				),
 
 				// successful sequence
-				ghttp.CombineHandlers(
-					ghttp.VerifyRequest("GET", "/v2/"),
-					ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
-				),
 				ghttp.CombineHandlers(
 					ghttp.VerifyRequest("GET", "/v2/"),
 					ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
@@ -559,10 +543,6 @@ var _ = Describe("In", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			registry.AppendHandlers(
-				ghttp.CombineHandlers(
-					ghttp.VerifyRequest("GET", "/v2/"),
-					ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
-				),
 				ghttp.CombineHandlers(
 					ghttp.VerifyRequest("GET", "/v2/"),
 					ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
@@ -650,10 +630,6 @@ var _ = Describe("In", func() {
 						ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
 					),
 					ghttp.CombineHandlers(
-						ghttp.VerifyRequest("GET", "/v2/"),
-						ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
-					),
-					ghttp.CombineHandlers(
 						ghttp.VerifyRequest("GET", "/v2/some/fake-image/manifests/"+digest.String()),
 						ghttp.RespondWith(http.StatusOK, manifest),
 					),
@@ -732,10 +708,6 @@ var _ = Describe("In", func() {
 							ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
 						),
 						ghttp.CombineHandlers(
-							ghttp.VerifyRequest("GET", "/v2/"),
-							ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
-						),
-						ghttp.CombineHandlers(
 							ghttp.VerifyRequest("GET", "/v2/library/fake-image/manifests/"+digest.String()),
 							ghttp.RespondWith(http.StatusOK, manifest),
 						),
@@ -799,10 +771,6 @@ var _ = Describe("In", func() {
 							ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
 						),
 						ghttp.CombineHandlers(
-							ghttp.VerifyRequest("GET", "/v2/"),
-							ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
-						),
-						ghttp.CombineHandlers(
 							ghttp.VerifyRequest("GET", "/v2/concourse/test-image-static/manifests/"+req.Version.Digest),
 							ghttp.RespondWith(http.StatusNotFound, nil),
 						),
@@ -831,10 +799,6 @@ var _ = Describe("In", func() {
 					req.Version.Digest = latestDigest(req.Source.Repository)
 
 					mirror.AppendHandlers(
-						ghttp.CombineHandlers(
-							ghttp.VerifyRequest("GET", "/v2/"),
-							ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),
-						),
 						ghttp.CombineHandlers(
 							ghttp.VerifyRequest("GET", "/v2/"),
 							ghttp.RespondWith(http.StatusOK, `welcome to zombocom`),

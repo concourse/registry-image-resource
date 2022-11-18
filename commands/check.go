@@ -331,7 +331,15 @@ func headOrGet(ref name.Reference, imageOpts ...remote.Option) (v1.Hash, bool, e
 			return v1.Hash{}, false, err
 		}
 
+		if (remoteDesc.Digest == v1.Hash{}) {
+			return v1.Hash{}, false, nil
+		}
+
 		return remoteDesc.Digest, true, nil
+	}
+
+	if (v1Desc.Digest == v1.Hash{}) {
+		return v1.Hash{}, false, nil
 	}
 
 	return v1Desc.Digest, true, nil

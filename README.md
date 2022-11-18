@@ -581,7 +581,8 @@ Run the tests with the following commands for both `alpine` and `ubuntu` images:
 
 ```sh
 docker build -t registry-image-resource --target tests -f dockerfiles/alpine/Dockerfile .
-docker build -t registry-image-resource --target tests -f dockerfiles/ubuntu/Dockerfile .
+docker build -t registry-image-resource --target tests -f dockerfiles/ubuntu/Dockerfile --build-arg base_image=ubuntu:latest .
+
 ```
 
 #### Integration tests
