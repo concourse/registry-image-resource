@@ -97,6 +97,15 @@ differences:
     <br>
     Follows the rules outlined in
     https://github.com/Masterminds/semver#checking-version-constraints
+    <br>
+    If the value appends with <code>-0</code> for pre-release versions,
+    <code>pre_releases</code> needs to be <code>true</code>.
+    </td>
+  </tr>
+  <tr>
+    <td><code>pre_releases</code> <em>(Optional)</em></td>
+    <td>
+    Includes pre-release versions. See [Pre-release versions](#pre-release-versions).
     </td>
   </tr>
   <tr>
