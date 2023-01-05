@@ -105,7 +105,14 @@ differences:
   <tr>
     <td><code>pre_releases</code> <em>(Optional)</em></td>
     <td>
-    Includes pre-release versions. See [Pre-release versions](#pre-release-versions).
+    By default, pre-release versions are ignored. With `pre_releases: true`, they
+    will be included.
+    <br>
+    Note however that variants and pre-releases both use the same syntax:
+    `1.2.3-alpine` is technically also valid syntax for a Semver prerelease. For
+    this reason, the resource will only consider prerelease data starting with
+    `alpha`, `beta`, or `rc` as a proper prerelease, treating anything else as
+    a variant.
     </td>
   </tr>
   <tr>
@@ -402,16 +409,6 @@ The above resource definition would detect the following versions:
 ]
 ```
 
-#### Pre-release versions
-
-By default, pre-release versions are ignored. With `pre_releases: true`, they
-will be included.
-
-Note however that variants and pre-releases both use the same syntax:
-`1.2.3-alpine` is technically also valid syntax for a Semver prerelease. For
-this reason, the resource will only consider prerelease data starting with
-`alpha`, `beta`, or `rc` as a proper prerelease, treating anything else as
-a variant.
 
 
 ### `get` Step (`in` script): fetch an image
