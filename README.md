@@ -486,7 +486,8 @@ Tags may be specified in multiple ways:
 * With `version` given in `params`, the image will be pushed using the version
   number as a tag, optionally with a `variant` suffix (configured in `source`).
 * With `additional_tags` given in `params`, the image will be pushed as each
-  tag listed in the file (whitespace separated).
+  tag listed in the file (whitespace separated). Only those tags are pushed, e.g.
+  the default `latest` isn't included.
 
 #### `put` Steps `params`
 
@@ -538,7 +539,8 @@ Tags may be specified in multiple ways:
     <td><code>additional_tags</code> <em>(Optional)</em></td>
     <td>
     The path to a file with whitespace-separated list of tag values to tag the
-    image with (in addition to the tag configured in <code>source</code>).
+    image with (in addition to the tag configured in <code>source</code>,
+    but not the default `latest` tag if no tag is configured).
     </td>
   </tr>
 </tbody>
