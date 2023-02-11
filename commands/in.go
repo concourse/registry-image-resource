@@ -191,6 +191,16 @@ func ociFormat(dest string, tag name.Tag, image v1.Image) error {
 		return fmt.Errorf("write OCI image: %s", err)
 	}
 
+	config, err := image.ConfigFile()
+	if err != nil {
+		return fmt.Errorf("extract OCI config file: %s", err)
+	}
+
+	err = writeLabels(dest, config.Config.Labels)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -225,6 +235,34 @@ func rootfsFormat(dest string, image v1.Image, debug bool, stderr io.Writer) err
 	err = meta.Close()
 	if err != nil {
 		return fmt.Errorf("close image metadata file: %w", err)
+	}
+
+	err = writeLabels(dest, cfg.Config.Labels)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func writeLabels(dest string, labelData map[string]string) error {
+	if labelData == nil {
+		labelData = map[string]string{}
+	}
+
+	labels, err := os.Create(filepath.Join(dest, "labels.json"))
+	if err != nil {
+		return fmt.Errorf("create image labels: %w", err)
+	}
+
+	err = json.NewEncoder(labels).Encode(labelData)
+	if err != nil {
+		return fmt.Errorf("write image labels: %w", err)
+	}
+
+	err = labels.Close()
+	if err != nil {
+		return fmt.Errorf("close image labels file: %w", err)
 	}
 
 	return nil
