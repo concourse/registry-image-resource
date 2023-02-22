@@ -64,6 +64,7 @@ type AwsCredentials struct {
 	AWSECRRegistryId   string   `json:"aws_ecr_registry_id,omitempty"`
 	AwsRoleArn         string   `json:"aws_role_arn,omitempty"`
 	AwsRoleArns        []string `json:"aws_role_arns,omitempty"`
+	AwsAccountId       string   `json:"aws_account_id,omitempty"`
 }
 
 type BasicCredentials struct {
@@ -426,7 +427,12 @@ func (source *Source) AuthenticateToECR() bool {
 
 	// Update username and repository
 	source.Username = "AWS"
-	source.Repository = strings.Join([]string{strings.TrimPrefix(*result.AuthorizationData[0].ProxyEndpoint, "https://"), source.Repository}, "/")
+
+	if source.AwsAccountId != "" {
+		source.Repository = fmt.Sprintf("%s.dkr.ecr.%s.amazonaws.com/%s", source.AwsAccountId, source.AwsRegion, source.Repository)
+	} else {
+		source.Repository = fmt.Sprintf("%s/%s", strings.TrimPrefix(*result.AuthorizationData[0].ProxyEndpoint, "https://"), source.Repository)
+	}
 
 	return true
 }

@@ -165,6 +165,15 @@ differences:
     </td>
   </tr>
   <tr>
+    <td><code>aws_account_id</code> <em>(Optional)</em></td>
+    <td>
+    The AWS Account ID that the image is located in. Useful if interacting with
+    images in another account. If omitted then the current AWS account ID will
+    be used. Be sure to wrap the account ID in quotes so it is parsed as a
+    string instead of a number.
+    </td>
+  </tr>
+  <tr>
     <td><code>platform</code> <em>(Optional)<br>(Experimental)</em></td>
     <td>
       <ul>
