@@ -448,6 +448,7 @@ The resource will produce the following files:
   For ECR images, this will include the registry the image was pulled from.
 * `./tag`: A file containing the tag from the version.
 * `./digest`: A file containing the digest from the version, e.g. `sha256:...`.
+* `./labels.json`: A file containing a JSON map of image labels, e.g. `{ "commit": "4e5c4ea" }`
 
 The remaining files depend on the configuration value for `format`:
 
