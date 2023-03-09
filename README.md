@@ -446,6 +446,26 @@ Fetches an image at the exact digest specified by the version.
       needing to download the image you just uploaded.
     </td>
   </tr>
+  <tr>
+    <td><code>repository</code> <em>(Optional)</em></td>
+    <td>
+      Override the repository defined in the <code>source</code> configuration.
+      Useful when dynamically passing a repo in a job.
+    </td>
+  </tr>
+  <tr>
+    <td><code>insecure</code> <em>(Optional)<br>Default: false</em></td>
+    <td>
+      Allow insecure registry.
+    </td>
+  </tr>
+  <tr>
+    <td><code>tag</code> <em>(Optional)</em></td>
+    <td>
+      Override the tag defined in the <code>source</code>.
+      Useful when dynamically passing a tag in a job.
+    </td>
+  </tr>
 </tbody>
 </table>
 

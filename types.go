@@ -479,6 +479,9 @@ type MetadataField struct {
 type GetParams struct {
 	RawFormat    string `json:"format"`
 	SkipDownload bool   `json:"skip_download"`
+	Repository   string `json:"repository,omitempty"`
+	Insecure     bool   `json:"insecure"`
+	Tag          Tag    `json:"tag,omitempty"`
 }
 
 func (p GetParams) Format() string {
@@ -487,6 +490,18 @@ func (p GetParams) Format() string {
 	}
 
 	return p.RawFormat
+}
+
+func (p GetParams) NewRepository() (name.Repository, error) {
+	return name.NewRepository(p.Repository, p.RepositoryOptions()...)
+}
+
+func (p GetParams) RepositoryOptions() []name.Option {
+	var opts []name.Option
+	if p.Insecure {
+		opts = append(opts, name.Insecure)
+	}
+	return opts
 }
 
 type PutParams struct {
