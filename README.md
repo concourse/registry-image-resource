@@ -450,7 +450,7 @@ Fetches an image at the exact digest specified by the version.
     <td><code>repository</code> <em>(Optional)</em></td>
     <td>
       Override the repository defined in the <code>source</code> configuration.
-      Useful when dynamically passing a repo in a job.
+      Useful when dynamically passing a repo in a job. Not intended to be used with `trigger`.
     </td>
   </tr>
   <tr>
@@ -463,7 +463,7 @@ Fetches an image at the exact digest specified by the version.
     <td><code>tag</code> <em>(Optional)</em></td>
     <td>
       Override the tag defined in the <code>source</code>.
-      Useful when dynamically passing a tag in a job.
+      Useful when dynamically passing a tag in a job. Not intended to be used with `trigger`.
     </td>
   </tr>
 </tbody>
