@@ -8,12 +8,13 @@ require (
 	github.com/concourse/go-archive v1.0.1
 	github.com/fatih/color v1.13.0
 	github.com/go-sql-driver/mysql v1.5.0 // indirect
-	github.com/google/go-containerregistry v0.12.1
+	github.com/google/go-containerregistry v0.15.2
 	github.com/onsi/ginkgo v1.16.4
 	github.com/onsi/gomega v1.19.0
 	github.com/simonshyu/notary-gcr v0.0.0-20220601090547-d99a631aa58b
 	github.com/sirupsen/logrus v1.9.0
 	github.com/vbauerster/mpb v3.4.0+incompatible
+	golang.org/x/crypto v0.1.0 // indirect
 )
 
 go 1.16
