@@ -282,10 +282,10 @@ func (k *InMemoryKeyChain) Resolve(resource authn.Resource) (authn.Authenticator
 	}), nil
 }
 
-func signImagesCosign(req resource.OutRequest, img v1.Image, tags []name.Tag) {
+func signImagesCosign(req resource.OutRequest, img v1.Image, tags []name.Tag) error {
 	digest, err := img.Digest()
 	if err != nil {
-		logrus.Fatalf("Error getting digest for image: %v", err)
+		return fmt.Errorf("error getting digest for image: %v", err)
 	}
 
 	// here we build the img digest url so that we can sign it with cosign.
@@ -309,7 +309,7 @@ func signImagesCosign(req resource.OutRequest, img v1.Image, tags []name.Tag) {
 
 	keychain := &InMemoryKeyChain{
 		credentials: map[string]userCredentials{
-			req.Source.Repository: {
+			req.Source.Cosign.Registry: {
 				username: req.Source.Username,
 				password: req.Source.Password,
 			},
@@ -380,7 +380,7 @@ func signImagesCosign(req resource.OutRequest, img v1.Image, tags []name.Tag) {
 	// tooling (Vault, Azure KeyVault etc)
 	err = os.Setenv("COSIGN_KEY", req.Source.Cosign.Key)
 	if err != nil {
-		fmt.Errorf("err %w", err)
+		return fmt.Errorf("err %w", err)
 	}
 
 	// similiar to the COSIGN_KEY variable we set the password that was used to create the
@@ -390,15 +390,16 @@ func signImagesCosign(req resource.OutRequest, img v1.Image, tags []name.Tag) {
 	// input, we have to use the environment variable.
 	err = os.Setenv("COSIGN_PASSWORD", req.Source.Cosign.Password)
 	if err != nil {
-		fmt.Errorf("err %w", err)
+		return fmt.Errorf("err %w", err)
 	}
 
-	logrus.Infof("Signing image with Cosign")
+	logrus.Infof("Signing image with Cosign: %s", imgDigestUrl)
 	err = sign.SignCmd(ro, ko, o, []string{imgDigestUrl})
 	if err != nil {
-		fmt.Errorf("There was an error signing the image with Cosign %w", err)
+		return fmt.Errorf("there was an error signing the image with Cosign %w", err)
 	}
 	logrus.Infof("Image signed with Cosign")
+	return nil
 }
 
 func loadImage(path string) (partial.WithRawManifest, error) {

@@ -276,6 +276,7 @@ type ContentTrust struct {
 }
 
 type Cosign struct {
+	Registry string `json:"registry"`
 	Key      string `json:"key"`
 	Password string `json:"password"`
 }
