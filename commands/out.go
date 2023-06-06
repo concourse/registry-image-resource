@@ -19,6 +19,9 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/google/go-containerregistry/pkg/v1/remote/transport"
 	"github.com/google/go-containerregistry/pkg/v1/tarball"
+	"github.com/sigstore/cosign/v2/cmd/cosign/cli/generate"
+	"github.com/sigstore/cosign/v2/cmd/cosign/cli/options"
+	"github.com/sigstore/cosign/v2/cmd/cosign/cli/sign"
 	"github.com/simonshyu/notary-gcr/pkg/gcr"
 	"github.com/sirupsen/logrus"
 )
@@ -223,6 +226,15 @@ func put(req resource.OutRequest, img partial.WithRawManifest, tags []name.Tag, 
 
 	logrus.Info("pushed")
 
+	if req.Source.Cosign != nil {
+		switch t := img.(type) {
+		case v1.Image:
+			signImagesCosign(req, t, tags)
+		default:
+			return fmt.Errorf("cannot sign type (%T)", img)
+		}
+	}
+
 	if req.Source.ContentTrust != nil {
 		switch t := img.(type) {
 		case v1.Image:
@@ -236,6 +248,157 @@ func put(req resource.OutRequest, img partial.WithRawManifest, tags []name.Tag, 
 	}
 
 	return nil
+}
+
+// struct to hold username and password
+type userCredentials struct {
+	username string
+	password string
+}
+
+// A keychain that is able to return the creds based on the registry url
+type InMemoryKeyChain struct {
+	// An in-memory map of username/passwords
+	credentials map[string]userCredentials
+}
+
+// Returns a function that is able to produce an AuthConfig struct. This is basically a factory factory
+func (k *InMemoryKeyChain) Resolve(resource authn.Resource) (authn.Authenticator, error) {
+
+	// Ask for the registry URL
+	registryHost := resource.RegistryStr()
+
+	// Find the user credentials by the registry URL
+	userCreds, ok := k.credentials[registryHost]
+
+	if !ok {
+		return authn.Anonymous, fmt.Errorf("unable to find credentials for host %s", registryHost)
+	}
+
+	// Return an authConfig that contains the username and password we looked up
+	return authn.FromConfig(authn.AuthConfig{
+		Username: userCreds.username,
+		Password: userCreds.password,
+	}), nil
+}
+
+func signImagesCosign(req resource.OutRequest, img v1.Image, tags []name.Tag) {
+	digest, err := img.Digest()
+	if err != nil {
+		logrus.Fatalf("Error getting digest for image: %v", err)
+	}
+
+	// here we build the img digest url so that we can sign it with cosign.
+	// we sign the digest URL and not just the tag URL because tags can point
+	// to difference digests over time. whereas a digest is supposed to represent
+	// and specific image build and won't change (although technically Docker cannot produce
+	// image digests that stay the same all the time, this is where tools like `apko`
+	// are a great tool for building OCI images)
+	imgDigestUrl := tags[0].String() + "@" + digest.String()
+
+	// over time this won't be needed. the Cosign library will evolve to expect
+	// less object parameters to be configured. this is only needed for now due to
+	// the fact that primarily cosign is a cli tool. And part of the CLI framework
+	// that cosign uses, sets the majority of the below objects variables by default.
+	// this comment concerns the below `ro`, `o` and `ko` data objects.
+	ro := &options.RootOptions{
+		OutputFile: "",
+		Verbose:    false,
+		Timeout:    options.DefaultTimeout,
+	}
+
+	keychain := &InMemoryKeyChain{
+		credentials: map[string]userCredentials{
+			req.Source.Repository: {
+				username: req.Source.Username,
+				password: req.Source.Password,
+			},
+		},
+	}
+
+	o := options.SignOptions{
+		Key:               "env://COSIGN_KEY",
+		Cert:              "",
+		CertChain:         "",
+		Upload:            true,
+		OutputSignature:   "",
+		OutputPayload:     "",
+		OutputCertificate: "",
+		PayloadPath:       "",
+		Recursive:         false,
+		Attachment:        "",
+		SkipConfirmation:  true,
+		TlogUpload:        false,
+		TSAServerURL:      "",
+		IssueCertificate:  false,
+		Fulcio: options.FulcioOptions{
+			URL: options.DefaultFulcioURL,
+		},
+		OIDC: options.OIDCOptions{
+			Issuer:      options.DefaultOIDCIssuerURL,
+			ClientID:    "sigstore",
+			RedirectURL: "",
+		},
+		Rekor: options.RekorOptions{
+			URL: options.DefaultRekorURL,
+		},
+		Registry: options.RegistryOptions{
+			AllowInsecure:      false,
+			KubernetesKeychain: false,
+			Keychain:           keychain,
+		},
+	}
+
+	ko := options.KeyOpts{
+		KeyRef:                         "env://COSIGN_KEY",
+		PassFunc:                       generate.GetPass,
+		Sk:                             false,
+		Slot:                           "",
+		FulcioURL:                      options.DefaultFulcioURL,
+		IDToken:                        "",
+		InsecureSkipFulcioVerify:       false,
+		RekorURL:                       options.DefaultRekorURL,
+		OIDCIssuer:                     options.DefaultOIDCIssuerURL,
+		OIDCClientID:                   "sigstore",
+		OIDCClientSecret:               "",
+		OIDCRedirectURL:                "",
+		OIDCDisableProviders:           false,
+		OIDCProvider:                   "",
+		SkipConfirmation:               true,
+		TSAServerURL:                   "",
+		IssueCertificateForExistingKey: false,
+	}
+
+	// because cosign is a CLI tool primiarly (until it has matured as a library)
+	// we have to set the COSIGN_KEY environment variable and tell cosign to use it.
+	// as it is less tricky than having to create files that contain the cosign.key
+	// which actually becomes less secure because anyone who gains access to the container
+	// can easily easily see the file. whereas the `os.Setenv` function does not permanently
+	// set environment variables for the parent process that runs it, only for child processes.
+	// however, it is still not perfect, we would rather pass the key directly to cosign but
+	// untill that functionality is offered this is the best option without making decisions on
+	// tooling (Vault, Azure KeyVault etc)
+	err = os.Setenv("COSIGN_KEY", req.Source.Cosign.Key)
+	if err != nil {
+		fmt.Errorf("err %w", err)
+	}
+
+	// similiar to the COSIGN_KEY variable we set the password that was used to create the
+	// keypair (if there was one). there are less ways to set the password currently outside
+	// of an environment variable or user input via a terminal prompt, as the Cosign library
+	// evolves over time, we can reasonably expect this to change, but as we cannot rely on user
+	// input, we have to use the environment variable.
+	err = os.Setenv("COSIGN_PASSWORD", req.Source.Cosign.Password)
+	if err != nil {
+		fmt.Errorf("err %w", err)
+	}
+
+	logrus.Infof("Signing image with Cosign")
+	err = sign.SignCmd(ro, ko, o, []string{imgDigestUrl})
+	if err != nil {
+		fmt.Errorf("There was an error signing the image with Cosign %w", err)
+	}
+	logrus.Infof("Image signed with Cosign")
 }
 
 func loadImage(path string) (partial.WithRawManifest, error) {

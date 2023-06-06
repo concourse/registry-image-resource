@@ -102,6 +102,8 @@ type Source struct {
 
 	ContentTrust *ContentTrust `json:"content_trust,omitempty"`
 
+	Cosign *Cosign `json:"cosign,omitempty"`
+
 	DomainCerts []string `json:"ca_certs,omitempty"`
 
 	RawPlatform *PlatformField `json:"platform,omitempty"`
@@ -271,6 +273,11 @@ type ContentTrust struct {
 	Scopes               string `json:"scopes,omitempty"`
 
 	BasicCredentials
+}
+
+type Cosign struct {
+	Key      string `json:"key"`
+	Password string `json:"password"`
 }
 
 /*
