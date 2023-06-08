@@ -88,8 +88,9 @@ type Source struct {
 
 	Insecure bool `json:"insecure"`
 
-	PreReleases bool   `json:"pre_releases,omitempty"`
-	Variant     string `json:"variant,omitempty"`
+	PreReleases bool `json:"pre_releases,omitempty"`
+	PreReleasePrefixes []string `json:"pre_release_prefixes,omitempty"`
+	Variant string `json:"variant,omitempty"`
 
 	SemverConstraint string `json:"semver_constraint,omitempty"`
 

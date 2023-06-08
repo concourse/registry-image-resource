@@ -134,8 +134,14 @@ differences:
     Note however that variants and pre-releases both use the same syntax:
     `1.2.3-alpine` is technically also valid syntax for a Semver prerelease. For
     this reason, the resource will only consider prerelease data starting with
-    `alpha`, `beta`, or `rc` as a proper prerelease, treating anything else as
-    a variant.
+    `alpha`, `beta`, or `rc` as a proper prerelease, or values provided by
+    `pre_release_prefixes`, treating anything else as a variant.
+    </td>
+  </tr>
+  <tr>
+    <td><code>pre_release_prefixes</code> <em>(Optional)</em></td>
+    <td>
+    Opt in to additional pre-release prefixes (e.g. `build.3`)
     </td>
   </tr>
   <tr>
