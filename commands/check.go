@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -99,6 +100,8 @@ func check(source resource.Source, from *resource.Version) (resource.CheckRespon
 
 	if source.Tag != "" {
 		return checkTag(repo.Tag(source.Tag.String()), source, from, opts...)
+	} else if source.Regex != "" {
+		return checkRepositoryRegex(repo, source, from, opts...)
 	} else {
 		return checkRepository(repo, source, from, opts...)
 	}
@@ -265,6 +268,51 @@ func checkRepository(repo name.Repository, source resource.Source, from *resourc
 				Digest: digest,
 			})
 		}
+	}
+
+	return response, nil
+}
+
+func checkRepositoryRegex(repo name.Repository, source resource.Source, from *resource.Version, opts ...remote.Option) (resource.CheckResponse, error) {
+	tags, err := remote.List(repo, opts...)
+	if err != nil {
+		return resource.CheckResponse{}, fmt.Errorf("list repository tags: %w", err)
+	}
+
+	tagDigests := map[string]string{}
+	matchedTags := make([]string, 0)
+
+	for _, identifier := range tags {
+		regex, _ := regexp.Compile(source.Regex)
+		if !regex.MatchString(identifier) {
+			// Does not match regex string provided
+			continue
+		}
+
+		tagRef := repo.Tag(identifier)
+
+		digest, found, err := headOrGet(tagRef, opts...)
+		if err != nil {
+			return resource.CheckResponse{}, fmt.Errorf("get tag digest: %w", err)
+		}
+
+		if !found {
+			continue
+		}
+
+		matchedTags = append(matchedTags, identifier)
+
+		tagDigests[identifier] = digest.String()
+	}
+
+	response := resource.CheckResponse{}
+
+	// Using matchedTags here maintains the order of the response to the list tags call
+	for _, tagString := range matchedTags {
+		response = append(response, resource.Version{
+			Tag:    tagString,
+			Digest: tagDigests[tagString],
+		})
 	}
 
 	return response, nil

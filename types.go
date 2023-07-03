@@ -95,6 +95,8 @@ type Source struct {
 
 	Tag Tag `json:"tag,omitempty"`
 
+	Regex string `json:"tag_regex,omitempty"`
+
 	BasicCredentials
 	AwsCredentials
 
