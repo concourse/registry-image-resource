@@ -731,17 +731,26 @@ var _ = Describe("Check", func() {
 })
 
 var _ = DescribeTable("tracking semver tags",
-	(SemverTagCheckExample).Run,
+	(SemverOrRegexTagCheckExample).Run,
 	Entry("no semver tags",
-		SemverTagCheckExample{
+		SemverOrRegexTagCheckExample{
 			Tags: map[string]string{
 				"non-semver-tag": "random-1",
 			},
 			Versions: []string{},
 		},
 	),
+	Entry("no matching regex tags",
+		SemverOrRegexTagCheckExample{
+			Tags: map[string]string{
+				"non-matching-regex-tag": "random-1",
+			},
+			Regex:    "foo.*",
+			Versions: []string{},
+		},
+	),
 	Entry("latest tag",
-		SemverTagCheckExample{
+		SemverOrRegexTagCheckExample{
 			Tags: map[string]string{
 				"non-semver-tag": "random-1",
 				"latest":         "random-2",
@@ -750,7 +759,7 @@ var _ = DescribeTable("tracking semver tags",
 		},
 	),
 	Entry("HEAD with GET fallback",
-		SemverTagCheckExample{
+		SemverOrRegexTagCheckExample{
 			Tags: map[string]string{
 				"non-semver-tag": "random-1",
 				"latest":         "random-2",
@@ -759,8 +768,37 @@ var _ = DescribeTable("tracking semver tags",
 			Versions: []string{"latest"},
 		},
 	),
+	Entry("simple tag regex",
+		SemverOrRegexTagCheckExample{
+			Tags: map[string]string{
+				"1.0.0":          "random-1",
+				"non-semver-tag": "random-2",
+				"gray":           "random-3",
+				"grey":           "random-4",
+			},
+			Regex:    "gr(a|e)y",
+			Versions: []string{"gray", "grey"},
+		},
+	),
+	Entry("regex override semver constraint",
+		SemverOrRegexTagCheckExample{
+			Tags: map[string]string{
+				"1.0.0": "random-1",
+				"1.2.1": "random-3",
+				"1.2.2": "random-4",
+				"2.0.0": "random-5",
+				// Does not include bare tag
+				"latest": "random-6",
+				"gray":   "random-7",
+				"grey":   "random-8",
+			},
+			Regex:            "gr(a|e)y",
+			SemverConstraint: "1.2.x",
+			Versions:         []string{"gray", "grey"},
+		},
+	),
 	Entry("semver and non-semver tags",
-		SemverTagCheckExample{
+		SemverOrRegexTagCheckExample{
 			Tags: map[string]string{
 				"1.0.0":          "random-1",
 				"non-semver-tag": "random-2",
@@ -768,8 +806,21 @@ var _ = DescribeTable("tracking semver tags",
 			Versions: []string{"1.0.0"},
 		},
 	),
+	Entry("regex maintain ordering",
+		SemverOrRegexTagCheckExample{
+			Tags: map[string]string{
+				"1.0.0":                  "random-1",
+				"3bd8a5e-dev":            "random-2",
+				"3bd8a5e-stage":          "random-3",
+				"non-matching-regex-tag": "random-4",
+				"67e3c33-dev":            "random-5",
+			},
+			Regex:    "^[0-9a-f]{7}-dev$",
+			Versions: []string{"3bd8a5e-dev", "67e3c33-dev"},
+		},
+	),
 	Entry("semver tag ordering",
-		SemverTagCheckExample{
+		SemverOrRegexTagCheckExample{
 			Tags: map[string]string{
 				"1.0.0": "random-1",
 				"1.2.1": "random-3",
@@ -779,7 +830,7 @@ var _ = DescribeTable("tracking semver tags",
 		},
 	),
 	Entry("semver tag ordering with cursor",
-		SemverTagCheckExample{
+		SemverOrRegexTagCheckExample{
 			Tags: map[string]string{
 				"1.0.0": "random-1",
 				"1.2.1": "random-3",
@@ -793,7 +844,7 @@ var _ = DescribeTable("tracking semver tags",
 		},
 	),
 	Entry("semver tag ordering with cursor with different digest",
-		SemverTagCheckExample{
+		SemverOrRegexTagCheckExample{
 			Tags: map[string]string{
 				"1.0.0": "random-1",
 				"1.2.1": "random-3",
@@ -807,7 +858,7 @@ var _ = DescribeTable("tracking semver tags",
 		},
 	),
 	Entry("semver constraint",
-		SemverTagCheckExample{
+		SemverOrRegexTagCheckExample{
 			Tags: map[string]string{
 				"1.0.0": "random-1",
 				"1.2.1": "random-3",
@@ -821,7 +872,7 @@ var _ = DescribeTable("tracking semver tags",
 		},
 	),
 	Entry("prereleases ignored by default",
-		SemverTagCheckExample{
+		SemverOrRegexTagCheckExample{
 			Tags: map[string]string{
 				"1.0.0-alpha.1": "random-0",
 				"1.0.0":         "random-1",
@@ -834,7 +885,7 @@ var _ = DescribeTable("tracking semver tags",
 		},
 	),
 	Entry("prereleases opted in",
-		SemverTagCheckExample{
+		SemverOrRegexTagCheckExample{
 			Tags: map[string]string{
 				"1.0.0-alpha.1": "random-0",
 				"1.0.0":         "random-1",
@@ -855,7 +906,7 @@ var _ = DescribeTable("tracking semver tags",
 		},
 	),
 	Entry("prereleases do not include 'variants'",
-		SemverTagCheckExample{
+		SemverOrRegexTagCheckExample{
 			Tags: map[string]string{
 				"1.0.0-alpha.1": "random-0",
 				"1.0.0-beta.1":  "random-1",
@@ -871,7 +922,7 @@ var _ = DescribeTable("tracking semver tags",
 		},
 	),
 	Entry("prereleases do not require dot",
-		SemverTagCheckExample{
+		SemverOrRegexTagCheckExample{
 			Tags: map[string]string{
 				"1.0.0-alpha1": "random-0",
 				"1.0.0-alpha2": "random-1",
@@ -894,7 +945,7 @@ var _ = DescribeTable("tracking semver tags",
 		},
 	),
 	Entry("prereleases do not require number",
-		SemverTagCheckExample{
+		SemverOrRegexTagCheckExample{
 			Tags: map[string]string{
 				"1.0.0-alpha": "random-0",
 				"1.0.0-beta":  "random-1",
@@ -910,7 +961,7 @@ var _ = DescribeTable("tracking semver tags",
 		},
 	),
 	Entry("final versions take priority over rcs",
-		SemverTagCheckExample{
+		SemverOrRegexTagCheckExample{
 			Tags: map[string]string{
 				"1.0.0-rc.1": "random-2",
 				"1.0.0-rc1":  "random-2",
@@ -922,7 +973,7 @@ var _ = DescribeTable("tracking semver tags",
 		},
 	),
 	Entry("mixed specificity semver tags",
-		SemverTagCheckExample{
+		SemverOrRegexTagCheckExample{
 			Tags: map[string]string{
 				"1":      "random-1",
 				"2":      "random-2",
@@ -940,7 +991,7 @@ var _ = DescribeTable("tracking semver tags",
 		},
 	),
 	Entry("semver tags with latest tag having unique digest",
-		SemverTagCheckExample{
+		SemverOrRegexTagCheckExample{
 			Tags: map[string]string{
 				"1.0.0":          "random-1",
 				"non-semver-tag": "random-2",
@@ -950,7 +1001,7 @@ var _ = DescribeTable("tracking semver tags",
 		},
 	),
 	Entry("latest tag pointing to latest version",
-		SemverTagCheckExample{
+		SemverOrRegexTagCheckExample{
 			Tags: map[string]string{
 				"1":      "random-1",
 				"2":      "random-2",
@@ -961,7 +1012,7 @@ var _ = DescribeTable("tracking semver tags",
 		},
 	),
 	Entry("latest tag pointing to older version",
-		SemverTagCheckExample{
+		SemverOrRegexTagCheckExample{
 			Tags: map[string]string{
 				"1":      "random-1",
 				"2":      "random-2",
@@ -972,7 +1023,7 @@ var _ = DescribeTable("tracking semver tags",
 		},
 	),
 	Entry("variants",
-		SemverTagCheckExample{
+		SemverOrRegexTagCheckExample{
 			Tags: map[string]string{
 				"latest":    "random-1",
 				"1.0.0":     "random-1",
@@ -991,7 +1042,7 @@ var _ = DescribeTable("tracking semver tags",
 		},
 	),
 	Entry("variant with bare variant tag pointing to unique digest",
-		SemverTagCheckExample{
+		SemverOrRegexTagCheckExample{
 			Tags: map[string]string{
 				"latest":    "random-1",
 				"1.0.0":     "random-1",
@@ -1009,7 +1060,7 @@ var _ = DescribeTable("tracking semver tags",
 		},
 	),
 	Entry("distinguishing additional variants from prereleases",
-		SemverTagCheckExample{
+		SemverOrRegexTagCheckExample{
 			Tags: map[string]string{
 				"1.0.0-foo":             "random-1",
 				"1.0.0-rc.1-foo":        "random-2",
@@ -1033,7 +1084,7 @@ var _ = DescribeTable("tracking semver tags",
 		},
 	),
 	Entry("tries mirror and falls back on original repository",
-		SemverTagCheckExample{
+		SemverOrRegexTagCheckExample{
 			Tags: map[string]string{
 				"1.0.0": "random-1",
 				"1.2.1": "random-3",
@@ -1046,7 +1097,7 @@ var _ = DescribeTable("tracking semver tags",
 		},
 	),
 	Entry("uses mirror and ignores failing repository",
-		SemverTagCheckExample{
+		SemverOrRegexTagCheckExample{
 			Tags: map[string]string{
 				"1.0.0": "random-1",
 				"1.2.1": "random-3",
@@ -1061,11 +1112,13 @@ var _ = DescribeTable("tracking semver tags",
 	),
 )
 
-type SemverTagCheckExample struct {
+type SemverOrRegexTagCheckExample struct {
 	Tags map[string]string
 
 	PreReleases bool
 	Variant     string
+
+	Regex string
 
 	SemverConstraint string
 
@@ -1080,7 +1133,7 @@ type SemverTagCheckExample struct {
 	NoHEAD bool
 }
 
-func (example SemverTagCheckExample) Run() {
+func (example SemverOrRegexTagCheckExample) Run() {
 	registryServer := ghttp.NewServer()
 	defer registryServer.Close()
 
@@ -1105,6 +1158,7 @@ func (example SemverTagCheckExample) Run() {
 			PreReleases:      example.PreReleases,
 			Variant:          example.Variant,
 			SemverConstraint: example.SemverConstraint,
+			Regex:            example.Regex,
 		},
 	}
 
@@ -1216,7 +1270,7 @@ func (example SemverTagCheckExample) Run() {
 	Expect(res).To(Equal(expectedVersions))
 }
 
-func (example SemverTagCheckExample) check(req resource.CheckRequest) resource.CheckResponse {
+func (example SemverOrRegexTagCheckExample) check(req resource.CheckRequest) resource.CheckResponse {
 	cmd := exec.Command(bins.Check)
 	cmd.Env = []string{"TEST=true"}
 
