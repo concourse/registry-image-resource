@@ -1,15 +1,18 @@
 # Registry Image Resource
 
 Supports checking, fetching, and pushing of images to Docker registries.
-This resource can be used in two ways: [with `tag`
-specified](#check-with-tag-discover-new-digests-for-the-tag) and [without
-`tag`](#check-without-tag-discover-semver-tags).
+This resource can be used in three ways: [with `tag`
+specified](#check-step-check-script-with-tag-discover-new-digests-for-the-tag), [with `tag_regex` specified](#check-step-check-script-with-tag_regex-discover-tags-matching-regex), or [with neither
+`tag` nor `tag_regex` specified](#check-step-check-script-without-tag-or-tag_regex-discover-semver-tags).
 
 With `tag` specified, `check` will detect changes to the digest the tag points
 to, and `out` will always push to the specified tag. This is to be used in
 simpler cases where no real versioning exists.
 
-With `tag` omitted, `check` will instead detect tags based on semver versions
+With `tag_regex` specified, `check` will instead detect tags based on the regex
+provided
+
+With `tag` and `tag_regex` both omitted, `check` will instead detect tags based on semver versions
 (e.g. `1.2.3`) and return them in semver order. With `variant` included,
 `check` will only detect semver tags that include the variant suffix (e.g.
 `1.2.3-stretch`).
@@ -77,6 +80,16 @@ differences:
     <td>
     Instead of monitoring semver tags, monitor a single tag for changes (based
     on digest).
+    </td>
+  </tr>
+  <tr>
+    <td><code>tag_regex</code> <em>(Optional)</em></td>
+    <td>
+    Instead of monitoring semver tags, monitor for tags based on a regex provided.
+    <br>The syntax of the regular expressions accepted is the same
+    general syntax used by Perl, Python, and other languages. More precisely,
+    it is the syntax accepted by RE2 and described at https://golang.org/s/re2syntax
+    <br>Note if used, this will override all Semver constraints and features
     </td>
   </tr>
   <tr>
@@ -336,7 +349,12 @@ registry_key: |
 Reports the current digest that the registry has for the tag configured in
 `source`.
 
-### `check` Step (`check` script) without `tag`: discover semver tags
+### `check` Step (`check` script) with `tag_regex`: discover tags matching regex
+
+Reports the current digest that the registry has for tags matching the regex
+configured in `source`. They will be returned in the same order that the source repository lists them.
+
+### `check` Step (`check` script) without `tag` or `tag_regex`: discover semver tags
 
 Detects tags which contain semver version numbers. Version numbers do not
 need to contain all 3 segments (major/minor/patch).
