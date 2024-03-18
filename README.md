@@ -10,7 +10,9 @@ to, and `out` will always push to the specified tag. This is to be used in
 simpler cases where no real versioning exists.
 
 With `tag_regex` specified, `check` will instead detect tags based on the regex
-provided
+provided. If `created_at_sort` is set to `true`, the tags will be sorted in descending order by the creation time. 
+This is useful when you want to get the latest tag based on the regex (see Docker registry issue 
+[here](https://github.com/docker/hub-feedback/issues/185)).
 
 With `tag` and `tag_regex` both omitted, `check` will instead detect tags based on semver versions
 (e.g. `1.2.3`) and return them in semver order. With `variant` included,
@@ -89,8 +91,16 @@ differences:
     <br>The syntax of the regular expressions accepted is the same
     general syntax used by Perl, Python, and other languages. More precisely,
     it is the syntax accepted by RE2 and described at https://golang.org/s/re2syntax
-    <br>Note if used, this will override all Semver constraints and features
+    <br>Note if used, this will override all Semver constraints and features.
+    By default, order of tags is not guaranteed. If you want to sort the tags in descending order, set `created_at_sort` to `true`.
     </td>
+  </tr>
+  <tr>
+  <td><code>created_at_sort</code> <em>(Optional)<br>Default: false</em></td>
+  <td>
+    If set to `true`, the tags will be sorted in descending order using the creation time from the image history. 
+    This is useful when you want to get the latest tag based on the tag_regex.
+  </td>
   </tr>
   <tr>
     <td><code>variant</code> <em>(Optional)</em></td>
@@ -352,7 +362,8 @@ Reports the current digest that the registry has for the tag configured in
 ### `check` Step (`check` script) with `tag_regex`: discover tags matching regex
 
 Reports the current digest that the registry has for tags matching the regex
-configured in `source`. They will be returned in the same order that the source repository lists them.
+configured in `source`. They will be returned in the same order that the source repository lists them unless `created_at_sort` 
+is set to `true`.
 
 ### `check` Step (`check` script) without `tag` or `tag_regex`: discover semver tags
 

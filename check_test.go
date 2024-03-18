@@ -2,12 +2,15 @@ package resource_test
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
 	"net/http"
 	"os/exec"
 	"strconv"
+	"time"
 
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
@@ -806,8 +809,43 @@ var _ = DescribeTable("tracking semver tags",
 					ImageName: "random-4",
 				},
 			},
-			Regex:    "gr(a|e)y",
-			Versions: []string{"gray", "grey"},
+			Regex:         "gr(a|e)y",
+			CreatedAtSort: false,
+			Versions:      []string{"gray", "grey"},
+		},
+	),
+	Entry("simple tag regex where sorted is true",
+		SemverOrRegexTagCheckExample{
+			Tags: []testTag{
+				{
+					Tag:       "1.0.0",
+					ImageName: "random-1",
+				},
+				{
+					Tag:       "non-semver-tag",
+					ImageName: "random-2",
+				},
+				{
+					Tag:       "gem-1338-git-4bd8a5e1a244",
+					ImageName: "random-3",
+				},
+				{
+					Tag:       "gem-181-git-6bd8a5e1a2b3",
+					ImageName: "random-4",
+				},
+				{
+					Tag:       "gem-1337-git-4bd8a5e1a244",
+					ImageName: "random-5",
+				},
+			},
+			TagsToTime: map[string]time.Time{
+				"gem-1338-git-4bd8a5e1a244": time.Date(2024, 1, 4, 5, 0, 0, 0, time.UTC),
+				"gem-181-git-6bd8a5e1a2b3":  time.Date(2024, 1, 4, 0, 0, 0, 0, time.UTC),
+				"gem-1337-git-4bd8a5e1a244": time.Date(2024, 1, 4, 4, 0, 0, 0, time.UTC),
+			},
+			Regex:         "gem-(\\d+)-git-([a-f0-9]{12})",
+			CreatedAtSort: true,
+			Versions:      []string{"gem-182-git-6bd8a5e1a2b3", "gem-1337-git-4bd8a5e1a244", "gem-1338-git-4bd8a5e1a244"},
 		},
 	),
 	Entry("regex override semver constraint",
@@ -888,8 +926,9 @@ var _ = DescribeTable("tracking semver tags",
 					ImageName: "random-5",
 				},
 			},
-			Regex:    "^[0-9a-f]{7}-dev$",
-			Versions: []string{"3bd8a5e-dev", "67e3c33-dev"},
+			Regex:         "^[0-9a-f]{7}-dev$",
+			CreatedAtSort: false,
+			Versions:      []string{"3bd8a5e-dev", "67e3c33-dev"},
 		},
 	),
 	Entry("semver tag ordering",
@@ -1488,12 +1527,14 @@ type testTag struct {
 }
 
 type SemverOrRegexTagCheckExample struct {
-	Tags []testTag
+	Tags       []testTag
+	TagsToTime map[string]time.Time
 
 	PreReleases bool
 	Variant     string
 
-	Regex string
+	Regex         string
+	CreatedAtSort bool
 
 	SemverConstraint string
 
@@ -1534,6 +1575,7 @@ func (example SemverOrRegexTagCheckExample) Run() {
 			Variant:          example.Variant,
 			SemverConstraint: example.SemverConstraint,
 			Regex:            example.Regex,
+			CreatedAtSort:    example.CreatedAtSort,
 		},
 	}
 
@@ -1608,6 +1650,45 @@ func (example SemverOrRegexTagCheckExample) Run() {
 					"Content-Type":          {string(mediaType)},
 					"Content-Length":        {strconv.Itoa(len(manifest))},
 					"Docker-Content-Digest": {digest.String()},
+				}),
+			)
+		}
+
+		// if SortByCreatedAt is set, we need to return the created date for each tag when the manifest is requested
+		if example.CreatedAtSort {
+			manifestRef, err := image.Manifest()
+			Expect(err).ToNot(HaveOccurred())
+			// Mutate ConfigFile such that created at is set to the tag name
+			expectedTime := example.TagsToTime[tag.ImageName]
+			config, err := image.ConfigFile()
+			Expect(err).ToNot(HaveOccurred())
+			config.Created = v1.Time{Time: expectedTime}
+			configBytes, err := json.Marshal(config)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Take the SHA256 of config and set to mutatedManifest object
+			configHash := sha256.Sum256(configBytes)
+			Expect(err).ToNot(HaveOccurred())
+			manifestRef.Config.Digest = v1.Hash{Algorithm: "sha256", Hex: hex.EncodeToString(configHash[:])}
+			manifestDigest := manifestRef.Config.Digest
+			mutatedManifest, err := json.Marshal(manifestRef)
+			Expect(err).ToNot(HaveOccurred())
+
+			registryServer.RouteToHandler(
+				"GET",
+				"/v2/"+repo.RepositoryStr()+"/manifests/"+tag.Tag,
+				ghttp.RespondWith(http.StatusOK, mutatedManifest, http.Header{
+					"Content-Type":          {string(mediaType)},
+					"Content-Length":        {strconv.Itoa(len(mutatedManifest))},
+					"Docker-Content-Digest": {digest.String()},
+				}),
+			)
+
+			registryServer.RouteToHandler(
+				"GET",
+				"/v2/"+repo.RepositoryStr()+"/blobs/"+manifestDigest.String(),
+				ghttp.RespondWith(http.StatusOK, configBytes, http.Header{
+					"Content-Length": {strconv.Itoa(len(configBytes))},
 				}),
 			)
 		}
