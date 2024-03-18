@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/Masterminds/semver/v3"
 	resource "github.com/concourse/registry-image-resource"
@@ -280,6 +281,7 @@ func checkRepositoryRegex(repo name.Repository, source resource.Source, from *re
 	}
 
 	tagDigests := map[string]string{}
+	tagToTimeDigests := map[string]time.Time{}
 	matchedTags := make([]string, 0)
 
 	for _, identifier := range tags {
@@ -300,9 +302,31 @@ func checkRepositoryRegex(repo name.Repository, source resource.Source, from *re
 			continue
 		}
 
+		if source.CreatedAtSort {
+			// Call Get to get the Image and History of the tag
+			img, err := remote.Image(tagRef, opts...)
+			if err != nil {
+				return resource.CheckResponse{}, fmt.Errorf("get remote image: %w", err)
+			}
+
+			// This calls /blobs/sha256:<digest> to get the config file
+			configFile, err := img.ConfigFile()
+			if err != nil {
+				return resource.CheckResponse{}, fmt.Errorf("get remote image config file: %w", err)
+			}
+			tagToTimeDigests[identifier] = configFile.Created.Time
+		}
+
 		matchedTags = append(matchedTags, identifier)
 
 		tagDigests[identifier] = digest.String()
+	}
+
+	// If CreatedAtSort is true, sort the matchedTags in descending order by looking up Time in tagToTimeDigests
+	if source.CreatedAtSort {
+		sort.Slice(matchedTags, func(i, j int) bool {
+			return tagToTimeDigests[matchedTags[i]].After(tagToTimeDigests[matchedTags[j]])
+		})
 	}
 
 	response := resource.CheckResponse{}
