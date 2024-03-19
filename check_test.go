@@ -795,7 +795,7 @@ var _ = DescribeTable("tracking semver tags",
 			},
 			TagsToTime: map[string]time.Time{
 				"gem-1338-git-4bd8a5e1a244": time.Date(2024, 1, 4, 5, 0, 0,0, time.UTC),
-				"gem-181-git-6bd8a5e1a2b3":  time.Date(2024, 1, 4, 0, 0, 0,0, time.UTC),
+				"gem-182-git-6bd8a5e1a2b3":  time.Date(2024, 1, 4, 0, 0, 0,0, time.UTC),
 				"gem-1337-git-4bd8a5e1a244": time.Date(2024, 1, 4, 4, 0, 0,0, time.UTC),
 			},
 			Regex:         "gem-(\\d+)-git-([a-f0-9]{12})",
