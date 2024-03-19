@@ -830,7 +830,7 @@ var _ = DescribeTable("tracking semver tags",
 					ImageName: "random-3",
 				},
 				{
-					Tag:       "gem-181-git-6bd8a5e1a2b3",
+					Tag:       "gem-182-git-6bd8a5e1a2b3",
 					ImageName: "random-4",
 				},
 				{
@@ -840,7 +840,7 @@ var _ = DescribeTable("tracking semver tags",
 			},
 			TagsToTime: map[string]time.Time{
 				"gem-1338-git-4bd8a5e1a244": time.Date(2024, 1, 4, 5, 0, 0, 0, time.UTC),
-				"gem-181-git-6bd8a5e1a2b3":  time.Date(2024, 1, 4, 0, 0, 0, 0, time.UTC),
+				"gem-182-git-6bd8a5e1a2b3":  time.Date(2024, 1, 4, 0, 0, 0, 0, time.UTC),
 				"gem-1337-git-4bd8a5e1a244": time.Date(2024, 1, 4, 4, 0, 0, 0, time.UTC),
 			},
 			Regex:         "gem-(\\d+)-git-([a-f0-9]{12})",
@@ -1659,7 +1659,7 @@ func (example SemverOrRegexTagCheckExample) Run() {
 			manifestRef, err := image.Manifest()
 			Expect(err).ToNot(HaveOccurred())
 			// Mutate ConfigFile such that created at is set to the tag name
-			expectedTime := example.TagsToTime[tag.ImageName]
+			expectedTime := example.TagsToTime[tag.Tag]
 			config, err := image.ConfigFile()
 			Expect(err).ToNot(HaveOccurred())
 			config.Created = v1.Time{Time: expectedTime}
