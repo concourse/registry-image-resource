@@ -95,7 +95,8 @@ type Source struct {
 
 	Tag Tag `json:"tag,omitempty"`
 
-	Regex string `json:"tag_regex,omitempty"`
+	Regex         string `json:"tag_regex,omitempty"`
+	CreatedAtSort bool   `json:"created_at_sort,omitempty"`
 
 	BasicCredentials
 	AwsCredentials
