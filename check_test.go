@@ -734,16 +734,22 @@ var _ = DescribeTable("tracking semver tags",
 	(SemverOrRegexTagCheckExample).Run,
 	Entry("no semver tags",
 		SemverOrRegexTagCheckExample{
-			Tags: map[string]string{
-				"non-semver-tag": "random-1",
+			Tags: []testTag{
+				{
+					Tag:       "non-semver-tag",
+					ImageName: "random-1",
+				},
 			},
 			Versions: []string{},
 		},
 	),
 	Entry("no matching regex tags",
 		SemverOrRegexTagCheckExample{
-			Tags: map[string]string{
-				"non-matching-regex-tag": "random-1",
+			Tags: []testTag{
+				{
+					Tag:       "non-matching-regex-tag",
+					ImageName: "random-1",
+				},
 			},
 			Regex:    "foo.*",
 			Versions: []string{},
@@ -751,18 +757,30 @@ var _ = DescribeTable("tracking semver tags",
 	),
 	Entry("latest tag",
 		SemverOrRegexTagCheckExample{
-			Tags: map[string]string{
-				"non-semver-tag": "random-1",
-				"latest":         "random-2",
+			Tags: []testTag{
+				{
+					Tag:       "non-semver-tag",
+					ImageName: "random-1",
+				},
+				{
+					Tag:       "latest",
+					ImageName: "random-2",
+				},
 			},
 			Versions: []string{"latest"},
 		},
 	),
 	Entry("HEAD with GET fallback",
 		SemverOrRegexTagCheckExample{
-			Tags: map[string]string{
-				"non-semver-tag": "random-1",
-				"latest":         "random-2",
+			Tags: []testTag{
+				{
+					Tag:       "non-semver-tag",
+					ImageName: "random-1",
+				},
+				{
+					Tag:       "latest",
+					ImageName: "random-2",
+				},
 			},
 			NoHEAD:   true,
 			Versions: []string{"latest"},
@@ -770,11 +788,23 @@ var _ = DescribeTable("tracking semver tags",
 	),
 	Entry("simple tag regex",
 		SemverOrRegexTagCheckExample{
-			Tags: map[string]string{
-				"1.0.0":          "random-1",
-				"non-semver-tag": "random-2",
-				"gray":           "random-3",
-				"grey":           "random-4",
+			Tags: []testTag{
+				{
+					Tag:       "1.0.0",
+					ImageName: "random-1",
+				},
+				{
+					Tag:       "non-semver-tag",
+					ImageName: "random-2",
+				},
+				{
+					Tag:       "gray",
+					ImageName: "random-3",
+				},
+				{
+					Tag:       "grey",
+					ImageName: "random-4",
+				},
 			},
 			Regex:    "gr(a|e)y",
 			Versions: []string{"gray", "grey"},
@@ -782,15 +812,37 @@ var _ = DescribeTable("tracking semver tags",
 	),
 	Entry("regex override semver constraint",
 		SemverOrRegexTagCheckExample{
-			Tags: map[string]string{
-				"1.0.0": "random-1",
-				"1.2.1": "random-3",
-				"1.2.2": "random-4",
-				"2.0.0": "random-5",
+			Tags: []testTag{
+				{
+					Tag:       "1.0.0",
+					ImageName: "random-1",
+				},
+				{
+					Tag:       "1.2.1",
+					ImageName: "random-3",
+				},
+				{
+					Tag:       "1.2.2",
+					ImageName: "random-4",
+				},
+				{
+					Tag:       "2.0.0",
+					ImageName: "random-5",
+				},
+
 				// Does not include bare tag
-				"latest": "random-6",
-				"gray":   "random-7",
-				"grey":   "random-8",
+				{
+					Tag:       "latest",
+					ImageName: "random-6",
+				},
+				{
+					Tag:       "gray",
+					ImageName: "random-7",
+				},
+				{
+					Tag:       "grey",
+					ImageName: "random-8",
+				},
 			},
 			Regex:            "gr(a|e)y",
 			SemverConstraint: "1.2.x",
@@ -799,21 +851,42 @@ var _ = DescribeTable("tracking semver tags",
 	),
 	Entry("semver and non-semver tags",
 		SemverOrRegexTagCheckExample{
-			Tags: map[string]string{
-				"1.0.0":          "random-1",
-				"non-semver-tag": "random-2",
+			Tags: []testTag{
+				{
+					Tag:       "1.0.0",
+					ImageName: "random-1",
+				},
+				{
+					Tag:       "non-semver-tag",
+					ImageName: "random-2",
+				},
 			},
 			Versions: []string{"1.0.0"},
 		},
 	),
 	Entry("regex maintain ordering",
 		SemverOrRegexTagCheckExample{
-			Tags: map[string]string{
-				"1.0.0":                  "random-1",
-				"3bd8a5e-dev":            "random-2",
-				"3bd8a5e-stage":          "random-3",
-				"non-matching-regex-tag": "random-4",
-				"67e3c33-dev":            "random-5",
+			Tags: []testTag{
+				{
+					Tag:       "1.0.0",
+					ImageName: "random-1",
+				},
+				{
+					Tag:       "3bd8a5e-dev",
+					ImageName: "random-2",
+				},
+				{
+					Tag:       "3bd8a5e-stage",
+					ImageName: "random-3",
+				},
+				{
+					Tag:       "non-matching-regex-tag",
+					ImageName: "random-4",
+				},
+				{
+					Tag:       "67e3c33-dev",
+					ImageName: "random-5",
+				},
 			},
 			Regex:    "^[0-9a-f]{7}-dev$",
 			Versions: []string{"3bd8a5e-dev", "67e3c33-dev"},
@@ -821,20 +894,38 @@ var _ = DescribeTable("tracking semver tags",
 	),
 	Entry("semver tag ordering",
 		SemverOrRegexTagCheckExample{
-			Tags: map[string]string{
-				"1.0.0": "random-1",
-				"1.2.1": "random-3",
-				"2.0.0": "random-5",
+			Tags: []testTag{
+				{
+					Tag:       "1.0.0",
+					ImageName: "random-1",
+				},
+				{
+					Tag:       "1.2.1",
+					ImageName: "random-3",
+				},
+				{
+					Tag:       "2.0.0",
+					ImageName: "random-5",
+				},
 			},
 			Versions: []string{"1.0.0", "1.2.1", "2.0.0"},
 		},
 	),
 	Entry("semver tag ordering with cursor",
 		SemverOrRegexTagCheckExample{
-			Tags: map[string]string{
-				"1.0.0": "random-1",
-				"1.2.1": "random-3",
-				"2.0.0": "random-5",
+			Tags: []testTag{
+				{
+					Tag:       "1.0.0",
+					ImageName: "random-1",
+				},
+				{
+					Tag:       "1.2.1",
+					ImageName: "random-3",
+				},
+				{
+					Tag:       "2.0.0",
+					ImageName: "random-5",
+				},
 			},
 			From: &resource.Version{
 				Tag:    "1.2.1",
@@ -845,10 +936,19 @@ var _ = DescribeTable("tracking semver tags",
 	),
 	Entry("semver tag ordering with cursor with different digest",
 		SemverOrRegexTagCheckExample{
-			Tags: map[string]string{
-				"1.0.0": "random-1",
-				"1.2.1": "random-3",
-				"2.0.0": "random-5",
+			Tags: []testTag{
+				{
+					Tag:       "1.0.0",
+					ImageName: "random-1",
+				},
+				{
+					Tag:       "1.2.1",
+					ImageName: "random-3",
+				},
+				{
+					Tag:       "2.0.0",
+					ImageName: "random-5",
+				},
 			},
 			From: &resource.Version{
 				Tag:    "1.2.1",
@@ -859,13 +959,28 @@ var _ = DescribeTable("tracking semver tags",
 	),
 	Entry("semver constraint",
 		SemverOrRegexTagCheckExample{
-			Tags: map[string]string{
-				"1.0.0": "random-1",
-				"1.2.1": "random-3",
-				"1.2.2": "random-4",
-				"2.0.0": "random-5",
+			Tags: []testTag{
+				{
+					Tag:       "1.0.0",
+					ImageName: "random-1",
+				},
+				{
+					Tag:       "1.2.1",
+					ImageName: "random-3",
+				},
+				{
+					Tag:       "1.2.2",
+					ImageName: "random-4",
+				},
+				{
+					Tag:       "2.0.0",
+					ImageName: "random-5",
+				},
 				// Does not include bare tag
-				"latest": "random-6",
+				{
+					Tag:       "latest",
+					ImageName: "random-6",
+				},
 			},
 			SemverConstraint: "1.2.x",
 			Versions:         []string{"1.2.1", "1.2.2"},
@@ -873,26 +988,62 @@ var _ = DescribeTable("tracking semver tags",
 	),
 	Entry("prereleases ignored by default",
 		SemverOrRegexTagCheckExample{
-			Tags: map[string]string{
-				"1.0.0-alpha.1": "random-0",
-				"1.0.0":         "random-1",
-				"1.2.1-beta.1":  "random-2",
-				"1.2.1":         "random-3",
-				"2.0.0-rc.1":    "random-4",
-				"2.0.0":         "random-5",
+			Tags: []testTag{
+				{
+					Tag:       "1.0.0-alpha.1",
+					ImageName: "random-0",
+				},
+				{
+					Tag:       "1.0.0",
+					ImageName: "random-1",
+				},
+				{
+					Tag:       "1.2.1-beta.1",
+					ImageName: "random-2",
+				},
+				{
+					Tag:       "1.2.1",
+					ImageName: "random-3",
+				},
+				{
+					Tag:       "2.0.0-rc.1",
+					ImageName: "random-4",
+				},
+				{
+					Tag:       "2.0.0",
+					ImageName: "random-5",
+				},
 			},
 			Versions: []string{"1.0.0", "1.2.1", "2.0.0"},
 		},
 	),
 	Entry("prereleases opted in",
 		SemverOrRegexTagCheckExample{
-			Tags: map[string]string{
-				"1.0.0-alpha.1": "random-0",
-				"1.0.0":         "random-1",
-				"1.2.1-beta.1":  "random-2",
-				"1.2.1":         "random-3",
-				"2.0.0-rc.1":    "random-4",
-				"2.0.0":         "random-5",
+			Tags: []testTag{
+				{
+					Tag:       "1.0.0-alpha.1",
+					ImageName: "random-0",
+				},
+				{
+					Tag:       "1.0.0",
+					ImageName: "random-1",
+				},
+				{
+					Tag:       "1.2.1-beta.1",
+					ImageName: "random-2",
+				},
+				{
+					Tag:       "1.2.1",
+					ImageName: "random-3",
+				},
+				{
+					Tag:       "2.0.0-rc.1",
+					ImageName: "random-4",
+				},
+				{
+					Tag:       "2.0.0",
+					ImageName: "random-5",
+				},
 			},
 			PreReleases: true,
 			Versions: []string{
@@ -907,11 +1058,23 @@ var _ = DescribeTable("tracking semver tags",
 	),
 	Entry("prereleases do not include 'variants'",
 		SemverOrRegexTagCheckExample{
-			Tags: map[string]string{
-				"1.0.0-alpha.1": "random-0",
-				"1.0.0-beta.1":  "random-1",
-				"1.0.0-rc.1":    "random-2",
-				"1.0.0-foo.1":   "random-3",
+			Tags: []testTag{
+				{
+					Tag:       "1.0.0-alpha.1",
+					ImageName: "random-0",
+				},
+				{
+					Tag:       "1.0.0-beta.1",
+					ImageName: "random-1",
+				},
+				{
+					Tag:       "1.0.0-rc.1",
+					ImageName: "random-2",
+				},
+				{
+					Tag:       "1.0.0-foo.1",
+					ImageName: "random-3",
+				},
 			},
 			PreReleases: true,
 			Versions: []string{
@@ -923,15 +1086,39 @@ var _ = DescribeTable("tracking semver tags",
 	),
 	Entry("prereleases do not require dot",
 		SemverOrRegexTagCheckExample{
-			Tags: map[string]string{
-				"1.0.0-alpha1": "random-0",
-				"1.0.0-alpha2": "random-1",
-				"1.0.0-beta1":  "random-2",
-				"1.0.0-beta2":  "random-3",
-				"1.0.0-rc1":    "random-4",
-				"1.0.0-rc2":    "random-5",
-				"1.0.0-foo1":   "random-6",
-				"1.0.0-foo2":   "random-7",
+			Tags: []testTag{
+				{
+					Tag:       "1.0.0-alpha1",
+					ImageName: "random-0",
+				},
+				{
+					Tag:       "1.0.0-alpha2",
+					ImageName: "random-1",
+				},
+				{
+					Tag:       "1.0.0-beta1",
+					ImageName: "random-2",
+				},
+				{
+					Tag:       "1.0.0-beta2",
+					ImageName: "random-3",
+				},
+				{
+					Tag:       "1.0.0-rc1",
+					ImageName: "random-4",
+				},
+				{
+					Tag:       "1.0.0-rc2",
+					ImageName: "random-5",
+				},
+				{
+					Tag:       "1.0.0-foo1",
+					ImageName: "random-6",
+				},
+				{
+					Tag:       "1.0.0-foo2",
+					ImageName: "random-7",
+				},
 			},
 			PreReleases: true,
 			Versions: []string{
@@ -946,11 +1133,23 @@ var _ = DescribeTable("tracking semver tags",
 	),
 	Entry("prereleases do not require number",
 		SemverOrRegexTagCheckExample{
-			Tags: map[string]string{
-				"1.0.0-alpha": "random-0",
-				"1.0.0-beta":  "random-1",
-				"1.0.0-rc":    "random-2",
-				"1.0.0-foo":   "random-3",
+			Tags: []testTag{
+				{
+					Tag:       "1.0.0-alpha",
+					ImageName: "random-0",
+				},
+				{
+					Tag:       "1.0.0-beta",
+					ImageName: "random-1",
+				},
+				{
+					Tag:       "1.0.0-rc",
+					ImageName: "random-2",
+				},
+				{
+					Tag:       "1.0.0-foo",
+					ImageName: "random-3",
+				},
 			},
 			PreReleases: true,
 			Versions: []string{
@@ -962,11 +1161,23 @@ var _ = DescribeTable("tracking semver tags",
 	),
 	Entry("final versions take priority over rcs",
 		SemverOrRegexTagCheckExample{
-			Tags: map[string]string{
-				"1.0.0-rc.1": "random-2",
-				"1.0.0-rc1":  "random-2",
-				"1.0.0-rc":   "random-2",
-				"1.0.0":      "random-2",
+			Tags: []testTag{
+				{
+					Tag:       "1.0.0-rc.1",
+					ImageName: "random-2",
+				},
+				{
+					Tag:       "1.0.0-rc1",
+					ImageName: "random-2",
+				},
+				{
+					Tag:       "1.0.0-rc",
+					ImageName: "random-2",
+				},
+				{
+					Tag:       "1.0.0",
+					ImageName: "random-2",
+				},
 			},
 			PreReleases: true,
 			Versions:    []string{"1.0.0"},
@@ -974,66 +1185,159 @@ var _ = DescribeTable("tracking semver tags",
 	),
 	Entry("mixed specificity semver tags",
 		SemverOrRegexTagCheckExample{
-			Tags: map[string]string{
-				"1":      "random-1",
-				"2":      "random-2",
-				"2.1":    "random-2",
-				"latest": "random-3",
-				"3":      "random-3",
-				"3.2":    "random-3",
-				"3.2.1":  "random-3",
-				"3.1":    "random-4",
-				"3.1.0":  "random-4",
-				"3.0":    "random-5",
-				"3.0.0":  "random-5",
+			Tags: []testTag{
+				{
+					Tag:       "1",
+					ImageName: "random-1",
+				},
+				{
+					Tag:       "2",
+					ImageName: "random-2",
+				},
+				{
+					Tag:       "2.1",
+					ImageName: "random-2",
+				},
+				{
+					Tag:       "latest",
+					ImageName: "random-3",
+				},
+				{
+					Tag:       "3",
+					ImageName: "random-3",
+				},
+				{
+					Tag:       "3.2",
+					ImageName: "random-3",
+				},
+				{
+					Tag:       "3.2.1",
+					ImageName: "random-3",
+				},
+				{
+					Tag:       "3.1",
+					ImageName: "random-4",
+				},
+				{
+					Tag:       "3.1.0",
+					ImageName: "random-4",
+				},
+				{
+					Tag:       "3.0",
+					ImageName: "random-5",
+				},
+				{
+					Tag:       "3.0.0",
+					ImageName: "random-5",
+				},
 			},
 			Versions: []string{"1", "2.1", "3.0.0", "3.1.0", "3.2.1"},
 		},
 	),
 	Entry("semver tags with latest tag having unique digest",
 		SemverOrRegexTagCheckExample{
-			Tags: map[string]string{
-				"1.0.0":          "random-1",
-				"non-semver-tag": "random-2",
-				"latest":         "random-3",
+			Tags: []testTag{
+				{
+					Tag:       "1.0.0",
+					ImageName: "random-1",
+				},
+				{
+					Tag:       "non-semver-tag",
+					ImageName: "random-2",
+				},
+				{
+					Tag:       "latest",
+					ImageName: "random-3",
+				},
 			},
 			Versions: []string{"1.0.0", "latest"},
 		},
 	),
 	Entry("latest tag pointing to latest version",
 		SemverOrRegexTagCheckExample{
-			Tags: map[string]string{
-				"1":      "random-1",
-				"2":      "random-2",
-				"3":      "random-3",
-				"latest": "random-3",
+			Tags: []testTag{
+				{
+					Tag:       "1",
+					ImageName: "random-1",
+				},
+				{
+					Tag:       "2",
+					ImageName: "random-2",
+				},
+				{
+					Tag:       "3",
+					ImageName: "random-3",
+				},
+				{
+					Tag:       "latest",
+					ImageName: "random-3",
+				},
 			},
 			Versions: []string{"1", "2", "3"},
 		},
 	),
 	Entry("latest tag pointing to older version",
 		SemverOrRegexTagCheckExample{
-			Tags: map[string]string{
-				"1":      "random-1",
-				"2":      "random-2",
-				"latest": "random-2",
-				"3":      "random-3",
+			Tags: []testTag{
+				{
+					Tag:       "1",
+					ImageName: "random-1",
+				},
+				{
+					Tag:       "2",
+					ImageName: "random-2",
+				},
+				{
+					Tag:       "latest",
+					ImageName: "random-2",
+				},
+				{
+					Tag:       "3",
+					ImageName: "random-3",
+				},
 			},
 			Versions: []string{"1", "2", "3"},
 		},
 	),
 	Entry("variants",
 		SemverOrRegexTagCheckExample{
-			Tags: map[string]string{
-				"latest":    "random-1",
-				"1.0.0":     "random-1",
-				"0.9.0":     "random-2",
-				"foo":       "random-3",
-				"1.0.0-foo": "random-3",
-				"0.9.0-foo": "random-4",
-				"bar":       "random-5",
-				"1.0.0-bar": "random-5",
-				"0.9.0-bar": "random-6",
+			Tags: []testTag{
+				{
+					Tag:       "latest",
+					ImageName: "random-1",
+				},
+				{
+					Tag:       "1.0.0",
+					ImageName: "random-1",
+				},
+				{
+					Tag:       "0.9.0",
+					ImageName: "random-2",
+				},
+				{
+					Tag:       "foo",
+					ImageName: "random-3",
+				},
+				{
+					Tag:       "1.0.0-foo",
+					ImageName: "random-3",
+				},
+				{
+					Tag:       "0.9.0-foo",
+					ImageName: "random-4",
+				},
+				{
+					Tag:       "bar",
+					ImageName: "random-5",
+				},
+				{
+					Tag:       "1.0.0-bar",
+					ImageName: "random-5",
+				},
+				{
+					Tag:       "0.9.0-bar",
+					ImageName: "random-6",
+				},
 			},
 
 			Variant: "foo",
@@ -1043,15 +1347,39 @@ var _ = DescribeTable("tracking semver tags",
 	),
 	Entry("variant with bare variant tag pointing to unique digest",
 		SemverOrRegexTagCheckExample{
-			Tags: map[string]string{
-				"latest":    "random-1",
-				"1.0.0":     "random-1",
-				"0.9.0":     "random-2",
-				"foo":       "random-3",
-				"0.8.0-foo": "random-4",
-				"bar":       "random-5",
-				"1.0.0-bar": "random-5",
-				"0.9.0-bar": "random-6",
+			Tags: []testTag{
+				{
+					Tag:       "latest",
+					ImageName: "random-1",
+				},
+				{
+					Tag:       "1.0.0",
+					ImageName: "random-1",
+				},
+				{
+					Tag:       "0.9.0",
+					ImageName: "random-2",
+				},
+				{
+					Tag:       "foo",
+					ImageName: "random-3",
+				},
+				{
+					Tag:       "0.8.0-foo",
+					ImageName: "random-4",
+				},
+				{
+					Tag:       "bar",
+					ImageName: "random-5",
+				},
+				{
+					Tag:       "1.0.0-bar",
+					ImageName: "random-5",
+				},
+				{
+					Tag:       "0.9.0-bar",
+					ImageName: "random-6",
+				},
 			},
 
 			Variant: "foo",
@@ -1061,15 +1389,39 @@ var _ = DescribeTable("tracking semver tags",
 	),
 	Entry("distinguishing additional variants from prereleases",
 		SemverOrRegexTagCheckExample{
-			Tags: map[string]string{
-				"1.0.0-foo":             "random-1",
-				"1.0.0-rc.1-foo":        "random-2",
-				"1.0.0-alpha.1-foo":     "random-3",
-				"1.0.0-beta.1-foo":      "random-4",
-				"1.0.0-bar-foo":         "random-5",
-				"1.0.0-rc.1-bar-foo":    "random-6",
-				"1.0.0-alpha.1-bar-foo": "random-7",
-				"1.0.0-beta.1-bar-foo":  "random-8",
+			Tags: []testTag{
+				{
+					Tag:       "1.0.0-foo",
+					ImageName: "random-1",
+				},
+				{
+					Tag:       "1.0.0-rc.1-foo",
+					ImageName: "random-2",
+				},
+				{
+					Tag:       "1.0.0-alpha.1-foo",
+					ImageName: "random-3",
+				},
+				{
+					Tag:       "1.0.0-beta.1-foo",
+					ImageName: "random-4",
+				},
+				{
+					Tag:       "1.0.0-bar-foo",
+					ImageName: "random-5",
+				},
+				{
+					Tag:       "1.0.0-rc.1-bar-foo",
+					ImageName: "random-6",
+				},
+				{
+					Tag:       "1.0.0-alpha.1-bar-foo",
+					ImageName: "random-7",
+				},
+				{
+					Tag:       "1.0.0-beta.1-bar-foo",
+					ImageName: "random-8",
+				},
 			},
 
 			Variant:     "foo",
@@ -1085,10 +1437,19 @@ var _ = DescribeTable("tracking semver tags",
 	),
 	Entry("tries mirror and falls back on original repository",
 		SemverOrRegexTagCheckExample{
-			Tags: map[string]string{
-				"1.0.0": "random-1",
-				"1.2.1": "random-3",
-				"2.0.0": "random-5",
+			Tags: []testTag{
+				{
+					Tag:       "1.0.0",
+					ImageName: "random-1",
+				},
+				{
+					Tag:       "1.2.1",
+					ImageName: "random-3",
+				},
+				{
+					Tag:       "2.0.0",
+					ImageName: "random-5",
+				},
 			},
 
 			RegistryMirror: "fakeserver.foo:5000",
@@ -1098,10 +1459,19 @@ var _ = DescribeTable("tracking semver tags",
 	),
 	Entry("uses mirror and ignores failing repository",
 		SemverOrRegexTagCheckExample{
-			Tags: map[string]string{
-				"1.0.0": "random-1",
-				"1.2.1": "random-3",
-				"2.0.0": "random-5",
+			Tags: []testTag{
+				{
+					Tag:       "1.0.0",
+					ImageName: "random-1",
+				},
+				{
+					Tag:       "1.2.1",
+					ImageName: "random-3",
+				},
+				{
+					Tag:       "2.0.0",
+					ImageName: "random-5",
+				},
 			},
 
 			Repository:    "test-image",
@@ -1112,8 +1482,13 @@ var _ = DescribeTable("tracking semver tags",
 	),
 )
 
+type testTag struct {
+	Tag       string
+	ImageName string
+}
+
 type SemverOrRegexTagCheckExample struct {
-	Tags map[string]string
+	Tags []testTag
 
 	PreReleases bool
 	Variant     string
@@ -1173,8 +1548,8 @@ func (example SemverOrRegexTagCheckExample) Run() {
 	}
 
 	tagNames := []string{}
-	for name := range example.Tags {
-		tagNames = append(tagNames, name)
+	for _, tag := range example.Tags {
+		tagNames = append(tagNames, tag.Tag)
 	}
 
 	registryServer.RouteToHandler(
@@ -1189,14 +1564,14 @@ func (example SemverOrRegexTagCheckExample) Run() {
 	images := map[string]v1.Image{}
 
 	tagVersions := map[string]resource.Version{}
-	for name, imageName := range example.Tags {
-		image, found := images[imageName]
+	for _, tag := range example.Tags {
+		image, found := images[tag.ImageName]
 		if !found {
 			var err error
 			image, err = random.Image(1024, 1)
 			Expect(err).ToNot(HaveOccurred())
 
-			images[imageName] = image
+			images[tag.ImageName] = image
 		}
 
 		manifest, err := image.RawManifest()
@@ -1211,7 +1586,7 @@ func (example SemverOrRegexTagCheckExample) Run() {
 		if example.NoHEAD {
 			registryServer.RouteToHandler(
 				"HEAD",
-				"/v2/"+repo.RepositoryStr()+"/manifests/"+name,
+				"/v2/"+repo.RepositoryStr()+"/manifests/"+tag.Tag,
 				ghttp.RespondWith(http.StatusOK, manifest, http.Header{
 					"Content-Type":   {string(mediaType)},
 					"Content-Length": {strconv.Itoa(len(manifest))},
@@ -1219,7 +1594,7 @@ func (example SemverOrRegexTagCheckExample) Run() {
 			)
 			registryServer.RouteToHandler(
 				"GET",
-				"/v2/"+repo.RepositoryStr()+"/manifests/"+name,
+				"/v2/"+repo.RepositoryStr()+"/manifests/"+tag.Tag,
 				ghttp.RespondWith(http.StatusOK, manifest, http.Header{
 					"Content-Type":   {string(mediaType)},
 					"Content-Length": {strconv.Itoa(len(manifest))},
@@ -1228,7 +1603,7 @@ func (example SemverOrRegexTagCheckExample) Run() {
 		} else {
 			registryServer.RouteToHandler(
 				"HEAD",
-				"/v2/"+repo.RepositoryStr()+"/manifests/"+name,
+				"/v2/"+repo.RepositoryStr()+"/manifests/"+tag.Tag,
 				ghttp.RespondWith(http.StatusOK, manifest, http.Header{
 					"Content-Type":          {string(mediaType)},
 					"Content-Length":        {strconv.Itoa(len(manifest))},
@@ -1237,8 +1612,8 @@ func (example SemverOrRegexTagCheckExample) Run() {
 			)
 		}
 
-		tagVersions[name] = resource.Version{
-			Tag:    name,
+		tagVersions[tag.Tag] = resource.Version{
+			Tag:    tag.Tag,
 			Digest: digest.String(),
 		}
 	}
