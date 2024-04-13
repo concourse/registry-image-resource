@@ -2,12 +2,15 @@ package resource_test
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
 	"net/http"
 	"os/exec"
 	"strconv"
+	"time"
 
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
@@ -731,59 +734,237 @@ var _ = Describe("Check", func() {
 })
 
 var _ = DescribeTable("tracking semver tags",
-	(SemverTagCheckExample).Run,
+	(SemverOrRegexTagCheckExample).Run,
 	Entry("no semver tags",
-		SemverTagCheckExample{
-			Tags: map[string]string{
-				"non-semver-tag": "random-1",
+		SemverOrRegexTagCheckExample{
+			Tags: []testTag{
+				{
+					Tag:       "non-semver-tag",
+					ImageName: "random-1",
+				},
 			},
 			Versions: []string{},
 		},
 	),
+	Entry("no matching regex tags",
+		SemverOrRegexTagCheckExample{
+			Tags: []testTag{
+				{
+					Tag:       "non-matching-regex-tag",
+					ImageName: "random-1",
+				},
+			},
+			Regex:    "foo.*",
+			Versions: []string{},
+		},
+	),
 	Entry("latest tag",
-		SemverTagCheckExample{
-			Tags: map[string]string{
-				"non-semver-tag": "random-1",
-				"latest":         "random-2",
+		SemverOrRegexTagCheckExample{
+			Tags: []testTag{
+				{
+					Tag:       "non-semver-tag",
+					ImageName: "random-1",
+				},
+				{
+					Tag:       "latest",
+					ImageName: "random-2",
+				},
 			},
 			Versions: []string{"latest"},
 		},
 	),
 	Entry("HEAD with GET fallback",
-		SemverTagCheckExample{
-			Tags: map[string]string{
-				"non-semver-tag": "random-1",
-				"latest":         "random-2",
+		SemverOrRegexTagCheckExample{
+			Tags: []testTag{
+				{
+					Tag:       "non-semver-tag",
+					ImageName: "random-1",
+				},
+				{
+					Tag:       "latest",
+					ImageName: "random-2",
+				},
 			},
 			NoHEAD:   true,
 			Versions: []string{"latest"},
 		},
 	),
+	Entry("simple tag regex",
+		SemverOrRegexTagCheckExample{
+			Tags: []testTag{
+				{
+					Tag:       "1.0.0",
+					ImageName: "random-1",
+				},
+				{
+					Tag:       "non-semver-tag",
+					ImageName: "random-2",
+				},
+				{
+					Tag:       "gray",
+					ImageName: "random-3",
+				},
+				{
+					Tag:       "grey",
+					ImageName: "random-4",
+				},
+			},
+			Regex:         "gr(a|e)y",
+			CreatedAtSort: false,
+			Versions:      []string{"gray", "grey"},
+		},
+	),
+	Entry("simple tag regex where sorted is true",
+		SemverOrRegexTagCheckExample{
+			Tags: []testTag{
+				{
+					Tag:       "1.0.0",
+					ImageName: "random-1",
+				},
+				{
+					Tag:       "non-semver-tag",
+					ImageName: "random-2",
+				},
+				{
+					Tag:       "gem-1338-git-4bd8a5e1a244",
+					ImageName: "random-3",
+				},
+				{
+					Tag:       "gem-182-git-6bd8a5e1a2b3",
+					ImageName: "random-4",
+				},
+				{
+					Tag:       "gem-1337-git-4bd8a5e1a244",
+					ImageName: "random-5",
+				},
+			},
+			TagsToTime: map[string]time.Time{
+				"gem-1338-git-4bd8a5e1a244": time.Date(2024, 1, 4, 5, 0, 0, 0, time.UTC),
+				"gem-182-git-6bd8a5e1a2b3":  time.Date(2024, 1, 4, 0, 0, 0, 0, time.UTC),
+				"gem-1337-git-4bd8a5e1a244": time.Date(2024, 1, 4, 4, 0, 0, 0, time.UTC),
+			},
+			Regex:         "gem-(\\d+)-git-([a-f0-9]{12})",
+			CreatedAtSort: true,
+			Versions:      []string{"gem-182-git-6bd8a5e1a2b3", "gem-1337-git-4bd8a5e1a244", "gem-1338-git-4bd8a5e1a244"},
+		},
+	),
+	Entry("regex override semver constraint",
+		SemverOrRegexTagCheckExample{
+			Tags: []testTag{
+				{
+					Tag:       "1.0.0",
+					ImageName: "random-1",
+				},
+				{
+					Tag:       "1.2.1",
+					ImageName: "random-3",
+				},
+				{
+					Tag:       "1.2.2",
+					ImageName: "random-4",
+				},
+				{
+					Tag:       "2.0.0",
+					ImageName: "random-5",
+				},
+
+				// Does not include bare tag
+				{
+					Tag:       "latest",
+					ImageName: "random-6",
+				},
+				{
+					Tag:       "gray",
+					ImageName: "random-7",
+				},
+				{
+					Tag:       "grey",
+					ImageName: "random-8",
+				},
+			},
+			Regex:            "gr(a|e)y",
+			SemverConstraint: "1.2.x",
+			Versions:         []string{"gray", "grey"},
+		},
+	),
 	Entry("semver and non-semver tags",
-		SemverTagCheckExample{
-			Tags: map[string]string{
-				"1.0.0":          "random-1",
-				"non-semver-tag": "random-2",
+		SemverOrRegexTagCheckExample{
+			Tags: []testTag{
+				{
+					Tag:       "1.0.0",
+					ImageName: "random-1",
+				},
+				{
+					Tag:       "non-semver-tag",
+					ImageName: "random-2",
+				},
 			},
 			Versions: []string{"1.0.0"},
 		},
 	),
+	Entry("regex maintain ordering",
+		SemverOrRegexTagCheckExample{
+			Tags: []testTag{
+				{
+					Tag:       "1.0.0",
+					ImageName: "random-1",
+				},
+				{
+					Tag:       "3bd8a5e-dev",
+					ImageName: "random-2",
+				},
+				{
+					Tag:       "3bd8a5e-stage",
+					ImageName: "random-3",
+				},
+				{
+					Tag:       "non-matching-regex-tag",
+					ImageName: "random-4",
+				},
+				{
+					Tag:       "67e3c33-dev",
+					ImageName: "random-5",
+				},
+			},
+			Regex:         "^[0-9a-f]{7}-dev$",
+			CreatedAtSort: false,
+			Versions:      []string{"3bd8a5e-dev", "67e3c33-dev"},
+		},
+	),
 	Entry("semver tag ordering",
-		SemverTagCheckExample{
-			Tags: map[string]string{
-				"1.0.0": "random-1",
-				"1.2.1": "random-3",
-				"2.0.0": "random-5",
+		SemverOrRegexTagCheckExample{
+			Tags: []testTag{
+				{
+					Tag:       "1.0.0",
+					ImageName: "random-1",
+				},
+				{
+					Tag:       "1.2.1",
+					ImageName: "random-3",
+				},
+				{
+					Tag:       "2.0.0",
+					ImageName: "random-5",
+				},
 			},
 			Versions: []string{"1.0.0", "1.2.1", "2.0.0"},
 		},
 	),
 	Entry("semver tag ordering with cursor",
-		SemverTagCheckExample{
-			Tags: map[string]string{
-				"1.0.0": "random-1",
-				"1.2.1": "random-3",
-				"2.0.0": "random-5",
+		SemverOrRegexTagCheckExample{
+			Tags: []testTag{
+				{
+					Tag:       "1.0.0",
+					ImageName: "random-1",
+				},
+				{
+					Tag:       "1.2.1",
+					ImageName: "random-3",
+				},
+				{
+					Tag:       "2.0.0",
+					ImageName: "random-5",
+				},
 			},
 			From: &resource.Version{
 				Tag:    "1.2.1",
@@ -793,11 +974,20 @@ var _ = DescribeTable("tracking semver tags",
 		},
 	),
 	Entry("semver tag ordering with cursor with different digest",
-		SemverTagCheckExample{
-			Tags: map[string]string{
-				"1.0.0": "random-1",
-				"1.2.1": "random-3",
-				"2.0.0": "random-5",
+		SemverOrRegexTagCheckExample{
+			Tags: []testTag{
+				{
+					Tag:       "1.0.0",
+					ImageName: "random-1",
+				},
+				{
+					Tag:       "1.2.1",
+					ImageName: "random-3",
+				},
+				{
+					Tag:       "2.0.0",
+					ImageName: "random-5",
+				},
 			},
 			From: &resource.Version{
 				Tag:    "1.2.1",
@@ -807,41 +997,92 @@ var _ = DescribeTable("tracking semver tags",
 		},
 	),
 	Entry("semver constraint",
-		SemverTagCheckExample{
-			Tags: map[string]string{
-				"1.0.0": "random-1",
-				"1.2.1": "random-3",
-				"1.2.2": "random-4",
-				"2.0.0": "random-5",
+		SemverOrRegexTagCheckExample{
+			Tags: []testTag{
+				{
+					Tag:       "1.0.0",
+					ImageName: "random-1",
+				},
+				{
+					Tag:       "1.2.1",
+					ImageName: "random-3",
+				},
+				{
+					Tag:       "1.2.2",
+					ImageName: "random-4",
+				},
+				{
+					Tag:       "2.0.0",
+					ImageName: "random-5",
+				},
 				// Does not include bare tag
-				"latest": "random-6",
+				{
+					Tag:       "latest",
+					ImageName: "random-6",
+				},
 			},
 			SemverConstraint: "1.2.x",
 			Versions:         []string{"1.2.1", "1.2.2"},
 		},
 	),
 	Entry("prereleases ignored by default",
-		SemverTagCheckExample{
-			Tags: map[string]string{
-				"1.0.0-alpha.1": "random-0",
-				"1.0.0":         "random-1",
-				"1.2.1-beta.1":  "random-2",
-				"1.2.1":         "random-3",
-				"2.0.0-rc.1":    "random-4",
-				"2.0.0":         "random-5",
+		SemverOrRegexTagCheckExample{
+			Tags: []testTag{
+				{
+					Tag:       "1.0.0-alpha.1",
+					ImageName: "random-0",
+				},
+				{
+					Tag:       "1.0.0",
+					ImageName: "random-1",
+				},
+				{
+					Tag:       "1.2.1-beta.1",
+					ImageName: "random-2",
+				},
+				{
+					Tag:       "1.2.1",
+					ImageName: "random-3",
+				},
+				{
+					Tag:       "2.0.0-rc.1",
+					ImageName: "random-4",
+				},
+				{
+					Tag:       "2.0.0",
+					ImageName: "random-5",
+				},
 			},
 			Versions: []string{"1.0.0", "1.2.1", "2.0.0"},
 		},
 	),
 	Entry("prereleases opted in",
-		SemverTagCheckExample{
-			Tags: map[string]string{
-				"1.0.0-alpha.1": "random-0",
-				"1.0.0":         "random-1",
-				"1.2.1-beta.1":  "random-2",
-				"1.2.1":         "random-3",
-				"2.0.0-rc.1":    "random-4",
-				"2.0.0":         "random-5",
+		SemverOrRegexTagCheckExample{
+			Tags: []testTag{
+				{
+					Tag:       "1.0.0-alpha.1",
+					ImageName: "random-0",
+				},
+				{
+					Tag:       "1.0.0",
+					ImageName: "random-1",
+				},
+				{
+					Tag:       "1.2.1-beta.1",
+					ImageName: "random-2",
+				},
+				{
+					Tag:       "1.2.1",
+					ImageName: "random-3",
+				},
+				{
+					Tag:       "2.0.0-rc.1",
+					ImageName: "random-4",
+				},
+				{
+					Tag:       "2.0.0",
+					ImageName: "random-5",
+				},
 			},
 			PreReleases: true,
 			Versions: []string{
@@ -855,12 +1096,24 @@ var _ = DescribeTable("tracking semver tags",
 		},
 	),
 	Entry("prereleases do not include 'variants'",
-		SemverTagCheckExample{
-			Tags: map[string]string{
-				"1.0.0-alpha.1": "random-0",
-				"1.0.0-beta.1":  "random-1",
-				"1.0.0-rc.1":    "random-2",
-				"1.0.0-foo.1":   "random-3",
+		SemverOrRegexTagCheckExample{
+			Tags: []testTag{
+				{
+					Tag:       "1.0.0-alpha.1",
+					ImageName: "random-0",
+				},
+				{
+					Tag:       "1.0.0-beta.1",
+					ImageName: "random-1",
+				},
+				{
+					Tag:       "1.0.0-rc.1",
+					ImageName: "random-2",
+				},
+				{
+					Tag:       "1.0.0-foo.1",
+					ImageName: "random-3",
+				},
 			},
 			PreReleases: true,
 			Versions: []string{
@@ -871,16 +1124,40 @@ var _ = DescribeTable("tracking semver tags",
 		},
 	),
 	Entry("prereleases do not require dot",
-		SemverTagCheckExample{
-			Tags: map[string]string{
-				"1.0.0-alpha1": "random-0",
-				"1.0.0-alpha2": "random-1",
-				"1.0.0-beta1":  "random-2",
-				"1.0.0-beta2":  "random-3",
-				"1.0.0-rc1":    "random-4",
-				"1.0.0-rc2":    "random-5",
-				"1.0.0-foo1":   "random-6",
-				"1.0.0-foo2":   "random-7",
+		SemverOrRegexTagCheckExample{
+			Tags: []testTag{
+				{
+					Tag:       "1.0.0-alpha1",
+					ImageName: "random-0",
+				},
+				{
+					Tag:       "1.0.0-alpha2",
+					ImageName: "random-1",
+				},
+				{
+					Tag:       "1.0.0-beta1",
+					ImageName: "random-2",
+				},
+				{
+					Tag:       "1.0.0-beta2",
+					ImageName: "random-3",
+				},
+				{
+					Tag:       "1.0.0-rc1",
+					ImageName: "random-4",
+				},
+				{
+					Tag:       "1.0.0-rc2",
+					ImageName: "random-5",
+				},
+				{
+					Tag:       "1.0.0-foo1",
+					ImageName: "random-6",
+				},
+				{
+					Tag:       "1.0.0-foo2",
+					ImageName: "random-7",
+				},
 			},
 			PreReleases: true,
 			Versions: []string{
@@ -894,12 +1171,24 @@ var _ = DescribeTable("tracking semver tags",
 		},
 	),
 	Entry("prereleases do not require number",
-		SemverTagCheckExample{
-			Tags: map[string]string{
-				"1.0.0-alpha": "random-0",
-				"1.0.0-beta":  "random-1",
-				"1.0.0-rc":    "random-2",
-				"1.0.0-foo":   "random-3",
+		SemverOrRegexTagCheckExample{
+			Tags: []testTag{
+				{
+					Tag:       "1.0.0-alpha",
+					ImageName: "random-0",
+				},
+				{
+					Tag:       "1.0.0-beta",
+					ImageName: "random-1",
+				},
+				{
+					Tag:       "1.0.0-rc",
+					ImageName: "random-2",
+				},
+				{
+					Tag:       "1.0.0-foo",
+					ImageName: "random-3",
+				},
 			},
 			PreReleases: true,
 			Versions: []string{
@@ -910,79 +1199,184 @@ var _ = DescribeTable("tracking semver tags",
 		},
 	),
 	Entry("final versions take priority over rcs",
-		SemverTagCheckExample{
-			Tags: map[string]string{
-				"1.0.0-rc.1": "random-2",
-				"1.0.0-rc1":  "random-2",
-				"1.0.0-rc":   "random-2",
-				"1.0.0":      "random-2",
+		SemverOrRegexTagCheckExample{
+			Tags: []testTag{
+				{
+					Tag:       "1.0.0-rc.1",
+					ImageName: "random-2",
+				},
+				{
+					Tag:       "1.0.0-rc1",
+					ImageName: "random-2",
+				},
+				{
+					Tag:       "1.0.0-rc",
+					ImageName: "random-2",
+				},
+				{
+					Tag:       "1.0.0",
+					ImageName: "random-2",
+				},
 			},
 			PreReleases: true,
 			Versions:    []string{"1.0.0"},
 		},
 	),
 	Entry("mixed specificity semver tags",
-		SemverTagCheckExample{
-			Tags: map[string]string{
-				"1":      "random-1",
-				"2":      "random-2",
-				"2.1":    "random-2",
-				"latest": "random-3",
-				"3":      "random-3",
-				"3.2":    "random-3",
-				"3.2.1":  "random-3",
-				"3.1":    "random-4",
-				"3.1.0":  "random-4",
-				"3.0":    "random-5",
-				"3.0.0":  "random-5",
+		SemverOrRegexTagCheckExample{
+			Tags: []testTag{
+				{
+					Tag:       "1",
+					ImageName: "random-1",
+				},
+				{
+					Tag:       "2",
+					ImageName: "random-2",
+				},
+				{
+					Tag:       "2.1",
+					ImageName: "random-2",
+				},
+				{
+					Tag:       "latest",
+					ImageName: "random-3",
+				},
+				{
+					Tag:       "3",
+					ImageName: "random-3",
+				},
+				{
+					Tag:       "3.2",
+					ImageName: "random-3",
+				},
+				{
+					Tag:       "3.2.1",
+					ImageName: "random-3",
+				},
+				{
+					Tag:       "3.1",
+					ImageName: "random-4",
+				},
+				{
+					Tag:       "3.1.0",
+					ImageName: "random-4",
+				},
+				{
+					Tag:       "3.0",
+					ImageName: "random-5",
+				},
+				{
+					Tag:       "3.0.0",
+					ImageName: "random-5",
+				},
 			},
 			Versions: []string{"1", "2.1", "3.0.0", "3.1.0", "3.2.1"},
 		},
 	),
 	Entry("semver tags with latest tag having unique digest",
-		SemverTagCheckExample{
-			Tags: map[string]string{
-				"1.0.0":          "random-1",
-				"non-semver-tag": "random-2",
-				"latest":         "random-3",
+		SemverOrRegexTagCheckExample{
+			Tags: []testTag{
+				{
+					Tag:       "1.0.0",
+					ImageName: "random-1",
+				},
+				{
+					Tag:       "non-semver-tag",
+					ImageName: "random-2",
+				},
+				{
+					Tag:       "latest",
+					ImageName: "random-3",
+				},
 			},
 			Versions: []string{"1.0.0", "latest"},
 		},
 	),
 	Entry("latest tag pointing to latest version",
-		SemverTagCheckExample{
-			Tags: map[string]string{
-				"1":      "random-1",
-				"2":      "random-2",
-				"3":      "random-3",
-				"latest": "random-3",
+		SemverOrRegexTagCheckExample{
+			Tags: []testTag{
+				{
+					Tag:       "1",
+					ImageName: "random-1",
+				},
+				{
+					Tag:       "2",
+					ImageName: "random-2",
+				},
+				{
+					Tag:       "3",
+					ImageName: "random-3",
+				},
+				{
+					Tag:       "latest",
+					ImageName: "random-3",
+				},
 			},
 			Versions: []string{"1", "2", "3"},
 		},
 	),
 	Entry("latest tag pointing to older version",
-		SemverTagCheckExample{
-			Tags: map[string]string{
-				"1":      "random-1",
-				"2":      "random-2",
-				"latest": "random-2",
-				"3":      "random-3",
+		SemverOrRegexTagCheckExample{
+			Tags: []testTag{
+				{
+					Tag:       "1",
+					ImageName: "random-1",
+				},
+				{
+					Tag:       "2",
+					ImageName: "random-2",
+				},
+				{
+					Tag:       "latest",
+					ImageName: "random-2",
+				},
+				{
+					Tag:       "3",
+					ImageName: "random-3",
+				},
 			},
 			Versions: []string{"1", "2", "3"},
 		},
 	),
 	Entry("variants",
-		SemverTagCheckExample{
-			Tags: map[string]string{
-				"latest":    "random-1",
-				"1.0.0":     "random-1",
-				"0.9.0":     "random-2",
-				"foo":       "random-3",
-				"1.0.0-foo": "random-3",
-				"0.9.0-foo": "random-4",
-				"bar":       "random-5",
-				"1.0.0-bar": "random-5",
-				"0.9.0-bar": "random-6",
+		SemverOrRegexTagCheckExample{
+			Tags: []testTag{
+				{
+					Tag:       "latest",
+					ImageName: "random-1",
+				},
+				{
+					Tag:       "1.0.0",
+					ImageName: "random-1",
+				},
+				{
+					Tag:       "0.9.0",
+					ImageName: "random-2",
+				},
+				{
+					Tag:       "foo",
+					ImageName: "random-3",
+				},
+				{
+					Tag:       "1.0.0-foo",
+					ImageName: "random-3",
+				},
+				{
+					Tag:       "0.9.0-foo",
+					ImageName: "random-4",
+				},
+				{
+					Tag:       "bar",
+					ImageName: "random-5",
+				},
+				{
+					Tag:       "1.0.0-bar",
+					ImageName: "random-5",
+				},
+				{
+					Tag:       "0.9.0-bar",
+					ImageName: "random-6",
+				},
 			},
 
 			Variant: "foo",
@@ -991,16 +1385,40 @@ var _ = DescribeTable("tracking semver tags",
 		},
 	),
 	Entry("variant with bare variant tag pointing to unique digest",
-		SemverTagCheckExample{
-			Tags: map[string]string{
-				"latest":    "random-1",
-				"1.0.0":     "random-1",
-				"0.9.0":     "random-2",
-				"foo":       "random-3",
-				"0.8.0-foo": "random-4",
-				"bar":       "random-5",
-				"1.0.0-bar": "random-5",
-				"0.9.0-bar": "random-6",
+		SemverOrRegexTagCheckExample{
+			Tags: []testTag{
+				{
+					Tag:       "latest",
+					ImageName: "random-1",
+				},
+				{
+					Tag:       "1.0.0",
+					ImageName: "random-1",
+				},
+				{
+					Tag:       "0.9.0",
+					ImageName: "random-2",
+				},
+				{
+					Tag:       "foo",
+					ImageName: "random-3",
+				},
+				{
+					Tag:       "0.8.0-foo",
+					ImageName: "random-4",
+				},
+				{
+					Tag:       "bar",
+					ImageName: "random-5",
+				},
+				{
+					Tag:       "1.0.0-bar",
+					ImageName: "random-5",
+				},
+				{
+					Tag:       "0.9.0-bar",
+					ImageName: "random-6",
+				},
 			},
 
 			Variant: "foo",
@@ -1009,16 +1427,40 @@ var _ = DescribeTable("tracking semver tags",
 		},
 	),
 	Entry("distinguishing additional variants from prereleases",
-		SemverTagCheckExample{
-			Tags: map[string]string{
-				"1.0.0-foo":             "random-1",
-				"1.0.0-rc.1-foo":        "random-2",
-				"1.0.0-alpha.1-foo":     "random-3",
-				"1.0.0-beta.1-foo":      "random-4",
-				"1.0.0-bar-foo":         "random-5",
-				"1.0.0-rc.1-bar-foo":    "random-6",
-				"1.0.0-alpha.1-bar-foo": "random-7",
-				"1.0.0-beta.1-bar-foo":  "random-8",
+		SemverOrRegexTagCheckExample{
+			Tags: []testTag{
+				{
+					Tag:       "1.0.0-foo",
+					ImageName: "random-1",
+				},
+				{
+					Tag:       "1.0.0-rc.1-foo",
+					ImageName: "random-2",
+				},
+				{
+					Tag:       "1.0.0-alpha.1-foo",
+					ImageName: "random-3",
+				},
+				{
+					Tag:       "1.0.0-beta.1-foo",
+					ImageName: "random-4",
+				},
+				{
+					Tag:       "1.0.0-bar-foo",
+					ImageName: "random-5",
+				},
+				{
+					Tag:       "1.0.0-rc.1-bar-foo",
+					ImageName: "random-6",
+				},
+				{
+					Tag:       "1.0.0-alpha.1-bar-foo",
+					ImageName: "random-7",
+				},
+				{
+					Tag:       "1.0.0-beta.1-bar-foo",
+					ImageName: "random-8",
+				},
 			},
 
 			Variant:     "foo",
@@ -1033,11 +1475,20 @@ var _ = DescribeTable("tracking semver tags",
 		},
 	),
 	Entry("tries mirror and falls back on original repository",
-		SemverTagCheckExample{
-			Tags: map[string]string{
-				"1.0.0": "random-1",
-				"1.2.1": "random-3",
-				"2.0.0": "random-5",
+		SemverOrRegexTagCheckExample{
+			Tags: []testTag{
+				{
+					Tag:       "1.0.0",
+					ImageName: "random-1",
+				},
+				{
+					Tag:       "1.2.1",
+					ImageName: "random-3",
+				},
+				{
+					Tag:       "2.0.0",
+					ImageName: "random-5",
+				},
 			},
 
 			RegistryMirror: "fakeserver.foo:5000",
@@ -1046,11 +1497,20 @@ var _ = DescribeTable("tracking semver tags",
 		},
 	),
 	Entry("uses mirror and ignores failing repository",
-		SemverTagCheckExample{
-			Tags: map[string]string{
-				"1.0.0": "random-1",
-				"1.2.1": "random-3",
-				"2.0.0": "random-5",
+		SemverOrRegexTagCheckExample{
+			Tags: []testTag{
+				{
+					Tag:       "1.0.0",
+					ImageName: "random-1",
+				},
+				{
+					Tag:       "1.2.1",
+					ImageName: "random-3",
+				},
+				{
+					Tag:       "2.0.0",
+					ImageName: "random-5",
+				},
 			},
 
 			Repository:    "test-image",
@@ -1061,11 +1521,20 @@ var _ = DescribeTable("tracking semver tags",
 	),
 )
 
-type SemverTagCheckExample struct {
-	Tags map[string]string
+type testTag struct {
+	Tag       string
+	ImageName string
+}
+
+type SemverOrRegexTagCheckExample struct {
+	Tags       []testTag
+	TagsToTime map[string]time.Time
 
 	PreReleases bool
 	Variant     string
+
+	Regex         string
+	CreatedAtSort bool
 
 	SemverConstraint string
 
@@ -1080,7 +1549,7 @@ type SemverTagCheckExample struct {
 	NoHEAD bool
 }
 
-func (example SemverTagCheckExample) Run() {
+func (example SemverOrRegexTagCheckExample) Run() {
 	registryServer := ghttp.NewServer()
 	defer registryServer.Close()
 
@@ -1105,6 +1574,8 @@ func (example SemverTagCheckExample) Run() {
 			PreReleases:      example.PreReleases,
 			Variant:          example.Variant,
 			SemverConstraint: example.SemverConstraint,
+			Regex:            example.Regex,
+			CreatedAtSort:    example.CreatedAtSort,
 		},
 	}
 
@@ -1119,8 +1590,8 @@ func (example SemverTagCheckExample) Run() {
 	}
 
 	tagNames := []string{}
-	for name := range example.Tags {
-		tagNames = append(tagNames, name)
+	for _, tag := range example.Tags {
+		tagNames = append(tagNames, tag.Tag)
 	}
 
 	registryServer.RouteToHandler(
@@ -1135,14 +1606,14 @@ func (example SemverTagCheckExample) Run() {
 	images := map[string]v1.Image{}
 
 	tagVersions := map[string]resource.Version{}
-	for name, imageName := range example.Tags {
-		image, found := images[imageName]
+	for _, tag := range example.Tags {
+		image, found := images[tag.ImageName]
 		if !found {
 			var err error
 			image, err = random.Image(1024, 1)
 			Expect(err).ToNot(HaveOccurred())
 
-			images[imageName] = image
+			images[tag.ImageName] = image
 		}
 
 		manifest, err := image.RawManifest()
@@ -1157,7 +1628,7 @@ func (example SemverTagCheckExample) Run() {
 		if example.NoHEAD {
 			registryServer.RouteToHandler(
 				"HEAD",
-				"/v2/"+repo.RepositoryStr()+"/manifests/"+name,
+				"/v2/"+repo.RepositoryStr()+"/manifests/"+tag.Tag,
 				ghttp.RespondWith(http.StatusOK, manifest, http.Header{
 					"Content-Type":   {string(mediaType)},
 					"Content-Length": {strconv.Itoa(len(manifest))},
@@ -1165,7 +1636,7 @@ func (example SemverTagCheckExample) Run() {
 			)
 			registryServer.RouteToHandler(
 				"GET",
-				"/v2/"+repo.RepositoryStr()+"/manifests/"+name,
+				"/v2/"+repo.RepositoryStr()+"/manifests/"+tag.Tag,
 				ghttp.RespondWith(http.StatusOK, manifest, http.Header{
 					"Content-Type":   {string(mediaType)},
 					"Content-Length": {strconv.Itoa(len(manifest))},
@@ -1174,7 +1645,7 @@ func (example SemverTagCheckExample) Run() {
 		} else {
 			registryServer.RouteToHandler(
 				"HEAD",
-				"/v2/"+repo.RepositoryStr()+"/manifests/"+name,
+				"/v2/"+repo.RepositoryStr()+"/manifests/"+tag.Tag,
 				ghttp.RespondWith(http.StatusOK, manifest, http.Header{
 					"Content-Type":          {string(mediaType)},
 					"Content-Length":        {strconv.Itoa(len(manifest))},
@@ -1183,8 +1654,47 @@ func (example SemverTagCheckExample) Run() {
 			)
 		}
 
-		tagVersions[name] = resource.Version{
-			Tag:    name,
+		// if SortByCreatedAt is set, we need to return the created date for each tag when the manifest is requested
+		if example.CreatedAtSort {
+			manifestRef, err := image.Manifest()
+			Expect(err).ToNot(HaveOccurred())
+			// Mutate ConfigFile such that created at is set to the tag name
+			expectedTime := example.TagsToTime[tag.Tag]
+			config, err := image.ConfigFile()
+			Expect(err).ToNot(HaveOccurred())
+			config.Created = v1.Time{Time: expectedTime}
+			configBytes, err := json.Marshal(config)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Take the SHA256 of config and set to mutatedManifest object
+			configHash := sha256.Sum256(configBytes)
+			Expect(err).ToNot(HaveOccurred())
+			manifestRef.Config.Digest = v1.Hash{Algorithm: "sha256", Hex: hex.EncodeToString(configHash[:])}
+			manifestDigest := manifestRef.Config.Digest
+			mutatedManifest, err := json.Marshal(manifestRef)
+			Expect(err).ToNot(HaveOccurred())
+
+			registryServer.RouteToHandler(
+				"GET",
+				"/v2/"+repo.RepositoryStr()+"/manifests/"+tag.Tag,
+				ghttp.RespondWith(http.StatusOK, mutatedManifest, http.Header{
+					"Content-Type":          {string(mediaType)},
+					"Content-Length":        {strconv.Itoa(len(mutatedManifest))},
+					"Docker-Content-Digest": {digest.String()},
+				}),
+			)
+
+			registryServer.RouteToHandler(
+				"GET",
+				"/v2/"+repo.RepositoryStr()+"/blobs/"+manifestDigest.String(),
+				ghttp.RespondWith(http.StatusOK, configBytes, http.Header{
+					"Content-Length": {strconv.Itoa(len(configBytes))},
+				}),
+			)
+		}
+
+		tagVersions[tag.Tag] = resource.Version{
+			Tag:    tag.Tag,
 			Digest: digest.String(),
 		}
 	}
@@ -1216,7 +1726,7 @@ func (example SemverTagCheckExample) Run() {
 	Expect(res).To(Equal(expectedVersions))
 }
 
-func (example SemverTagCheckExample) check(req resource.CheckRequest) resource.CheckResponse {
+func (example SemverOrRegexTagCheckExample) check(req resource.CheckRequest) resource.CheckResponse {
 	cmd := exec.Command(bins.Check)
 	cmd.Env = []string{"TEST=true"}
 

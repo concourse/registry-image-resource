@@ -1,15 +1,20 @@
 # Registry Image Resource
 
 Supports checking, fetching, and pushing of images to Docker registries.
-This resource can be used in two ways: [with `tag`
-specified](#check-with-tag-discover-new-digests-for-the-tag) and [without
-`tag`](#check-without-tag-discover-semver-tags).
+This resource can be used in three ways: [with `tag`
+specified](#check-step-check-script-with-tag-discover-new-digests-for-the-tag), [with `tag_regex` specified](#check-step-check-script-with-tag_regex-discover-tags-matching-regex), or [with neither
+`tag` nor `tag_regex` specified](#check-step-check-script-without-tag-or-tag_regex-discover-semver-tags).
 
 With `tag` specified, `check` will detect changes to the digest the tag points
 to, and `out` will always push to the specified tag. This is to be used in
 simpler cases where no real versioning exists.
 
-With `tag` omitted, `check` will instead detect tags based on semver versions
+With `tag_regex` specified, `check` will instead detect tags based on the regex
+provided. If `created_at_sort` is set to `true`, the tags will be sorted in descending order by the creation time. 
+This is useful when you want to get the latest tag based on the regex (see Docker registry issue 
+[here](https://github.com/docker/hub-feedback/issues/185)).
+
+With `tag` and `tag_regex` both omitted, `check` will instead detect tags based on semver versions
 (e.g. `1.2.3`) and return them in semver order. With `variant` included,
 `check` will only detect semver tags that include the variant suffix (e.g.
 `1.2.3-stretch`).
@@ -78,6 +83,24 @@ differences:
     Instead of monitoring semver tags, monitor a single tag for changes (based
     on digest).
     </td>
+  </tr>
+  <tr>
+    <td><code>tag_regex</code> <em>(Optional)</em></td>
+    <td>
+    Instead of monitoring semver tags, monitor for tags based on a regex provided.
+    <br>The syntax of the regular expressions accepted is the same
+    general syntax used by Perl, Python, and other languages. More precisely,
+    it is the syntax accepted by RE2 and described at https://golang.org/s/re2syntax
+    <br>Note if used, this will override all Semver constraints and features.
+    By default, order of tags is not guaranteed. If you want to sort the tags in descending order, set `created_at_sort` to `true`.
+    </td>
+  </tr>
+  <tr>
+  <td><code>created_at_sort</code> <em>(Optional)<br>Default: false</em></td>
+  <td>
+    If set to `true`, the tags will be sorted in descending order using the creation time from the image history. 
+    This is useful when you want to get the latest tag based on the tag_regex.
+  </td>
   </tr>
   <tr>
     <td><code>variant</code> <em>(Optional)</em></td>
@@ -336,7 +359,13 @@ registry_key: |
 Reports the current digest that the registry has for the tag configured in
 `source`.
 
-### `check` Step (`check` script) without `tag`: discover semver tags
+### `check` Step (`check` script) with `tag_regex`: discover tags matching regex
+
+Reports the current digest that the registry has for tags matching the regex
+configured in `source`. They will be returned in the same order that the source repository lists them unless `created_at_sort` 
+is set to `true`.
+
+### `check` Step (`check` script) without `tag` or `tag_regex`: discover semver tags
 
 Detects tags which contain semver version numbers. Version numbers do not
 need to contain all 3 segments (major/minor/patch).
