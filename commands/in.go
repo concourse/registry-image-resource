@@ -71,12 +71,24 @@ func (i *In) Execute() error {
 		}
 	}
 
-	repo, err := req.Source.NewRepository()
+	// override source if repository is passed in get param
+	repo := name.Repository{}
+	if req.Params.Repository != "" {
+		repo, err = req.Params.NewRepository()
+	} else {
+		repo, err = req.Source.NewRepository()
+	}
 	if err != nil {
 		return fmt.Errorf("failed to resolve repository: %w", err)
 	}
 
-	tag := repo.Tag(req.Version.Tag)
+	// override source if tag is passed in get param
+	tag := name.Tag{}
+	if req.Params.Tag != "" {
+		tag = repo.Tag(req.Params.Tag.String())
+	} else {
+		tag = repo.Tag(req.Version.Tag)
+	}
 
 	if !req.Params.SkipDownload {
 		mirrorSource, hasMirror, err := req.Source.Mirror()
