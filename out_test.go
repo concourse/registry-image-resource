@@ -298,8 +298,8 @@ var _ = Describe("Out", func() {
 			})
 
 			It("Signs the image", func() {
-				// there is little to know if the image has been signed
-				// so we assume that if there is no error, then it has been signed
+				Expect(actualErr).To(ContainSubstring("Signing image with Cosign"))
+				Expect(actualErr).To(ContainSubstring("Image signed with Cosign"))
 				Expect(actualErr).ToNot(HaveOccurred())
 			})
 		})
