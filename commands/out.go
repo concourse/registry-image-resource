@@ -262,7 +262,6 @@ type keyChain struct {
 	credentials map[string]cosignUserCredentials
 }
 
-// Returns a function that is able to produce an AuthConfig struct. This is basically a factory factory
 func (k *keyChain) Resolve(resource authn.Resource) (authn.Authenticator, error) {
 
 	registryHost := resource.RegistryStr()
