@@ -287,6 +287,23 @@ var _ = Describe("Out", func() {
 				}
 			})
 		})
+
+		Context("When signing image with cosign", func() {
+			BeforeEach(func() {
+				req.Source.Cosign = &resource.Cosign{
+					Registry: "test.registry",
+					Key:      "",
+					Password: "",
+				}
+			})
+
+			It("Signs the image", func() {
+				Expect(actualErrOutput).To(ContainSubstring("Signing image with Cosign"))
+				Expect(actualErrOutput).To(ContainSubstring("Image signed with Cosign"))
+				Expect(actualErr).ToNot(HaveOccurred())
+			})
+		})
+
 	})
 
 	Context("pushing an OCI imageIndex (multi-arch) image to dockerhub", func() {
