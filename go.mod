@@ -2,7 +2,7 @@ module github.com/concourse/registry-image-resource
 
 require (
 	github.com/Masterminds/semver/v3 v3.2.0
-	github.com/aws/aws-sdk-go v1.44.5
+	github.com/aws/aws-sdk-go v1.55.5
 	github.com/cenkalti/backoff v2.2.1+incompatible
 	github.com/concourse/go-archive v1.0.1
 	github.com/fatih/color v1.13.0
