@@ -53,8 +53,8 @@ var dockerPrivateUsername = os.Getenv("DOCKER_PRIVATE_USERNAME")
 var dockerPrivatePassword = os.Getenv("DOCKER_PRIVATE_PASSWORD")
 
 // testdata/static/Dockerfile, but pushed again (twice; old + latest) to the above private repo
-const PRIVATE_OLDER_STATIC_DIGEST = "sha256:4003f4c3fad6024467f7e59d8153c4c1ef3e2a749d0f234a326cd0ea6bd31359"
-const PRIVATE_LATEST_STATIC_DIGEST = "sha256:2374201198a54c35ad03124f1218bb553eaa97368ce8d2359b43e0bc3b17e06f"
+const PRIVATE_OLDER_STATIC_DIGEST = "sha256:f30102682603ad47bb0a83270c82e9314f01a30054398ab803e718bd13304645"
+const PRIVATE_LATEST_STATIC_DIGEST = "sha256:5b56fbe8463395bc9743ddc7799ea793cfbf819041a8eda4c1b87b376620add5"
 
 // a repo to which random images will be pushed when testing 'out'
 var dockerPushRepo = os.Getenv("DOCKER_PUSH_REPO")
