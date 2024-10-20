@@ -646,9 +646,7 @@ docker build . -t registry-image-resource --target tests \
   --build-arg DOCKER_PRIVATE_REPO="some/repo" \
   --build-arg DOCKER_PUSH_USERNAME="some-username" \
   --build-arg DOCKER_PUSH_PASSWORD="some-password" \
-  --build-arg DOCKER_PUSH_REPO="some/repo" \
-  --build-arg GCR_PUSH_SERVICE_ACCOUNT_KEY='{"some":"json"}' \
-  --build-arg GCR_PUSH_REPO="some/repo"
+  --build-arg DOCKER_PUSH_REPO="some/repo"
 ```
 
 Note that you may omit any of the repo credentials in order to skip those
