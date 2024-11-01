@@ -65,7 +65,11 @@ func (i *In) Execute() error {
 
 	dest := i.args[1]
 
-	if req.Source.AwsRegion != "" {
+	// If credentials were defined in params, override the source configuration.
+	req.Source.BasicCredentials.Inherit(req.Params.BasicCredentials)
+	req.Source.AwsCredentials.Inherit(req.Params.AwsCredentials)
+
+	if req.Source.AwsAccessKeyId != "" && req.Source.AwsSecretAccessKey != "" && req.Source.AwsRegion != "" {
 		if !req.Source.AuthenticateToECR() {
 			return fmt.Errorf("cannot authenticate with ECR")
 		}
