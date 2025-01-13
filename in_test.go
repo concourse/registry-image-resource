@@ -2,6 +2,8 @@ package resource_test
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
 	"io/ioutil"
@@ -9,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -21,6 +24,7 @@ import (
 	"github.com/onsi/gomega/ghttp"
 
 	resource "github.com/concourse/registry-image-resource"
+	"github.com/concourse/registry-image-resource/commands"
 )
 
 var _ = Describe("In", func() {
@@ -344,6 +348,79 @@ var _ = Describe("In", func() {
 			// digest within manifest, which is what ends up being the 'image id'
 			// anyway.
 			Expect(fetchedManifest.Config.Digest).To(Equal(manifest.Config.Digest))
+		})
+	})
+
+	Describe("fetching index image in OCI layout format", func() {
+		BeforeEach(func() {
+			req.Source.Repository = "concourse/test-image-static"
+			req.Params.RawFormat = commands.OciLayoutFormatName
+
+			req.Version.Tag = "latest"
+			req.Version.Digest = LATEST_STATIC_DIGEST // this is a modern image index hash (e.g. it has multiple architectures)
+		})
+
+		It("saves the tagged image in oci/", func() {
+			Expect(actualErr).ToNot(HaveOccurred())
+
+			_, err := os.Stat(filepath.Join(destDir, commands.OciLayoutDirName, "oci-layout"))
+			Expect(err).ToNot(HaveOccurred())
+
+			// for modern images, this file is not written out
+			_, err = os.Stat(filepath.Join(destDir, commands.OciLayoutDirName, commands.OciLayoutSingleImageDigestFileName))
+			Expect(os.IsNotExist(err)).To(BeTrue())
+
+			img, err := commands.NewIndexImageFromPath(filepath.Join(destDir, commands.OciLayoutDirName))
+			Expect(err).ToNot(HaveOccurred())
+
+			imgDigest, err := img.Digest()
+			Expect(err).ToNot(HaveOccurred())
+			Expect(imgDigest.String()).To(Equal(req.Version.Digest))
+
+			// for an image index, the hash of index.json should match the requested digest
+			indexJson, err := os.ReadFile(filepath.Join(destDir, commands.OciLayoutDirName, "index.json"))
+			Expect(err).ToNot(HaveOccurred())
+
+			indexHash := sha256.Sum256(indexJson)
+			Expect("sha256:" + hex.EncodeToString(indexHash[:])).To(Equal(req.Version.Digest))
+		})
+	})
+
+	Describe("fetching legacy image in OCI layout format", func() {
+		BeforeEach(func() {
+			req.Source.Repository = "concourse/test-image-static"
+			req.Params.RawFormat = commands.OciLayoutFormatName
+
+			req.Version.Tag = "latest"
+			req.Version.Digest = OLDER_STATIC_DIGEST // this is a legcy image index hash
+		})
+
+		It("saves the tagged image in oci/", func() {
+			Expect(actualErr).ToNot(HaveOccurred())
+
+			_, err := os.Stat(filepath.Join(destDir, commands.OciLayoutDirName, "oci-layout"))
+			Expect(err).ToNot(HaveOccurred())
+
+			img, err := commands.NewIndexImageFromPath(filepath.Join(destDir, commands.OciLayoutDirName))
+			Expect(err).ToNot(HaveOccurred())
+
+			imgDigest, err := img.Digest()
+			Expect(err).ToNot(HaveOccurred())
+			Expect(imgDigest.String()).To(Equal(req.Version.Digest))
+
+			// for a legacy image, we save a reference in marker file
+			singleImageDigestString, err := os.ReadFile(filepath.Join(destDir, commands.OciLayoutDirName, commands.OciLayoutSingleImageDigestFileName))
+			Expect(err).ToNot(HaveOccurred())
+
+			// should match requested digest
+			Expect(string(singleImageDigestString)).To(Equal(req.Version.Digest))
+
+			// and blob for manifest should also exist
+			digestBits := strings.Split(string(singleImageDigestString), ":")
+			Expect(len(digestBits)).To(Equal(2))
+
+			_, err = os.Stat(filepath.Join(destDir, commands.OciLayoutDirName, "blobs", digestBits[0], digestBits[1]))
+			Expect(err).ToNot(HaveOccurred())
 		})
 	})
 

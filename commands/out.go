@@ -14,8 +14,6 @@ import (
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
-	"github.com/google/go-containerregistry/pkg/v1/layout"
-	"github.com/google/go-containerregistry/pkg/v1/partial"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/google/go-containerregistry/pkg/v1/remote/transport"
 	"github.com/google/go-containerregistry/pkg/v1/tarball"
@@ -155,18 +153,9 @@ func (o *Out) Execute() error {
 		return fmt.Errorf("could not load image from path '%s': %w", req.Params.Image, err)
 	}
 
-	var h v1.Hash
-	switch t := img.(type) {
-	case v1.Image:
-		if h, err = t.Digest(); err != nil {
-			return fmt.Errorf("failed to get image digest: %w", err)
-		}
-	case v1.ImageIndex:
-		if h, err = t.Digest(); err != nil {
-			return fmt.Errorf("failed to get index digest: %w", err)
-		}
-	default:
-		return fmt.Errorf("cannot get digest for type (%T)", img)
+	h, err := img.Digest()
+	if err != nil {
+		return fmt.Errorf("failed to get image digest: %w", err)
 	}
 
 	opts := req.Source.NewOptions()
@@ -207,16 +196,20 @@ func (o *Out) Execute() error {
 	return nil
 }
 
-func put(req resource.OutRequest, img partial.WithRawManifest, tags []name.Tag, opts resource.Options) error {
+func put(req resource.OutRequest, img *IndexOrImage, tags []name.Tag, opts resource.Options) error {
+	taggable, err := img.Taggable()
+	if err != nil {
+		return fmt.Errorf("taggable: %w", err)
+	}
 	images := map[name.Reference]remote.Taggable{}
 	var identifiers []string
 	for _, tag := range tags {
-		images[tag] = img
+		images[tag] = taggable
 		identifiers = append(identifiers, tag.Identifier())
 	}
 
 	logrus.Infof("pushing tag(s) %s", strings.Join(identifiers, ", "))
-	err := remote.MultiWrite(images, opts.Remote...)
+	err = remote.MultiWrite(images, opts.Remote...)
 	if err != nil {
 		return fmt.Errorf("pushing tag(s): %w", err)
 	}
@@ -224,21 +217,18 @@ func put(req resource.OutRequest, img partial.WithRawManifest, tags []name.Tag, 
 	logrus.Info("pushed")
 
 	if req.Source.ContentTrust != nil {
-		switch t := img.(type) {
-		case v1.Image:
-			err = signImages(req, t, tags)
-			if err != nil {
-				return fmt.Errorf("signing image(s): %w", err)
-			}
-		default:
-			return fmt.Errorf("cannot sign type (%T)", img)
+		err = img.ForEachImage(func(imgToSign v1.Image) error {
+			return signImages(req, imgToSign, tags)
+		})
+		if err != nil {
+			return fmt.Errorf("signing image(s): %w", err)
 		}
 	}
 
 	return nil
 }
 
-func loadImage(path string) (partial.WithRawManifest, error) {
+func loadImage(path string) (*IndexOrImage, error) {
 	stat, err := os.Stat(path)
 	if err != nil {
 		return nil, err
@@ -249,30 +239,18 @@ func loadImage(path string) (partial.WithRawManifest, error) {
 		if err != nil {
 			return nil, fmt.Errorf("loading %s as tarball: %w", path, err)
 		}
-		return img, nil
+		rv, err := NewIndexImageFromImage(img)
+		if err != nil {
+			return nil, fmt.Errorf("new index image from image: %w", err)
+		}
+		return rv, nil
 	}
 
-	ii, err := layout.ImageIndexFromPath(path)
+	rv, err := NewIndexImageFromPath(path)
 	if err != nil {
-		return nil, fmt.Errorf("loading %s as OCI layout: %w", path, err)
+		return nil, fmt.Errorf("new index image from path: %w", err)
 	}
-
-	m, err := ii.IndexManifest()
-	if err != nil {
-		return nil, err
-	}
-	if len(m.Manifests) != 1 {
-		return nil, fmt.Errorf("layout contains %d entries", len(m.Manifests))
-	}
-
-	desc := m.Manifests[0]
-	if desc.MediaType.IsImage() {
-		return ii.Image(desc.Digest)
-	} else if desc.MediaType.IsIndex() {
-		return ii.ImageIndex(desc.Digest)
-	}
-
-	return nil, fmt.Errorf("layout contains non-image (mediaType: %q)", desc.MediaType)
+	return rv, nil
 }
 
 func signImages(req resource.OutRequest, img v1.Image, tags []name.Tag) error {

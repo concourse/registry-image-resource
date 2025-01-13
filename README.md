@@ -465,7 +465,7 @@ Fetches an image at the exact digest specified by the version.
 <tbody>
   <tr>
     <td><code>format</code> <em>(Optional)<br>Default: <code>rootfs</code></em></td>
-    <td>The format to fetch the image as. Accepted values are: <code>rootfs</code>, <code>oci</code></td>
+    <td>The format to fetch the image as. Accepted values are: <code>rootfs</code>, <code>oci</code>, <code>oci-layout</code></td>
   </tr>
   <tr>
     <td><code>skip_download</code> <em>(Optional)<br>Default: false</em></td>
@@ -486,7 +486,6 @@ The resource will produce the following files:
   For ECR images, this will include the registry the image was pulled from.
 * `./tag`: A file containing the tag from the version.
 * `./digest`: A file containing the digest from the version, e.g. `sha256:...`.
-* `./labels.json`: A file containing a JSON map of image labels, e.g. `{ "commit": "4e5c4ea" }`
 
 The remaining files depend on the configuration value for `format`:
 
@@ -501,16 +500,35 @@ In this format, the resource will produce the following files:
 
 * `./rootfs/...`: the unpacked rootfs produced by the image.
 * `./metadata.json`: the runtime information to propagate to Concourse.
+* `./labels.json`: A file containing a JSON map of image labels, e.g. `{ "commit": "4e5c4ea" }`
 
 ##### `oci` Format
 
-The `oci` format will fetch the image and write it to disk in OCI format. This
-is analogous to running `docker save`.
+The `oci` format will fetch the image and write it to disk in a format similar
+to running `docker save`.
 
 In this format, the resource will produce the following files:
 
 * `./image.tar`: the OCI image tarball, suitable for passing to `docker load`.
+* `./labels.json`: A file containing a JSON map of image labels, e.g. `{ "commit": "4e5c4ea" }`
 
+##### `oci-layout` Format
+
+The `oci-layout` format will fetch the image (or images) and write it to disk according to the
+[OCI Image Layout Specification](https://github.com/opencontainers/image-spec/blob/main/image-layout.md).
+
+In this format, the resource will produce the following files:
+
+* `./oci/index.json`
+* `./oci/oci-layout`
+* `./oci/blobs/sha256/aabbccdd...`
+* `./oci/blobs/sha256/ffeeddcc...`
+* `./oci/single-image-digest`: this is written only when the original digest specifies a legacy image,
+  rather than an image index. It is in the format `sha256:xxx`
+
+This format supports images with builds for different architectures, and is suitable for a corresponding
+`put` step, where the resultant put image will have the same digest as the one originally fetched
+(useful for mirroring use-cases).
 
 ### `put` Step (`out` script): push and tag an image
 
