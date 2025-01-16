@@ -17,7 +17,6 @@ import (
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
-	"github.com/google/go-containerregistry/pkg/v1/empty"
 	"github.com/google/go-containerregistry/pkg/v1/layout"
 	"github.com/google/go-containerregistry/pkg/v1/partial"
 	"github.com/google/go-containerregistry/pkg/v1/random"
@@ -30,6 +29,7 @@ import (
 	"github.com/onsi/gomega/ghttp"
 
 	resource "github.com/concourse/registry-image-resource"
+	"github.com/concourse/registry-image-resource/commands"
 )
 
 var _ = Describe("Out", func() {
@@ -311,10 +311,7 @@ var _ = Describe("Out", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			path := filepath.Join(srcDir, "multi-arch")
-			p, err := layout.Write(path, empty.Index)
-			Expect(err).ToNot(HaveOccurred())
-
-			err = p.AppendIndex(randomImageIndex)
+			_, err = layout.Write(path, randomImageIndex)
 			Expect(err).ToNot(HaveOccurred())
 
 			req.Params.Image = "multi-arch"
@@ -390,6 +387,60 @@ var _ = Describe("Out", func() {
 					Expect(pushedDigest).To(Equal(randomDigest))
 				}
 			})
+		})
+	})
+
+	Context("pushing an OCI imageIndex (which originated as legacy image) to dockerhub", func() {
+		var randomImage v1.Image
+
+		BeforeEach(func() {
+			checkDockerPushUserConfigured()
+
+			req.Source = resource.Source{
+				Repository: dockerPushRepo,
+				Tag:        resource.Tag(parallelTag("latest")),
+
+				BasicCredentials: resource.BasicCredentials{
+					Username: dockerPushUsername,
+					Password: dockerPushPassword,
+				},
+			}
+
+			var err error
+
+			randomImage, err = random.Image(1024, 1)
+			Expect(err).ToNot(HaveOccurred())
+
+			ioi, err := commands.NewIndexImageFromImage(randomImage)
+			Expect(err).ToNot(HaveOccurred())
+
+			err = ioi.WriteToPath(filepath.Join(srcDir, "oci-layout-legacy-image"))
+			Expect(err).ToNot(HaveOccurred())
+
+			req.Params.Image = "oci-layout-legacy-image"
+		})
+
+		It("works", func() {
+			Expect(actualErr).ToNot(HaveOccurred())
+
+			name, err := name.ParseReference(req.Source.Name())
+			Expect(err).ToNot(HaveOccurred())
+
+			auth := &authn.Basic{
+				Username: req.Source.Username,
+				Password: req.Source.Password,
+			}
+
+			img, err := remote.Image(name, remote.WithAuth(auth))
+			Expect(err).ToNot(HaveOccurred())
+
+			pushedDigest, err := img.Digest()
+			Expect(err).ToNot(HaveOccurred())
+
+			randomDigest, err := randomImage.Digest()
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(pushedDigest).To(Equal(randomDigest))
 		})
 	})
 

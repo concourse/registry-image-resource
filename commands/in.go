@@ -135,6 +135,31 @@ func downloadWithRetry(tag name.Tag, source resource.Source, params resource.Get
 			return err
 		}
 
+		// handle oci-layout case first
+		if params.Format() == OciLayoutFormatName {
+			// first fetch the manifest
+			remoteDesc, err := remote.Get(repo.Digest(version.Digest), opts...)
+			if err != nil {
+				return fmt.Errorf("remote get: %w", err)
+			}
+
+			// wrap (as needed) as an index image
+			ioi, err := NewIndexImageFromRemote(remoteDesc)
+			if err != nil {
+				return fmt.Errorf("remote index or image: %w", err)
+			}
+
+			// write it out
+			err = ioi.WriteToPath(filepath.Join(dest, OciLayoutDirName))
+			if err != nil {
+				return fmt.Errorf("write oci layout: %w", err)
+			}
+
+			// and done
+			return nil
+		}
+
+		// else fallback to current behavior
 		image, err := remote.Image(repo.Digest(version.Digest), opts...)
 		if err != nil {
 			return fmt.Errorf("get image: %w", err)
