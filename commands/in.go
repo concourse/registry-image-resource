@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 
@@ -192,17 +191,17 @@ func saveImage(dest string, tag name.Tag, image v1.Image, format string, debug b
 }
 
 func saveVersionInfo(dest string, version resource.Version, repo string) error {
-	err := ioutil.WriteFile(filepath.Join(dest, "tag"), []byte(version.Tag), 0644)
+	err := os.WriteFile(filepath.Join(dest, "tag"), []byte(version.Tag), 0644)
 	if err != nil {
 		return fmt.Errorf("write image tag: %w", err)
 	}
 
-	err = ioutil.WriteFile(filepath.Join(dest, "digest"), []byte(version.Digest), 0644)
+	err = os.WriteFile(filepath.Join(dest, "digest"), []byte(version.Digest), 0644)
 	if err != nil {
 		return fmt.Errorf("write image digest: %w", err)
 	}
 
-	err = ioutil.WriteFile(filepath.Join(dest, "repository"), []byte(repo), 0644)
+	err = os.WriteFile(filepath.Join(dest, "repository"), []byte(repo), 0644)
 	if err != nil {
 		return fmt.Errorf("write image repository: %w", err)
 	}

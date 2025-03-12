@@ -1,12 +1,12 @@
 package resource
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
@@ -177,6 +177,7 @@ func (source Source) SetOptions(opts *Options) error {
 }
 
 func (source Source) AuthOptions(repo name.Repository, scopeActions []string) ([]remote.Option, error) {
+	ctx := context.Background()
 	var auth authn.Authenticator
 	if source.Username != "" && source.Password != "" {
 		auth = &authn.Basic{
@@ -218,7 +219,7 @@ func (source Source) AuthOptions(repo name.Repository, scopeActions []string) ([
 		scopes[i] = repo.Scope(action)
 	}
 
-	rt, err := transport.New(repo.Registry, auth, tr, scopes)
+	rt, err := transport.NewWithContext(ctx, repo.Registry, auth, tr, scopes)
 	if err != nil {
 		return nil, fmt.Errorf("initialize transport: %w", err)
 	}
@@ -292,7 +293,7 @@ type ContentTrust struct {
 		└── client.key
 */
 func (ct *ContentTrust) PrepareConfigDir() (string, error) {
-	configDir, err := ioutil.TempDir("", "notary-config")
+	configDir, err := os.MkdirTemp("", "notary-config")
 	if err != nil {
 		return "", err
 	}
@@ -312,7 +313,7 @@ func (ct *ContentTrust) PrepareConfigDir() (string, error) {
 		return "", err
 	}
 
-	err = ioutil.WriteFile(filepath.Join(configDir, "gcr-config.json"), configData, 0644)
+	err = os.WriteFile(filepath.Join(configDir, "gcr-config.json"), configData, 0644)
 	if err != nil {
 		return "", err
 	}
@@ -329,7 +330,7 @@ func (ct *ContentTrust) PrepareConfigDir() (string, error) {
 	}
 
 	repoKey := fmt.Sprintf("%s.key", ct.RepositoryKeyID)
-	err = ioutil.WriteFile(filepath.Join(privateDir, repoKey), []byte(ct.RepositoryKey), 0600)
+	err = os.WriteFile(filepath.Join(privateDir, repoKey), []byte(ct.RepositoryKey), 0600)
 	if err != nil {
 		return "", err
 	}
@@ -340,11 +341,11 @@ func (ct *ContentTrust) PrepareConfigDir() (string, error) {
 		if err != nil {
 			return "", err
 		}
-		err = ioutil.WriteFile(filepath.Join(certDir, "client.cert"), []byte(ct.TLSCert), 0644)
+		err = os.WriteFile(filepath.Join(certDir, "client.cert"), []byte(ct.TLSCert), 0644)
 		if err != nil {
 			return "", err
 		}
-		err = ioutil.WriteFile(filepath.Join(certDir, "client.key"), []byte(ct.TLSKey), 0644)
+		err = os.WriteFile(filepath.Join(certDir, "client.key"), []byte(ct.TLSKey), 0644)
 		if err != nil {
 			return "", err
 		}
@@ -523,7 +524,7 @@ func (p *PutParams) ParseAdditionalTags(src string) ([]string, error) {
 
 	filepath := filepath.Join(src, p.AdditionalTags)
 
-	content, err := ioutil.ReadFile(filepath)
+	content, err := os.ReadFile(filepath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read file at %q: %s", filepath, err)
 	}

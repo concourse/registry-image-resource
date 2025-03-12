@@ -4,7 +4,6 @@ import (
 	"archive/tar"
 	"compress/gzip"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -30,7 +29,7 @@ func unpackImage(dest string, img v1.Image, debug bool, out io.Writer) error {
 	chown := os.Getuid() == 0
 
 	if debug {
-		out = ioutil.Discard
+		out = io.Discard
 	}
 
 	progress := mpb.New(mpb.WithOutput(out))
