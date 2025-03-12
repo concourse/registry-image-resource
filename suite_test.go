@@ -2,7 +2,6 @@ package resource_test
 
 import (
 	"encoding/json"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"strconv"
@@ -145,7 +144,7 @@ func latestManifest(ref string) (string, *v1.Manifest) {
 }
 
 func cat(path string) string {
-	bytes, err := ioutil.ReadFile(path)
+	bytes, err := os.ReadFile(path)
 	Expect(err).ToNot(HaveOccurred())
 	return string(bytes)
 }

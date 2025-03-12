@@ -6,7 +6,6 @@ import (
 	"encoding/pem"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"os/exec"
@@ -51,7 +50,7 @@ var _ = Describe("Out", func() {
 
 	BeforeEach(func() {
 		var err error
-		srcDir, err = ioutil.TempDir("", "docker-image-out-dir")
+		srcDir, err = os.MkdirTemp("", "docker-image-out-dir")
 		Expect(err).ToNot(HaveOccurred())
 
 		req.Source = resource.Source{}
@@ -254,9 +253,9 @@ var _ = Describe("Out", func() {
 			BeforeEach(func() {
 				req.Params.AdditionalTags = "tags"
 
-				err := ioutil.WriteFile(
+				err := os.WriteFile(
 					filepath.Join(srcDir, req.Params.AdditionalTags),
-					[]byte(fmt.Sprintf("%s\n%s\n", parallelTag("additional"), parallelTag("tags"))),
+					fmt.Appendf([]byte{}, "%s\n%s\n", parallelTag("additional"), parallelTag("tags")),
 					0644,
 				)
 				Expect(err).ToNot(HaveOccurred())
@@ -940,7 +939,7 @@ func (example SemverTagPushExample) Run() {
 	layers, err := image.Layers()
 	Expect(err).ToNot(HaveOccurred())
 
-	imageDir, err := ioutil.TempDir("", "put-dir")
+	imageDir, err := os.MkdirTemp("", "put-dir")
 	Expect(err).ToNot(HaveOccurred())
 
 	defer os.RemoveAll(imageDir)
@@ -1043,7 +1042,7 @@ func (example SemverTagPushExample) Run() {
 		Expect(err).ToNot(HaveOccurred())
 
 		actualTags := []string{}
-		pushedTags.Range(func(key, val interface{}) bool {
+		pushedTags.Range(func(key, val any) bool {
 			actualTags = append(actualTags, key.(string))
 			return true
 		})

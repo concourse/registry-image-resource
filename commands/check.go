@@ -100,9 +100,9 @@ func check(source resource.Source, from *resource.Version) (resource.CheckRespon
 	}
 
 	if source.Tag != "" {
-		return checkTag(repo.Tag(source.Tag.String()), source, from, opts...)
+		return checkTag(repo.Tag(source.Tag.String()), from, opts...)
 	} else if source.Regex != "" {
-		return checkRepositoryRegex(repo, source, from, opts...)
+		return checkRepositoryRegex(repo, source, opts...)
 	} else {
 		return checkRepository(repo, source, from, opts...)
 	}
@@ -274,7 +274,7 @@ func checkRepository(repo name.Repository, source resource.Source, from *resourc
 	return response, nil
 }
 
-func checkRepositoryRegex(repo name.Repository, source resource.Source, from *resource.Version, opts ...remote.Option) (resource.CheckResponse, error) {
+func checkRepositoryRegex(repo name.Repository, source resource.Source, opts ...remote.Option) (resource.CheckResponse, error) {
 	tags, err := remote.List(repo, opts...)
 	if err != nil {
 		return resource.CheckResponse{}, fmt.Errorf("list repository tags: %w", err)
@@ -354,7 +354,7 @@ func (vs TagVersions) Len() int           { return len(vs) }
 func (vs TagVersions) Less(i, j int) bool { return vs[i].Version.LessThan(vs[j].Version) }
 func (vs TagVersions) Swap(i, j int)      { vs[i], vs[j] = vs[j], vs[i] }
 
-func checkTag(tag name.Tag, source resource.Source, version *resource.Version, opts ...remote.Option) (resource.CheckResponse, error) {
+func checkTag(tag name.Tag, version *resource.Version, opts ...remote.Option) (resource.CheckResponse, error) {
 	digest, found, err := headOrGet(tag, opts...)
 	if err != nil {
 		return resource.CheckResponse{}, fmt.Errorf("get remote image: %w", err)

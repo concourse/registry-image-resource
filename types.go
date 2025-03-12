@@ -1,12 +1,12 @@
 package resource
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
@@ -14,12 +14,11 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/credentials/stscreds"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/ecr"
-	"github.com/aws/aws-sdk-go/service/ecr/ecriface"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/ecr"
+	"github.com/aws/aws-sdk-go-v2/service/sts"
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
@@ -57,14 +56,15 @@ type OutResponse struct {
 }
 
 type AwsCredentials struct {
-	AwsAccessKeyId     string   `json:"aws_access_key_id,omitempty"`
-	AwsSecretAccessKey string   `json:"aws_secret_access_key,omitempty"`
-	AwsSessionToken    string   `json:"aws_session_token,omitempty"`
-	AwsRegion          string   `json:"aws_region,omitempty"`
-	AWSECRRegistryId   string   `json:"aws_ecr_registry_id,omitempty"`
-	AwsRoleArn         string   `json:"aws_role_arn,omitempty"`
-	AwsRoleArns        []string `json:"aws_role_arns,omitempty"`
-	AwsAccountId       string   `json:"aws_account_id,omitempty"`
+	AwsAccessKeyId     string `json:"aws_access_key_id,omitempty"`
+	AwsSecretAccessKey string `json:"aws_secret_access_key,omitempty"`
+	AwsSessionToken    string `json:"aws_session_token,omitempty"`
+	AwsRegion          string `json:"aws_region,omitempty"`
+	// Deprecated: No longer required for cross-account ECR access
+	AWSECRRegistryId string   `json:"aws_ecr_registry_id,omitempty"`
+	AwsRoleArn       string   `json:"aws_role_arn,omitempty"`
+	AwsRoleArns      []string `json:"aws_role_arns,omitempty"`
+	AwsAccountId     string   `json:"aws_account_id,omitempty"`
 }
 
 type BasicCredentials struct {
@@ -177,6 +177,7 @@ func (source Source) SetOptions(opts *Options) error {
 }
 
 func (source Source) AuthOptions(repo name.Repository, scopeActions []string) ([]remote.Option, error) {
+	ctx := context.Background()
 	var auth authn.Authenticator
 	if source.Username != "" && source.Password != "" {
 		auth = &authn.Basic{
@@ -218,7 +219,7 @@ func (source Source) AuthOptions(repo name.Repository, scopeActions []string) ([
 		scopes[i] = repo.Scope(action)
 	}
 
-	rt, err := transport.New(repo.Registry, auth, tr, scopes)
+	rt, err := transport.NewWithContext(ctx, repo.Registry, auth, tr, scopes)
 	if err != nil {
 		return nil, fmt.Errorf("initialize transport: %w", err)
 	}
@@ -292,7 +293,7 @@ type ContentTrust struct {
 		└── client.key
 */
 func (ct *ContentTrust) PrepareConfigDir() (string, error) {
-	configDir, err := ioutil.TempDir("", "notary-config")
+	configDir, err := os.MkdirTemp("", "notary-config")
 	if err != nil {
 		return "", err
 	}
@@ -312,7 +313,7 @@ func (ct *ContentTrust) PrepareConfigDir() (string, error) {
 		return "", err
 	}
 
-	err = ioutil.WriteFile(filepath.Join(configDir, "gcr-config.json"), configData, 0644)
+	err = os.WriteFile(filepath.Join(configDir, "gcr-config.json"), configData, 0644)
 	if err != nil {
 		return "", err
 	}
@@ -329,7 +330,7 @@ func (ct *ContentTrust) PrepareConfigDir() (string, error) {
 	}
 
 	repoKey := fmt.Sprintf("%s.key", ct.RepositoryKeyID)
-	err = ioutil.WriteFile(filepath.Join(privateDir, repoKey), []byte(ct.RepositoryKey), 0600)
+	err = os.WriteFile(filepath.Join(privateDir, repoKey), []byte(ct.RepositoryKey), 0600)
 	if err != nil {
 		return "", err
 	}
@@ -340,11 +341,11 @@ func (ct *ContentTrust) PrepareConfigDir() (string, error) {
 		if err != nil {
 			return "", err
 		}
-		err = ioutil.WriteFile(filepath.Join(certDir, "client.cert"), []byte(ct.TLSCert), 0644)
+		err = os.WriteFile(filepath.Join(certDir, "client.cert"), []byte(ct.TLSCert), 0644)
 		if err != nil {
 			return "", err
 		}
-		err = ioutil.WriteFile(filepath.Join(certDir, "client.key"), []byte(ct.TLSKey), 0644)
+		err = os.WriteFile(filepath.Join(certDir, "client.key"), []byte(ct.TLSKey), 0644)
 		if err != nil {
 			return "", err
 		}
@@ -371,22 +372,27 @@ func (source *Source) Metadata() []MetadataField {
 }
 
 func (source *Source) AuthenticateToECR() bool {
-	logrus.Warnln("ECR integration is experimental and untested")
-
 	if source.AwsRoleArn != "" && len(source.AwsRoleArns) != 0 {
 		logrus.Errorf("`aws_role_arn` cannot be set at the same time as `aws_role_arns`")
 		return false
 	}
 
-	awsConfig := aws.Config{
-		Region: aws.String(source.AwsRegion),
+	awsConfig, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion(source.AwsRegion))
+	if err != nil {
+		logrus.Error("error creating aws config:", err)
+		return false
 	}
 
 	if source.AwsAccessKeyId != "" && source.AwsSecretAccessKey != "" {
-		awsConfig.Credentials = credentials.NewStaticCredentials(source.AwsAccessKeyId, source.AwsSecretAccessKey, source.AwsSessionToken)
-	}
+		appCreds := aws.NewCredentialsCache(credentials.NewStaticCredentialsProvider(source.AwsAccessKeyId, source.AwsSecretAccessKey, source.AwsSessionToken))
+		_, err := appCreds.Retrieve(context.TODO())
+		if err != nil {
+			logrus.Error("error using static credentials:", err)
+			return false
+		}
 
-	mySession := session.Must(session.NewSession(&awsConfig))
+		awsConfig.Credentials = appCreds
+	}
 
 	// Note: This implementation gives precedence to `aws_role_arn` since it
 	// assumes that we've errored if both `aws_role_arn` and `aws_role_arns`
@@ -396,18 +402,32 @@ func (source *Source) AuthenticateToECR() bool {
 		awsRoleArns = []string{source.AwsRoleArn}
 	}
 	for _, roleArn := range awsRoleArns {
-		logrus.Debugf("assuming new role: %s", roleArn)
-		mySession = session.Must(session.NewSession(&aws.Config{
-			Region:      aws.String(source.AwsRegion),
-			Credentials: stscreds.NewCredentials(mySession, roleArn),
-		}))
+		logrus.Debugf("assuming role: %s", roleArn)
+		stsClient := sts.NewFromConfig(awsConfig)
+		result, err := stsClient.AssumeRole(context.TODO(), &sts.AssumeRoleInput{
+			RoleArn: aws.String(roleArn),
+		})
+		if err != nil {
+			logrus.Errorf("error assuming role '%s': %s", roleArn, err.Error())
+			return false
+		}
+
+		awsConfig.Credentials = aws.NewCredentialsCache(credentials.NewStaticCredentialsProvider(
+			*result.Credentials.SecretAccessKey,
+			*result.Credentials.SecretAccessKey,
+			*result.Credentials.SessionToken),
+		)
 	}
 
-	client := ecr.New(mySession)
-	result, err := source.GetECRAuthorizationToken(client)
+	client := ecr.NewFromConfig(awsConfig)
+	result, err := client.GetAuthorizationToken(context.TODO(), &ecr.GetAuthorizationTokenInput{})
 	if err != nil {
 		logrus.Errorf("failed to authenticate to ECR: %s", err)
 		return false
+	}
+
+	if source.AWSECRRegistryId != "" {
+		logrus.Warn("aws_ecr_registry_id is no longer required. This param may be removed in a future version of this resource-type")
 	}
 
 	for _, data := range result.AuthorizationData {
@@ -438,14 +458,6 @@ func (source *Source) AuthenticateToECR() bool {
 	}
 
 	return true
-}
-
-func (source *Source) GetECRAuthorizationToken(client ecriface.ECRAPI) (*ecr.GetAuthorizationTokenOutput, error) {
-	input := &ecr.GetAuthorizationTokenInput{}
-	if source.AWSECRRegistryId != "" {
-		input.RegistryIds = append(input.RegistryIds, aws.String(source.AWSECRRegistryId))
-	}
-	return client.GetAuthorizationToken(input)
 }
 
 // Tag refers to a tag for an image in the registry.
@@ -523,7 +535,7 @@ func (p *PutParams) ParseAdditionalTags(src string) ([]string, error) {
 
 	filepath := filepath.Join(src, p.AdditionalTags)
 
-	content, err := ioutil.ReadFile(filepath)
+	content, err := os.ReadFile(filepath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read file at %q: %s", filepath, err)
 	}

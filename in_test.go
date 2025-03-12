@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"os/exec"
@@ -50,7 +49,7 @@ var _ = Describe("In", func() {
 
 	BeforeEach(func() {
 		var err error
-		destDir, err = ioutil.TempDir("", "docker-image-in-dir")
+		destDir, err = os.MkdirTemp("", "docker-image-in-dir")
 		Expect(err).ToNot(HaveOccurred())
 
 		req.Source = resource.Source{}
@@ -192,7 +191,7 @@ var _ = Describe("In", func() {
 		It("does not restore files that were removed in later layers", func() {
 			Expect(actualErr).ToNot(HaveOccurred())
 
-			infos, err := ioutil.ReadDir(rootfsPath("top-dir-1"))
+			infos, err := os.ReadDir(rootfsPath("top-dir-1"))
 			Expect(err).ToNot(HaveOccurred())
 			Expect(infos).To(HaveLen(2))
 
@@ -204,7 +203,7 @@ var _ = Describe("In", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(stat.IsDir()).To(BeTrue())
 
-			infos, err = ioutil.ReadDir(rootfsPath("top-dir-1", "nested-dir"))
+			infos, err = os.ReadDir(rootfsPath("top-dir-1", "nested-dir"))
 			Expect(err).ToNot(HaveOccurred())
 			Expect(infos).To(HaveLen(3))
 
@@ -226,7 +225,7 @@ var _ = Describe("In", func() {
 			stat, err = os.Stat(rootfsPath("top-dir-2"))
 			Expect(err).To(HaveOccurred())
 
-			infos, err = ioutil.ReadDir(rootfsPath("top-dir-3"))
+			infos, err = os.ReadDir(rootfsPath("top-dir-3"))
 			Expect(err).ToNot(HaveOccurred())
 			Expect(infos).To(HaveLen(1))
 
@@ -434,7 +433,7 @@ var _ = Describe("In", func() {
 		It("saves the digest to a file", func() {
 			Expect(actualErr).ToNot(HaveOccurred())
 
-			digest, err := ioutil.ReadFile(filepath.Join(destDir, "digest"))
+			digest, err := os.ReadFile(filepath.Join(destDir, "digest"))
 			Expect(err).ToNot(HaveOccurred())
 			Expect(string(digest)).To(Equal(req.Version.Digest))
 		})
@@ -452,7 +451,7 @@ var _ = Describe("In", func() {
 		It("saves the tag to a file", func() {
 			Expect(actualErr).ToNot(HaveOccurred())
 
-			tag, err := ioutil.ReadFile(filepath.Join(destDir, "tag"))
+			tag, err := os.ReadFile(filepath.Join(destDir, "tag"))
 			Expect(err).ToNot(HaveOccurred())
 			Expect(string(tag)).To(Equal("tagged"))
 		})
@@ -468,7 +467,7 @@ var _ = Describe("In", func() {
 		It("saves the repository string to a file", func() {
 			Expect(actualErr).ToNot(HaveOccurred())
 
-			repository, err := ioutil.ReadFile(filepath.Join(destDir, "repository"))
+			repository, err := os.ReadFile(filepath.Join(destDir, "repository"))
 			Expect(err).ToNot(HaveOccurred())
 			Expect(string(repository)).To(Equal("concourse/test-image-static"))
 		})
@@ -498,11 +497,11 @@ var _ = Describe("In", func() {
 		It("saves the tag and digest files", func() {
 			Expect(actualErr).ToNot(HaveOccurred())
 
-			digest, err := ioutil.ReadFile(filepath.Join(destDir, "digest"))
+			digest, err := os.ReadFile(filepath.Join(destDir, "digest"))
 			Expect(err).ToNot(HaveOccurred())
 			Expect(string(digest)).To(Equal(LATEST_STATIC_DIGEST))
 
-			tag, err := ioutil.ReadFile(filepath.Join(destDir, "tag"))
+			tag, err := os.ReadFile(filepath.Join(destDir, "tag"))
 			Expect(err).ToNot(HaveOccurred())
 			Expect(string(tag)).To(Equal("latest"))
 		})
@@ -755,10 +754,10 @@ var _ = Describe("In", func() {
 					_, err := os.Stat(rootfsPath("Dockerfile"))
 					Expect(err).ToNot(HaveOccurred())
 
-					_, err = ioutil.ReadFile(filepath.Join(destDir, "digest"))
+					_, err = os.ReadFile(filepath.Join(destDir, "digest"))
 					Expect(err).ToNot(HaveOccurred())
 
-					_, err = ioutil.ReadFile(filepath.Join(destDir, "tag"))
+					_, err = os.ReadFile(filepath.Join(destDir, "tag"))
 					Expect(err).ToNot(HaveOccurred())
 				})
 			})
@@ -860,10 +859,10 @@ var _ = Describe("In", func() {
 					_, err := os.Stat(rootfsPath("Dockerfile"))
 					Expect(err).ToNot(HaveOccurred())
 
-					_, err = ioutil.ReadFile(filepath.Join(destDir, "digest"))
+					_, err = os.ReadFile(filepath.Join(destDir, "digest"))
 					Expect(err).ToNot(HaveOccurred())
 
-					_, err = ioutil.ReadFile(filepath.Join(destDir, "tag"))
+					_, err = os.ReadFile(filepath.Join(destDir, "tag"))
 					Expect(err).ToNot(HaveOccurred())
 				})
 			})
