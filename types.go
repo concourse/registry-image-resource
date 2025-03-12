@@ -372,8 +372,6 @@ func (source *Source) Metadata() []MetadataField {
 }
 
 func (source *Source) AuthenticateToECR() bool {
-	logrus.Warnln("ECR integration is experimental and untested")
-
 	if source.AwsRoleArn != "" && len(source.AwsRoleArns) != 0 {
 		logrus.Errorf("`aws_role_arn` cannot be set at the same time as `aws_role_arns`")
 		return false
