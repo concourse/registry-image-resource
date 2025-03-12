@@ -14,12 +14,11 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/credentials/stscreds"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/ecr"
-	"github.com/aws/aws-sdk-go/service/ecr/ecriface"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/ecr"
+	"github.com/aws/aws-sdk-go-v2/service/sts"
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
@@ -379,15 +378,22 @@ func (source *Source) AuthenticateToECR() bool {
 		return false
 	}
 
-	awsConfig := aws.Config{
-		Region: aws.String(source.AwsRegion),
+	awsConfig, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion(source.AwsRegion))
+	if err != nil {
+		logrus.Error("error creating aws config:", err)
+		return false
 	}
 
 	if source.AwsAccessKeyId != "" && source.AwsSecretAccessKey != "" {
-		awsConfig.Credentials = credentials.NewStaticCredentials(source.AwsAccessKeyId, source.AwsSecretAccessKey, source.AwsSessionToken)
-	}
+		appCreds := aws.NewCredentialsCache(credentials.NewStaticCredentialsProvider(source.AwsAccessKeyId, source.AwsSecretAccessKey, source.AwsSessionToken))
+		_, err := appCreds.Retrieve(context.TODO())
+		if err != nil {
+			logrus.Error("error using static credentials:", err)
+			return false
+		}
 
-	mySession := session.Must(session.NewSession(&awsConfig))
+		awsConfig.Credentials = appCreds
+	}
 
 	// Note: This implementation gives precedence to `aws_role_arn` since it
 	// assumes that we've errored if both `aws_role_arn` and `aws_role_arns`
@@ -397,15 +403,25 @@ func (source *Source) AuthenticateToECR() bool {
 		awsRoleArns = []string{source.AwsRoleArn}
 	}
 	for _, roleArn := range awsRoleArns {
-		logrus.Debugf("assuming new role: %s", roleArn)
-		mySession = session.Must(session.NewSession(&aws.Config{
-			Region:      aws.String(source.AwsRegion),
-			Credentials: stscreds.NewCredentials(mySession, roleArn),
-		}))
+		logrus.Debugf("assuming role: %s", roleArn)
+		stsClient := sts.NewFromConfig(awsConfig)
+		result, err := stsClient.AssumeRole(context.TODO(), &sts.AssumeRoleInput{
+			RoleArn: aws.String(roleArn),
+		})
+		if err != nil {
+			logrus.Errorf("error assuming role '%s': %s", roleArn, err.Error())
+			return false
+		}
+
+		awsConfig.Credentials = aws.NewCredentialsCache(credentials.NewStaticCredentialsProvider(
+			*result.Credentials.SecretAccessKey,
+			*result.Credentials.SecretAccessKey,
+			*result.Credentials.SessionToken),
+		)
 	}
 
-	client := ecr.New(mySession)
-	result, err := source.GetECRAuthorizationToken(client)
+	client := ecr.NewFromConfig(awsConfig)
+	result, err := client.GetAuthorizationToken(context.TODO(), &ecr.GetAuthorizationTokenInput{})
 	if err != nil {
 		logrus.Errorf("failed to authenticate to ECR: %s", err)
 		return false
@@ -439,14 +455,6 @@ func (source *Source) AuthenticateToECR() bool {
 	}
 
 	return true
-}
-
-func (source *Source) GetECRAuthorizationToken(client ecriface.ECRAPI) (*ecr.GetAuthorizationTokenOutput, error) {
-	input := &ecr.GetAuthorizationTokenInput{}
-	if source.AWSECRRegistryId != "" {
-		input.RegistryIds = append(input.RegistryIds, aws.String(source.AWSECRRegistryId))
-	}
-	return client.GetAuthorizationToken(input)
 }
 
 // Tag refers to a tag for an image in the registry.
