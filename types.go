@@ -56,14 +56,15 @@ type OutResponse struct {
 }
 
 type AwsCredentials struct {
-	AwsAccessKeyId     string   `json:"aws_access_key_id,omitempty"`
-	AwsSecretAccessKey string   `json:"aws_secret_access_key,omitempty"`
-	AwsSessionToken    string   `json:"aws_session_token,omitempty"`
-	AwsRegion          string   `json:"aws_region,omitempty"`
-	AWSECRRegistryId   string   `json:"aws_ecr_registry_id,omitempty"`
-	AwsRoleArn         string   `json:"aws_role_arn,omitempty"`
-	AwsRoleArns        []string `json:"aws_role_arns,omitempty"`
-	AwsAccountId       string   `json:"aws_account_id,omitempty"`
+	AwsAccessKeyId     string `json:"aws_access_key_id,omitempty"`
+	AwsSecretAccessKey string `json:"aws_secret_access_key,omitempty"`
+	AwsSessionToken    string `json:"aws_session_token,omitempty"`
+	AwsRegion          string `json:"aws_region,omitempty"`
+	// Deprecated: No longer required for cross-account ECR access
+	AWSECRRegistryId string   `json:"aws_ecr_registry_id,omitempty"`
+	AwsRoleArn       string   `json:"aws_role_arn,omitempty"`
+	AwsRoleArns      []string `json:"aws_role_arns,omitempty"`
+	AwsAccountId     string   `json:"aws_account_id,omitempty"`
 }
 
 type BasicCredentials struct {
@@ -425,6 +426,10 @@ func (source *Source) AuthenticateToECR() bool {
 	if err != nil {
 		logrus.Errorf("failed to authenticate to ECR: %s", err)
 		return false
+	}
+
+	if source.AWSECRRegistryId != "" {
+		logrus.Warn("aws_ecr_registry_id is no longer required. This param may be removed in a future version of this resource-type")
 	}
 
 	for _, data := range result.AuthorizationData {
