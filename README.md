@@ -559,8 +559,9 @@ Tags may be specified in multiple ways:
   <tr>
     <td><code>image</code> <em>(Required)</em></td>
     <td>
-    The path to the <code>oci</code> image tarball to upload. Expanded with
-    <a href="https://golang.org/pkg/path/filepath/#Glob"><code>filepath.Glob</code></a>
+    Can be the path to the <code>oci</code> image tarball (e.g. <code>my-image/image.tar</code>)
+    or the path to an <a href="https://github.com/opencontainers/image-spec/blob/main/image-layout.md">OCI image layout</a> (e.g. <code>my-image/oci</code>).
+    Expanded with <a href="https://golang.org/pkg/path/filepath/#Glob"><code>filepath.Glob</code></a>
     </td>
   </tr>
   <tr>
