@@ -1098,13 +1098,34 @@ var _ = DescribeTable("tracking semver tags",
 	Entry("prerelease prefixes opted in",
 		SemverOrRegexTagCheckExample{
 			Tags: []testTag{
-				{Tag: "1.0.0-alpha.1", ImageName: "random-0"},
-				{Tag: "1.0.0", ImageName: "random-1"},
-				{Tag: "1.2.1-beta.1", ImageName: "random-2"},
-				{Tag: "1.2.1", ImageName: "random-3"},
-				{Tag: "2.0.0-rc.1", ImageName: "random-4"},
-				{Tag: "2.0.0", ImageName: "random-5"},
-				{Tag: "2.0.0-build.1", ImageName: "random-6"},
+				{
+					Tag:       "1.0.0-alpha.1",
+					ImageName: "random-0",
+				},
+				{
+					Tag:       "1.0.0",
+					ImageName: "random-1",
+				},
+				{
+					Tag:       "1.2.1-beta.1",
+					ImageName: "random-2",
+				},
+				{
+					Tag:       "1.2.1",
+					ImageName: "random-3",
+				},
+				{
+					Tag:       "2.0.0-rc.1",
+					ImageName: "random-4",
+				},
+				{
+					Tag:       "2.0.0",
+					ImageName: "random-5",
+				},
+				{
+					Tag:       "2.0.0-build.1",
+					ImageName: "random-6",
+				},
 			},
 			PreReleases:        true,
 			PreReleasePrefixes: []string{"build"},
@@ -1501,14 +1522,38 @@ var _ = DescribeTable("tracking semver tags",
 	Entry("opting in to prereleases allows additional '-' suffixes before variant",
 		SemverOrRegexTagCheckExample{
 			Tags: []testTag{
-				{Tag: "1.0.0-build-foo", ImageName: "random-1"},
-				{Tag: "1.0.0-rc.1-foo", ImageName: "random-2"},
-				{Tag: "1.0.0-alpha.1-foo", ImageName: "random-3"},
-				{Tag: "1.0.0-beta.1-foo", ImageName: "random-4"},
-				{Tag: "1.0.0-bar-foo", ImageName: "random-5"},
-				{Tag: "1.0.0-rc.1-bar-foo", ImageName: "random-6"},
-				{Tag: "1.0.0-alpha.1-bar-foo", ImageName: "random-7"},
-				{Tag: "1.0.0-beta.1-bar-foo", ImageName: "random-8"},
+				{
+					Tag:       "1.0.0-build-foo",
+					ImageName: "random-1",
+				},
+				{
+					Tag:       "1.0.0-rc.1-foo",
+					ImageName: "random-2",
+				},
+				{
+					Tag:       "1.0.0-alpha.1-foo",
+					ImageName: "random-3",
+				},
+				{
+					Tag:       "1.0.0-beta.1-foo",
+					ImageName: "random-4",
+				},
+				{
+					Tag:       "1.0.0-bar-foo",
+					ImageName: "random-5",
+				},
+				{
+					Tag:       "1.0.0-rc.1-bar-foo",
+					ImageName: "random-6",
+				},
+				{
+					Tag:       "1.0.0-alpha.1-bar-foo",
+					ImageName: "random-7",
+				},
+				{
+					Tag:       "1.0.0-beta.1-bar-foo",
+					ImageName: "random-8",
+				},
 			},
 
 			Variant:            "foo",

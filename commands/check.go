@@ -189,7 +189,7 @@ func checkRepository(repo name.Repository, source resource.Source, from *resourc
 						match = true
 					}
 				}
-				if ! match {
+				if !match {
 					// additional variant, not a prerelease segment
 					continue
 				}
