@@ -124,12 +124,7 @@ func (o *Out) Execute() error {
 	}
 
 	for _, tagName := range additionalTags {
-		tag, err := name.NewTag(fmt.Sprintf("%s:%s", req.Source.Repository, tagName))
-		if err != nil {
-			return fmt.Errorf("could not resolve repository/tag reference: %w", err)
-		}
-
-		tagsToPush = append(tagsToPush, tag)
+		tagsToPush = append(tagsToPush, repo.Tag(tagName))
 	}
 
 	if len(tagsToPush) == 0 {
