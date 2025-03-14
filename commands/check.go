@@ -173,14 +173,23 @@ func checkRepository(repo name.Repository, source resource.Source, from *resourc
 					continue
 				}
 
-				// contains additional variant
-				if strings.Contains(pre, "-") {
-					continue
+				preReleasePrefixes := []string{"alpha", "beta", "rc"}
+				if source.PreReleasePrefixes != nil && len(source.PreReleasePrefixes) > 0 {
+					preReleasePrefixes = append(preReleasePrefixes, source.PreReleasePrefixes...)
+				} else {
+					if strings.Contains(pre, "-") {
+						// contains additional variant
+						continue
+					}
 				}
 
-				if !strings.HasPrefix(pre, "alpha") &&
-					!strings.HasPrefix(pre, "beta") &&
-					!strings.HasPrefix(pre, "rc") {
+				match := false
+				for _, prefix := range preReleasePrefixes {
+					if strings.HasPrefix(pre, prefix) {
+						match = true
+					}
+				}
+				if !match {
 					// additional variant, not a prerelease segment
 					continue
 				}

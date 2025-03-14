@@ -1095,6 +1095,51 @@ var _ = DescribeTable("tracking semver tags",
 			},
 		},
 	),
+	Entry("prerelease prefixes opted in",
+		SemverOrRegexTagCheckExample{
+			Tags: []testTag{
+				{
+					Tag:       "1.0.0-alpha.1",
+					ImageName: "random-0",
+				},
+				{
+					Tag:       "1.0.0",
+					ImageName: "random-1",
+				},
+				{
+					Tag:       "1.2.1-beta.1",
+					ImageName: "random-2",
+				},
+				{
+					Tag:       "1.2.1",
+					ImageName: "random-3",
+				},
+				{
+					Tag:       "2.0.0-rc.1",
+					ImageName: "random-4",
+				},
+				{
+					Tag:       "2.0.0",
+					ImageName: "random-5",
+				},
+				{
+					Tag:       "2.0.0-build.1",
+					ImageName: "random-6",
+				},
+			},
+			PreReleases:        true,
+			PreReleasePrefixes: []string{"build"},
+			Versions: []string{
+				"1.0.0-alpha.1",
+				"1.0.0",
+				"1.2.1-beta.1",
+				"1.2.1",
+				"2.0.0-build.1",
+				"2.0.0-rc.1",
+				"2.0.0",
+			},
+		},
+	),
 	Entry("prereleases do not include 'variants'",
 		SemverOrRegexTagCheckExample{
 			Tags: []testTag{
@@ -1474,6 +1519,58 @@ var _ = DescribeTable("tracking semver tags",
 			},
 		},
 	),
+	Entry("opting in to prereleases allows additional '-' suffixes before variant",
+		SemverOrRegexTagCheckExample{
+			Tags: []testTag{
+				{
+					Tag:       "1.0.0-build-foo",
+					ImageName: "random-1",
+				},
+				{
+					Tag:       "1.0.0-rc.1-foo",
+					ImageName: "random-2",
+				},
+				{
+					Tag:       "1.0.0-alpha.1-foo",
+					ImageName: "random-3",
+				},
+				{
+					Tag:       "1.0.0-beta.1-foo",
+					ImageName: "random-4",
+				},
+				{
+					Tag:       "1.0.0-bar-foo",
+					ImageName: "random-5",
+				},
+				{
+					Tag:       "1.0.0-rc.1-bar-foo",
+					ImageName: "random-6",
+				},
+				{
+					Tag:       "1.0.0-alpha.1-bar-foo",
+					ImageName: "random-7",
+				},
+				{
+					Tag:       "1.0.0-beta.1-bar-foo",
+					ImageName: "random-8",
+				},
+			},
+
+			Variant:            "foo",
+			PreReleases:        true,
+			PreReleasePrefixes: []string{"build"},
+
+			Versions: []string{
+				"1.0.0-alpha.1-foo",
+				"1.0.0-alpha.1-bar-foo",
+				"1.0.0-beta.1-foo",
+				"1.0.0-beta.1-bar-foo",
+				"1.0.0-build-foo",
+				"1.0.0-rc.1-foo",
+				"1.0.0-rc.1-bar-foo",
+			},
+		},
+	),
 	Entry("tries mirror and falls back on original repository",
 		SemverOrRegexTagCheckExample{
 			Tags: []testTag{
@@ -1530,8 +1627,9 @@ type SemverOrRegexTagCheckExample struct {
 	Tags       []testTag
 	TagsToTime map[string]time.Time
 
-	PreReleases bool
-	Variant     string
+	PreReleases        bool
+	PreReleasePrefixes []string
+	Variant            string
 
 	Regex         string
 	CreatedAtSort bool
@@ -1570,12 +1668,13 @@ func (example SemverOrRegexTagCheckExample) Run() {
 
 	req := resource.CheckRequest{
 		Source: resource.Source{
-			Repository:       repo.Name(),
-			PreReleases:      example.PreReleases,
-			Variant:          example.Variant,
-			SemverConstraint: example.SemverConstraint,
-			Regex:            example.Regex,
-			CreatedAtSort:    example.CreatedAtSort,
+			Repository:         repo.Name(),
+			PreReleases:        example.PreReleases,
+			PreReleasePrefixes: example.PreReleasePrefixes,
+			Variant:            example.Variant,
+			SemverConstraint:   example.SemverConstraint,
+			Regex:              example.Regex,
+			CreatedAtSort:      example.CreatedAtSort,
 		},
 	}
 
