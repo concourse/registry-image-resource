@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"runtime"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	resource "github.com/concourse/registry-image-resource"
