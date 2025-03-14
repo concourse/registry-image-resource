@@ -141,7 +141,7 @@ differences:
   <tr>
     <td><code>pre_release_prefixes</code> <em>(Optional)</em></td>
     <td>
-    Opt in to additional pre-release prefixes (e.g. `build.3`)
+    An array of strings, where each string is an additional pre-release prefix that should be found (e.g. `build.3`). `pre_releases` must be set to `true`.
     </td>
   </tr>
   <tr>
