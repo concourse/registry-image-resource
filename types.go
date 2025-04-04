@@ -17,6 +17,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/credentials/stscreds"
 	"github.com/aws/aws-sdk-go-v2/service/ecr"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
 	"github.com/google/go-containerregistry/pkg/authn"
@@ -405,18 +406,17 @@ func (source *Source) AuthenticateToECR() bool {
 	for _, roleArn := range awsRoleArns {
 		logrus.Debugf("assuming role: %s", roleArn)
 		stsClient := sts.NewFromConfig(awsConfig)
-		result, err := stsClient.AssumeRole(context.TODO(), &sts.AssumeRoleInput{
-			RoleArn: aws.String(roleArn),
-		})
+		roleCreds := stscreds.NewAssumeRoleProvider(stsClient, roleArn)
+		creds, err := roleCreds.Retrieve(context.Background())
 		if err != nil {
 			logrus.Errorf("error assuming role '%s': %s", roleArn, err.Error())
 			return false
 		}
 
 		awsConfig.Credentials = aws.NewCredentialsCache(credentials.NewStaticCredentialsProvider(
-			*result.Credentials.SecretAccessKey,
-			*result.Credentials.SecretAccessKey,
-			*result.Credentials.SessionToken),
+			creds.AccessKeyID,
+			creds.SecretAccessKey,
+			creds.SessionToken),
 		)
 	}
 
