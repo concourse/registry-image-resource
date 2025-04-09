@@ -135,7 +135,7 @@ func NewIndexImageFromRemote(imgOrIndex *remote.Descriptor) (*IndexOrImage, erro
 		return rv, nil
 
 	default:
-		return nil, fmt.Errorf("unspported media type: %s", imgOrIndex.MediaType)
+		return nil, fmt.Errorf("unsupported media type: %s", imgOrIndex.MediaType)
 	}
 }
 

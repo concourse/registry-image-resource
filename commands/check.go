@@ -284,6 +284,11 @@ func checkRepository(repo name.Repository, source resource.Source, from *resourc
 }
 
 func checkRepositoryRegex(repo name.Repository, source resource.Source, opts ...remote.Option) (resource.CheckResponse, error) {
+	regex, err := regexp.Compile(source.Regex)
+	if err != nil {
+		return resource.CheckResponse{}, fmt.Errorf("invalid regex pattern: %w", err)
+	}
+
 	tags, err := remote.List(repo, opts...)
 	if err != nil {
 		return resource.CheckResponse{}, fmt.Errorf("list repository tags: %w", err)
@@ -294,7 +299,6 @@ func checkRepositoryRegex(repo name.Repository, source resource.Source, opts ...
 	matchedTags := make([]string, 0)
 
 	for _, identifier := range tags {
-		regex, _ := regexp.Compile(source.Regex)
 		if !regex.MatchString(identifier) {
 			// Does not match regex string provided
 			continue
