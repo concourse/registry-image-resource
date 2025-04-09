@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	resource "github.com/concourse/registry-image-resource"
 	"github.com/fatih/color"
@@ -64,7 +65,8 @@ func (i *In) Execute() error {
 
 	dest := i.args[1]
 
-	if req.Source.AwsRegion != "" {
+	isPublicECR := strings.Contains(req.Source.Repository, "public.ecr.aws")
+	if !isPublicECR && req.Source.AwsRegion != "" {
 		if !req.Source.AuthenticateToECR() {
 			return fmt.Errorf("cannot authenticate with ECR")
 		}
