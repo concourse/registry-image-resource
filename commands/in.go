@@ -134,6 +134,11 @@ func downloadWithRetry(tag name.Tag, source resource.Source, params resource.Get
 			return err
 		}
 
+		// In case anyone else wonders why we don't show a progress bar for
+		// downloads, it's because go-containerregistry doesn't expose anything
+		// for us to show the download progress:
+		// https://github.com/google/go-containerregistry/issues/670
+		// Maybe we should switch to using oras-go?
 		switch params.Format() {
 		case "oci-layout":
 			return saveOciLayout(repo, version, dest, opts)
