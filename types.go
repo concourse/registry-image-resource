@@ -420,6 +420,19 @@ func (source *Source) AuthenticateToECR() bool {
 		)
 	}
 
+	// Update username to AWS
+	source.Username = "AWS"
+
+	// Determine if this is a public ECR repository
+	isPublicECR := strings.Contains(source.Repository, "public.ecr.aws")
+
+	if isPublicECR {
+		// For public ECR, we don't need to fetch an auth token
+		// The repository URL doesn't need modification either
+		logrus.Debug("using public ECR repository - skipping ECR token retrieval")
+		return true
+	}
+
 	client := ecr.NewFromConfig(awsConfig)
 	result, err := client.GetAuthorizationToken(context.TODO(), &ecr.GetAuthorizationTokenInput{})
 	if err != nil {
@@ -448,9 +461,6 @@ func (source *Source) AuthenticateToECR() bool {
 			return false
 		}
 	}
-
-	// Update username and repository
-	source.Username = "AWS"
 
 	if source.AwsAccountId != "" {
 		source.Repository = fmt.Sprintf("%s.dkr.ecr.%s.amazonaws.com/%s", source.AwsAccountId, source.AwsRegion, source.Repository)
