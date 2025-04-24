@@ -299,11 +299,6 @@ func createNotaryAuth(req resource.OutRequest) *authn.Basic {
 func aliasesToBump(req resource.OutRequest, repo name.Repository, ver *semver.Version) ([]name.Tag, error) {
 	variant := req.Source.Variant
 
-	repo, err := req.Source.NewRepository()
-	if err != nil {
-		return nil, fmt.Errorf("resolve repository name: %w", err)
-	}
-
 	opts, err := req.Source.AuthOptions(repo, []string{transport.PullScope})
 	if err != nil {
 		return nil, err

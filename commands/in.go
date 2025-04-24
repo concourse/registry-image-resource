@@ -121,7 +121,7 @@ func (i *In) Execute() error {
 }
 
 func downloadWithRetry(tag name.Tag, source resource.Source, params resource.GetParams, version resource.Version, dest string, stderr io.Writer) error {
-	fmt.Fprintf(os.Stderr, "fetching %s@%s\n", color.GreenString(source.Repository), color.YellowString(version.Digest))
+	fmt.Fprintf(stderr, "fetching %s@%s\n", color.GreenString(source.Repository), color.YellowString(version.Digest))
 
 	repo, err := source.NewRepository()
 	if err != nil {
