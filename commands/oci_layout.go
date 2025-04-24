@@ -61,10 +61,10 @@ func NewIndexImageFromImage(img v1.Image) (*IndexOrImage, error) {
 	}, nil
 }
 
-// create new IndexOrImage based on loading from a directory on disk
-// directory must incldue "oci-layout" (as required by the spec)
-// as a special-case, if the "single-image-digest" marker file is present,
-// then ignore any other images and wrap that as a single image.
+// create new IndexOrImage based on loading from a directory on disk directory
+// must incldue the file "oci-layout" (as required by the spec) as a
+// special-case, if the "single-image-digest" marker file is present, then
+// ignore any other images and wrap that as a single image.
 func NewIndexImageFromPath(path string) (*IndexOrImage, error) {
 	// load layout into index
 	ii, err := layout.ImageIndexFromPath(path)
@@ -72,12 +72,45 @@ func NewIndexImageFromPath(path string) (*IndexOrImage, error) {
 		return nil, fmt.Errorf("loading %s as OCI layout: %w", path, err)
 	}
 
+	ii, err = unwrapNestedIndex(ii)
+	if err != nil {
+		return nil, fmt.Errorf("error unwrapping nested image indexes: %w", err)
+	}
+
+	return checkIfSingleImageDigest(ii, path)
+}
+
+// Detects if the ImageIndex contains a single Manifest. If that single Manifest
+// is another ImageIndex then it fetches that file and repeats this process
+// until it gets an ImageIndex that contains more than one Manifest, which
+// should be the real underlying ImageIndex that contains a list of ImageManifests.
+func unwrapNestedIndex(imageIndex v1.ImageIndex) (v1.ImageIndex, error) {
+	manifest, err := imageIndex.IndexManifest()
+	if err != nil {
+		return nil, fmt.Errorf("error getting index manifest: %w", err)
+	}
+
+	if len(manifest.Manifests) == 1 {
+		maybeIndex := manifest.Manifests[0]
+		if maybeIndex.MediaType.IsIndex() {
+			ii, err := imageIndex.ImageIndex(maybeIndex.Digest)
+			if err != nil {
+				return nil, fmt.Errorf("error unwrapping nested index manifest: %w", err)
+			}
+			return unwrapNestedIndex(ii)
+		}
+	}
+
+	return imageIndex, nil
+}
+
+func checkIfSingleImageDigest(imageIndex v1.ImageIndex, path string) (*IndexOrImage, error) {
 	// check if special marker file exists
 	digestStrBytes, err := os.ReadFile(filepath.Join(path, OciLayoutSingleImageDigestFileName))
 	if err != nil {
 		// if this file doesn't exist, then we are done!
 		if errors.Is(err, fs.ErrNotExist) {
-			return &IndexOrImage{imageIndex: ii}, nil
+			return &IndexOrImage{imageIndex: imageIndex}, nil
 		}
 		return nil, fmt.Errorf("read %s: %w", OciLayoutSingleImageDigestFileName, err)
 	}
@@ -88,19 +121,18 @@ func NewIndexImageFromPath(path string) (*IndexOrImage, error) {
 		return nil, fmt.Errorf("new hash: %w", err)
 	}
 
-	// get an image reference to that
-	img, err := ii.Image(singleImageHash)
+	// get an image reference to the single image
+	img, err := imageIndex.Image(singleImageHash)
 	if err != nil {
 		return nil, fmt.Errorf("image: %w", err)
 	}
 
-	// wrap it
+	// wrap the single image
 	rv, err := NewIndexImageFromImage(img)
 	if err != nil {
 		return nil, fmt.Errorf("new index image from image: %w", err)
 	}
 
-	// and return it
 	return rv, nil
 }
 
