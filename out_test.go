@@ -232,7 +232,7 @@ var _ = Describe("Out", func() {
 
 				It("exits non-zero and returns an error", func() {
 					Expect(actualErr).To(HaveOccurred())
-					Expect(actualErrOutput).To(ContainSubstring("too many files match glob"))
+					Expect(actualErrOutput).To(ContainSubstring("too many files/directories match glob"))
 				})
 			})
 
