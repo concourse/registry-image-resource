@@ -3,6 +3,7 @@ package commands
 import (
 	"archive/tar"
 	"compress/gzip"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -13,8 +14,8 @@ import (
 	"github.com/fatih/color"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/sirupsen/logrus"
-	"github.com/vbauerster/mpb"
-	"github.com/vbauerster/mpb/decor"
+	"github.com/vbauerster/mpb/v8"
+	"github.com/vbauerster/mpb/v8/decor"
 )
 
 const whiteoutPrefix = ".wh."
@@ -32,7 +33,8 @@ func unpackImage(dest string, img v1.Image, debug bool, out io.Writer) error {
 		out = io.Discard
 	}
 
-	progress := mpb.New(mpb.WithOutput(out))
+	fmt.Fprintln(out, "Extracting image")
+	progress := mpb.New(mpb.WithOutput(out), mpb.WithAutoRefresh())
 
 	bars := make([]*mpb.Bar, len(layers))
 

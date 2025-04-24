@@ -506,7 +506,7 @@ func (p GetParams) Format() string {
 }
 
 type PutParams struct {
-	// Path to an OCI image tarball to push.
+	// Path to an OCI image tarball or directory in OCI-layout format to push.
 	Image string `json:"image"`
 
 	// Version number to publish. If a variant is configured, it will be

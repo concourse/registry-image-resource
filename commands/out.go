@@ -140,7 +140,7 @@ func (o *Out) Execute() error {
 		return fmt.Errorf("no files match glob '%s'", req.Params.Image)
 	}
 	if len(matches) > 1 {
-		return fmt.Errorf("too many files match glob '%s': %v", req.Params.Image, matches)
+		return fmt.Errorf("too many files/directories match glob '%s': %v", req.Params.Image, matches)
 	}
 
 	img, err := loadImage(matches[0])
