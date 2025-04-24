@@ -134,59 +134,59 @@ func downloadWithRetry(tag name.Tag, source resource.Source, params resource.Get
 			return err
 		}
 
-		// handle oci-layout case first
-		if params.Format() == OciLayoutFormatName {
-			// first fetch the manifest
-			remoteDesc, err := remote.Get(repo.Digest(version.Digest), opts...)
-			if err != nil {
-				return fmt.Errorf("remote get: %w", err)
-			}
-
-			// wrap (as needed) as an index image
-			ioi, err := NewIndexImageFromRemote(remoteDesc)
-			if err != nil {
-				return fmt.Errorf("remote index or image: %w", err)
-			}
-
-			// write it out
-			err = ioi.WriteToPath(filepath.Join(dest, OciLayoutDirName))
-			if err != nil {
-				return fmt.Errorf("write oci layout: %w", err)
-			}
-
-			// and done
-			return nil
+		switch params.Format() {
+		case "oci-layout":
+			return saveOciLayout(repo, version, dest, opts)
+		case "oci":
+			return saveOci(repo, tag, version, dest, opts)
+		case "rootfs":
+			return saveRootfs(repo, version, dest, opts, source.Debug, stderr)
+		default:
+			return fmt.Errorf("unknown format provided, must be one of 'rootfs', 'oci', 'oci-layout: %s", params.Format())
 		}
-
-		// else fallback to current behavior
-		image, err := remote.Image(repo.Digest(version.Digest), opts...)
-		if err != nil {
-			return fmt.Errorf("get image: %w", err)
-		}
-
-		err = saveImage(dest, tag, image, params.Format(), source.Debug, stderr)
-		if err != nil {
-			return fmt.Errorf("save image: %w", err)
-		}
-
-		return nil
 	})
 }
 
-func saveImage(dest string, tag name.Tag, image v1.Image, format string, debug bool, stderr io.Writer) error {
-	switch format {
-	case "oci":
-		err := ociFormat(dest, tag, image)
-		if err != nil {
-			return fmt.Errorf("write oci image: %w", err)
-		}
-	case "rootfs":
-		err := rootfsFormat(dest, image, debug, stderr)
-		if err != nil {
-			return fmt.Errorf("write rootfs: %w", err)
-		}
+func saveOciLayout(repo name.Repository, version resource.Version, dest string, opts []remote.Option) error {
+	remoteDesc, err := remote.Get(repo.Digest(version.Digest), opts...)
+	if err != nil {
+		return fmt.Errorf("remote get: %w", err)
 	}
 
+	ioi, err := NewIndexImageFromRemote(remoteDesc)
+	if err != nil {
+		return fmt.Errorf("remote index or image: %w", err)
+	}
+
+	err = ioi.WriteToPath(filepath.Join(dest, OciLayoutDirName))
+	if err != nil {
+		return fmt.Errorf("write oci layout: %w", err)
+	}
+
+	return nil
+}
+
+func saveOci(repo name.Repository, tag name.Tag, version resource.Version, dest string, opts []remote.Option) error {
+	image, err := remote.Image(repo.Digest(version.Digest), opts...)
+	if err != nil {
+		return fmt.Errorf("get image: %w", err)
+	}
+	err = ociFormat(dest, tag, image)
+	if err != nil {
+		return fmt.Errorf("write oci image: %w", err)
+	}
+	return nil
+}
+
+func saveRootfs(repo name.Repository, version resource.Version, dest string, opts []remote.Option, debug bool, stderr io.Writer) error {
+	image, err := remote.Image(repo.Digest(version.Digest), opts...)
+	if err != nil {
+		return fmt.Errorf("get image: %w", err)
+	}
+	err = rootfsFormat(dest, image, debug, stderr)
+	if err != nil {
+		return fmt.Errorf("write rootfs: %w", err)
+	}
 	return nil
 }
 
