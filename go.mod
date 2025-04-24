@@ -19,11 +19,12 @@ require (
 	github.com/onsi/gomega v1.36.2
 	github.com/simonshyu/notary-gcr v0.0.0-20220601090547-d99a631aa58b
 	github.com/sirupsen/logrus v1.9.3
-	github.com/vbauerster/mpb v3.4.0+incompatible
+	github.com/vbauerster/mpb/v8 v8.9.3
 )
 
 require (
 	github.com/VividCortex/ewma v1.2.0 // indirect
+	github.com/acarl005/stripansi v0.0.0-20180116102854-5a71ef0e047d // indirect
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.16.30 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/configsources v1.3.34 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.6.34 // indirect
@@ -48,12 +49,14 @@ require (
 	github.com/klauspost/compress v1.18.0 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
+	github.com/mattn/go-runewidth v0.0.16 // indirect
 	github.com/miekg/pkcs11 v1.1.1 // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/onsi/ginkgo v1.16.4 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.1.1 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
+	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/theupdateframework/notary v0.7.0 // indirect
 	github.com/vbatts/tar-split v0.12.1 // indirect
 	golang.org/x/crypto v0.36.0 // indirect
