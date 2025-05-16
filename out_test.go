@@ -404,6 +404,7 @@ var _ = Describe("Out", func() {
 				},
 			}
 
+			randomImageIndexes = []v1.ImageIndex{}
 			for i := range 2 {
 				imgIndex, err := random.Index(1024, 1, 1)
 				Expect(err).ToNot(HaveOccurred())
@@ -433,10 +434,18 @@ var _ = Describe("Out", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			for _, imgIndex := range randomImageIndexes {
-				randomDigest, err := imgIndex.Digest()
+				manifest, err := imgIndex.IndexManifest()
 				Expect(err).ToNot(HaveOccurred())
 
-				_, err = pushedImageIndex.ImageIndex(randomDigest)
+				var expectedDigest v1.Hash
+				for _, mani := range manifest.Manifests {
+					if mani.MediaType.IsImage() {
+						expectedDigest = mani.Digest
+						break
+					}
+				}
+
+				_, err = pushedImageIndex.Image(expectedDigest)
 				Expect(err).ToNot(HaveOccurred())
 			}
 		})
@@ -480,10 +489,18 @@ var _ = Describe("Out", func() {
 					Expect(err).ToNot(HaveOccurred())
 
 					for _, imgIndex := range randomImageIndexes {
-						randomDigest, err := imgIndex.Digest()
+						manifest, err := imgIndex.IndexManifest()
 						Expect(err).ToNot(HaveOccurred())
 
-						_, err = pushedImageIndex.ImageIndex(randomDigest)
+						var expectedDigest v1.Hash
+						for _, mani := range manifest.Manifests {
+							if mani.MediaType.IsImage() {
+								expectedDigest = mani.Digest
+								break
+							}
+						}
+
+						_, err = pushedImageIndex.Image(expectedDigest)
 						Expect(err).ToNot(HaveOccurred())
 					}
 				}

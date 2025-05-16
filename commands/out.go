@@ -14,6 +14,8 @@ import (
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
+	"github.com/google/go-containerregistry/pkg/v1/empty"
+	"github.com/google/go-containerregistry/pkg/v1/mutate"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/google/go-containerregistry/pkg/v1/remote/transport"
 	"github.com/google/go-containerregistry/pkg/v1/tarball"
@@ -132,29 +134,41 @@ func (o *Out) Execute() error {
 	}
 
 	if req.Params.Image != "" && len(req.Params.Images) > 0 {
+		// Not actually necessary but it's a pattern we want to discourage. It
+		// would be confusing to use both so let's encourage users to use just
+		// one of the two fields
 		return fmt.Errorf("only one of 'image' or 'images' may be specified in params")
 	}
 
-	imagePath := filepath.Join(src, req.Params.Image)
-	matches, err := filepath.Glob(imagePath)
-	if err != nil {
-		return fmt.Errorf("failed to glob path '%s': %w", req.Params.Image, err)
-	}
-	if len(matches) == 0 {
-		return fmt.Errorf("no files match glob '%s'", req.Params.Image)
-	}
-	if len(matches) > 1 {
-		return fmt.Errorf("too many files/directories match glob '%s': %v", req.Params.Image, matches)
+	paramImages := req.Params.Images
+	if req.Params.Image != "" {
+		paramImages = append(paramImages, req.Params.Image)
 	}
 
-	img, err := loadImage(matches[0])
-	if err != nil {
-		return fmt.Errorf("could not load image from path '%s': %w", req.Params.Image, err)
+	var images []*IndexOrImage
+	for _, image := range paramImages {
+		imagePath := filepath.Join(src, image)
+		matches, err := filepath.Glob(imagePath)
+		if err != nil {
+			return fmt.Errorf("failed to glob path '%s': %w", image, err)
+		}
+		if len(matches) == 0 {
+			return fmt.Errorf("no files match glob '%s'", image)
+		}
+		if len(matches) > 1 {
+			return fmt.Errorf("too many files/directories match glob '%s': %v", image, matches)
+		}
+
+		img, err := loadImage(matches[0])
+		if err != nil {
+			return fmt.Errorf("could not load image from path '%s': %w", image, err)
+		}
+
+		images = append(images, img)
 	}
 
-	h, err := img.Digest()
-	if err != nil {
-		return fmt.Errorf("failed to get image digest: %w", err)
+	if len(images) == 0 {
+		return fmt.Errorf("No images loaded to push. Make sure you set 'image' or 'images' in the params of the put step")
 	}
 
 	opts := req.Source.NewOptions()
@@ -165,11 +179,56 @@ func (o *Out) Execute() error {
 		return fmt.Errorf("failed to set repo/auth options: %w", err)
 	}
 
+	// push all images layers
 	err = resource.RetryOnRateLimit(func() error {
-		return put(req, img, tagsToPush, opts)
+		return pushImages(repo, images, opts.Remote...)
+	})
+	if err != nil {
+		return fmt.Errorf("pushing image layers failed: %w", err)
+	}
+
+	// combine all images into a single ImageIndex
+	manifests := []mutate.IndexAddendum{}
+	for _, image := range images {
+		index, err := image.IndexManifest()
+		if err != nil {
+			return fmt.Errorf("error getting IndexManifest: %w", err)
+		}
+		for _, manifest := range index.Manifests {
+			if !manifest.MediaType.IsImage() { //TODO: what about nested IndexManifests?
+				continue
+			}
+			manifests = append(manifests, mutate.IndexAddendum{
+				Add:        empty.Image,
+				Descriptor: manifest,
+			})
+		}
+	}
+
+	combinedImage := mutate.AppendManifests(empty.Index, manifests...)
+
+	hash, err := combinedImage.Digest()
+	if err != nil {
+		return fmt.Errorf("failed to get image digest: %w", err)
+	}
+
+	err = resource.RetryOnRateLimit(func() error {
+		return pushTags(combinedImage, tagsToPush, opts)
 	})
 	if err != nil {
 		return fmt.Errorf("pushing image failed: %w", err)
+	}
+
+	if req.Source.ContentTrust != nil {
+		logrus.Info("Signing image(s)...")
+		for _, image := range images {
+			err = image.ForEachImage(func(imgToSign v1.Image) error {
+				return signImages(req, imgToSign, tagsToPush)
+			})
+			if err != nil {
+				return fmt.Errorf("error signing image(s): %w", err)
+			}
+		}
 	}
 
 	pushedTags := []string{}
@@ -177,7 +236,7 @@ func (o *Out) Execute() error {
 		pushedTags = append(pushedTags, tag.TagStr())
 	}
 
-	digest := opts.Repository.Digest(h.String())
+	digest := opts.Repository.Digest(hash.String())
 	err = json.NewEncoder(os.Stdout).Encode(resource.OutResponse{
 		Version: resource.Version{
 			Tag:    tagsToPush[0].TagStr(),
@@ -195,35 +254,20 @@ func (o *Out) Execute() error {
 	return nil
 }
 
-func put(req resource.OutRequest, img *IndexOrImage, tags []name.Tag, opts resource.Options) error {
-	taggable, err := img.Taggable()
-	if err != nil {
-		return fmt.Errorf("taggable: %w", err)
-	}
+func pushTags(index v1.ImageIndex, tags []name.Tag, opts resource.Options) error {
 	images := map[name.Reference]remote.Taggable{}
 	var identifiers []string
 	for _, tag := range tags {
-		images[tag] = taggable
+		images[tag] = index
 		identifiers = append(identifiers, tag.Identifier())
 	}
 
 	logrus.Infof("pushing tag(s) %s", strings.Join(identifiers, ", "))
-	err = remote.MultiWrite(images, opts.Remote...)
+	err := remote.MultiWrite(images, opts.Remote...)
 	if err != nil {
 		return fmt.Errorf("pushing tag(s): %w", err)
 	}
-
 	logrus.Info("pushed")
-
-	if req.Source.ContentTrust != nil {
-		err = img.ForEachImage(func(imgToSign v1.Image) error {
-			return signImages(req, imgToSign, tags)
-		})
-		if err != nil {
-			return fmt.Errorf("signing image(s): %w", err)
-		}
-	}
-
 	return nil
 }
 
@@ -250,6 +294,32 @@ func loadImage(path string) (*IndexOrImage, error) {
 		return nil, fmt.Errorf("new index image from path: %w", err)
 	}
 	return rv, nil
+}
+
+// Pushes images untagged
+func pushImages(repo name.Repository, images []*IndexOrImage, opts ...remote.Option) error {
+	digests := map[name.Reference]remote.Taggable{}
+	for _, image := range images {
+		digest, err := image.Digest()
+		if err != nil {
+			return fmt.Errorf("failed to get digest for image: %w", err)
+		}
+		ref := repo.Digest(digest.String())
+
+		taggable, err := image.Taggable()
+		if err != nil {
+			fmt.Errorf("error getting taggable: %w", err)
+		}
+
+		digests[ref] = taggable
+	}
+
+	err := remote.MultiWrite(digests, opts...)
+	if err != nil {
+		fmt.Errorf("error pushing image layers: %w", err)
+	}
+
+	return nil
 }
 
 func signImages(req resource.OutRequest, img v1.Image, tags []name.Tag) error {
