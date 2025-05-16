@@ -3,7 +3,6 @@ package commands
 import (
 	"archive/tar"
 	"compress/gzip"
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -33,7 +32,6 @@ func unpackImage(dest string, img v1.Image, debug bool, out io.Writer) error {
 		out = io.Discard
 	}
 
-	fmt.Fprintln(out, "Extracting image")
 	progress := mpb.New(mpb.WithOutput(out), mpb.WithAutoRefresh())
 
 	bars := make([]*mpb.Bar, len(layers))

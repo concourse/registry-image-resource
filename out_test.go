@@ -388,6 +388,109 @@ var _ = Describe("Out", func() {
 		})
 	})
 
+	Context("pushing multiple images as a single ImageIndex to dockerhub", func() {
+		var randomImageIndexes []v1.ImageIndex
+
+		BeforeEach(func() {
+			checkDockerPushUserConfigured()
+
+			req.Source = resource.Source{
+				Repository: dockerPushRepo,
+				Tag:        resource.Tag(parallelTag("latest")),
+
+				BasicCredentials: resource.BasicCredentials{
+					Username: dockerPushUsername,
+					Password: dockerPushPassword,
+				},
+			}
+
+			for i := range 2 {
+				imgIndex, err := random.Index(1024, 1, 1)
+				Expect(err).ToNot(HaveOccurred())
+				randomImageIndexes = append(randomImageIndexes, imgIndex)
+
+				dirName := fmt.Sprintf("image-%d", i)
+				path := filepath.Join(srcDir, dirName)
+				_, err = layout.Write(path, imgIndex)
+				Expect(err).ToNot(HaveOccurred())
+
+				req.Params.Images = append(req.Params.Images, dirName)
+			}
+		})
+
+		It("works", func() {
+			Expect(actualErr).ToNot(HaveOccurred())
+
+			name, err := name.ParseReference(req.Source.Name())
+			Expect(err).ToNot(HaveOccurred())
+
+			auth := &authn.Basic{
+				Username: req.Source.Username,
+				Password: req.Source.Password,
+			}
+
+			pushedImageIndex, err := remote.Index(name, remote.WithAuth(auth))
+			Expect(err).ToNot(HaveOccurred())
+
+			for _, imgIndex := range randomImageIndexes {
+				randomDigest, err := imgIndex.Digest()
+				Expect(err).ToNot(HaveOccurred())
+
+				_, err = pushedImageIndex.ImageIndex(randomDigest)
+				Expect(err).ToNot(HaveOccurred())
+			}
+		})
+
+		It("returns metadata", func() {
+			Expect(actualErr).ToNot(HaveOccurred())
+
+			Expect(res.Metadata).To(Equal([]resource.MetadataField{
+				{
+					Name:  "repository",
+					Value: dockerPushRepo,
+				},
+				{
+					Name:  "tags",
+					Value: parallelTag("latest"),
+				},
+			}))
+		})
+
+		Context("When using bump_aliases", func() {
+			BeforeEach(func() {
+				req.Params.BumpAliases = true
+				req.Params.Version = "1.0.0"
+			})
+
+			It("Push the right tags", func() {
+				Expect(actualErr).ToNot(HaveOccurred())
+
+				tags := []string{"1.0.0", "1.0", "1", req.Source.Tag.String()}
+
+				for _, tag := range tags {
+					name, err := name.ParseReference(dockerPushRepo + ":" + tag)
+					Expect(err).ToNot(HaveOccurred())
+
+					auth := &authn.Basic{
+						Username: req.Source.Username,
+						Password: req.Source.Password,
+					}
+
+					pushedImageIndex, err := remote.Index(name, remote.WithAuth(auth))
+					Expect(err).ToNot(HaveOccurred())
+
+					for _, imgIndex := range randomImageIndexes {
+						randomDigest, err := imgIndex.Digest()
+						Expect(err).ToNot(HaveOccurred())
+
+						_, err = pushedImageIndex.ImageIndex(randomDigest)
+						Expect(err).ToNot(HaveOccurred())
+					}
+				}
+			})
+		})
+	})
+
 	Context("pushing an OCI imageIndex (which originated as legacy image) to dockerhub", func() {
 		var randomImage v1.Image
 

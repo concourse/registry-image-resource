@@ -509,6 +509,11 @@ type PutParams struct {
 	// Path to an OCI image tarball or directory in OCI-layout format to push.
 	Image string `json:"image"`
 
+	// Takes multiple images, pushes each image individually as an untagged
+	// digest before pushing an image manifest that contains all images. Follows
+	// the same parsing rules as "image".
+	Images []string `json:"images"`
+
 	// Version number to publish. If a variant is configured, it will be
 	// appended to this value to form the tag.
 	Version string `json:"version"`

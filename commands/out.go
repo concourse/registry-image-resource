@@ -131,6 +131,10 @@ func (o *Out) Execute() error {
 		return fmt.Errorf("no tag specified - need either 'version:' in params or 'tag:' in source")
 	}
 
+	if req.Params.Image != "" && len(req.Params.Images) > 0 {
+		return fmt.Errorf("only one of 'image' or 'images' may be specified in params")
+	}
+
 	imagePath := filepath.Join(src, req.Params.Image)
 	matches, err := filepath.Glob(imagePath)
 	if err != nil {
