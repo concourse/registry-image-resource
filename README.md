@@ -10,8 +10,8 @@ to, and `out` will always push to the specified tag. This is to be used in
 simpler cases where no real versioning exists.
 
 With `tag_regex` specified, `check` will instead detect tags based on the regex
-provided. If `created_at_sort` is set to `true`, the tags will be sorted in descending order by the creation time. 
-This is useful when you want to get the latest tag based on the regex (see Docker registry issue 
+provided. If `created_at_sort` is set to `true`, the tags will be sorted in descending order by the creation time.
+This is useful when you want to get the latest tag based on the regex (see Docker registry issue
 [here](https://github.com/docker/hub-feedback/issues/185)).
 
 With `tag` and `tag_regex` both omitted, `check` will instead detect tags based on semver versions
@@ -98,7 +98,7 @@ differences:
   <tr>
   <td><code>created_at_sort</code> <em>(Optional)<br>Default: false</em></td>
   <td>
-    If set to `true`, the tags will be sorted in descending order using the creation time from the image history. 
+    If set to `true`, the tags will be sorted in descending order using the creation time from the image history.
     This is useful when you want to get the latest tag based on the tag_regex.
   </td>
   </tr>
@@ -231,7 +231,7 @@ differences:
     <td>
       <ul>
         <li>
-          <code>host</code> <em>(Required)</em>: 
+          <code>host</code> <em>(Required)</em>:
           A hostname pointing to a Docker registry mirror service. Note that this
           is only used if no registry hostname prefix is specified in the
           <code>repository</code> key. If the <code>repository</code> contains a
@@ -240,7 +240,7 @@ differences:
           registry in the <code>repository</code> key is used.
         </li>
         <li>
-          <code>username</code> and <code>password</code> <em>(Optional)</em>: 
+          <code>username</code> and <code>password</code> <em>(Optional)</em>:
           A username and password to use when authenticating to the mirror.
         </li>
       </ul>
@@ -251,30 +251,30 @@ differences:
     <td>
       <ul>
         <li>
-          <code>server</code> <em>(Optional)</em>: 
+          <code>server</code> <em>(Optional)</em>:
           URL for the notary server. (equal to
           <code>DOCKER_CONTENT_TRUST_SERVER</code>)
         </li>
         <li>
-          <code>repository_key_id</code> <em>(Required)</em>: 
+          <code>repository_key_id</code> <em>(Required)</em>:
           Target key's ID used to sign the trusted collection, could be retrieved
           by <code>notary key list</code>
         </li>
         <li>
-          <code>repository_key</code> <em>(Required)</em>: 
+          <code>repository_key</code> <em>(Required)</em>:
           Target key used to sign the trusted collection.
         </li>
         <li>
-          <code>repository_passphrase</code> <em>(Required)</em>: 
+          <code>repository_passphrase</code> <em>(Required)</em>:
           The passphrase of the signing/target key. (equal to
           <code>DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE</code>)
         </li>
         <li>
-          <code>tls_key</code> <em>(Optional)</em>: 
+          <code>tls_key</code> <em>(Optional)</em>:
           TLS key for the notary server.
         </li>
         <li>
-          <code>tls_cert</code> <em>(Optional)</em>: 
+          <code>tls_cert</code> <em>(Optional)</em>:
           TLS certificate for the notary server.
         </li>
         <li>
@@ -368,7 +368,7 @@ Reports the current digest that the registry has for the tag configured in
 ### `check` Step (`check` script) with `tag_regex`: discover tags matching regex
 
 Reports the current digest that the registry has for tags matching the regex
-configured in `source`. They will be returned in the same order that the source repository lists them unless `created_at_sort` 
+configured in `source`. They will be returned in the same order that the source repository lists them unless `created_at_sort`
 is set to `true`.
 
 ### `check` Step (`check` script) without `tag` or `tag_regex`: discover semver tags
@@ -554,6 +554,8 @@ Tags may be specified in multiple ways:
 
 #### `put` Steps `params`
 
+You must specify `image` or `images`.
+
 <table>
 <thead>
   <tr>
@@ -563,11 +565,21 @@ Tags may be specified in multiple ways:
 </thead>
 <tbody>
   <tr>
-    <td><code>image</code> <em>(Required)</em></td>
+    <td><code>image</code> <em>(Optional)</em></td>
     <td>
     Can be the path to the <code>oci</code> image tarball (e.g. <code>my-image/image.tar</code>)
     or the path to an <a href="https://github.com/opencontainers/image-spec/blob/main/image-layout.md">OCI image layout</a> (e.g. <code>my-image/oci</code>).
     Expanded with <a href="https://golang.org/pkg/path/filepath/#Glob"><code>filepath.Glob</code></a>
+    </td>
+  </tr>
+  <tr>
+    <td><code>images</code> <em>(Optional)</em></td>
+    <td>
+    A list of images, following the same parsing rules as <code>image</code>.
+    Using this field will result in the resource pushing each listed image as an
+    untagged digest. Once all images are pushed they will be tagged together as
+    a single image manifest. This is useful for pushing multi-arch images that
+    were built separately and need to be combined.
     </td>
   </tr>
   <tr>
