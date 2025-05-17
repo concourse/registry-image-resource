@@ -207,13 +207,21 @@ func (o *Out) Execute() error {
 
 	combinedImage := mutate.AppendManifests(empty.Index, manifests...)
 
-	hash, err := combinedImage.Digest()
+	indexToPush := &IndexOrImage{ImageIndex: combinedImage}
+	if len(images) == 1 {
+		// If only one image was provided then use the original ImageIndex. When
+		// we repackage the image in combinedIndex we end up producing a
+		// different digest for the ImageIndex
+		indexToPush = images[0]
+	}
+
+	hash, err := indexToPush.Digest()
 	if err != nil {
 		return fmt.Errorf("failed to get image digest: %w", err)
 	}
 
 	err = resource.RetryOnRateLimit(func() error {
-		return pushTags(combinedImage, tagsToPush, opts)
+		return pushTags(indexToPush, tagsToPush, opts)
 	})
 	if err != nil {
 		return fmt.Errorf("pushing image failed: %w", err)
@@ -254,16 +262,21 @@ func (o *Out) Execute() error {
 	return nil
 }
 
-func pushTags(index v1.ImageIndex, tags []name.Tag, opts resource.Options) error {
+func pushTags(img *IndexOrImage, tags []name.Tag, opts resource.Options) error {
 	images := map[name.Reference]remote.Taggable{}
+	taggable, err := img.Taggable()
+	if err != nil {
+		return fmt.Errorf("error getting taggable: %w", err)
+	}
+
 	var identifiers []string
 	for _, tag := range tags {
-		images[tag] = index
+		images[tag] = taggable
 		identifiers = append(identifiers, tag.Identifier())
 	}
 
 	logrus.Infof("pushing tag(s) %s", strings.Join(identifiers, ", "))
-	err := remote.MultiWrite(images, opts.Remote...)
+	err = remote.MultiWrite(images, opts.Remote...)
 	if err != nil {
 		return fmt.Errorf("pushing tag(s): %w", err)
 	}

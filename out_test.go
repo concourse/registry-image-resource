@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"sync"
 
 	"github.com/google/go-containerregistry/pkg/authn"
@@ -1092,11 +1093,7 @@ func (example SemverTagPushExample) Run() {
 		response,
 	)
 
-	registry.RouteToHandler("HEAD", "/v2/test-image/blobs/"+digest.String(), func(w http.ResponseWriter, r *http.Request) {
-		ghttp.RespondWith(http.StatusOK, "blob totally exists")(w, r)
-	})
-
-	registry.RouteToHandler("HEAD", "/v2/test-image/blobs/"+cfgDigest.String(), func(w http.ResponseWriter, r *http.Request) {
+	registry.RouteToHandler("HEAD", regexp.MustCompile(`/v2/test-image/blobs/sha256:.*`), func(w http.ResponseWriter, r *http.Request) {
 		ghttp.RespondWith(http.StatusOK, "blob totally exists")(w, r)
 	})
 
@@ -1134,9 +1131,11 @@ func (example SemverTagPushExample) Run() {
 
 		actualDigest, _, err := v1.SHA256(r.Body)
 		Expect(err).ToNot(HaveOccurred())
-		Expect(actualDigest.String()).To(Equal(digest.String()))
+		Expect(actualDigest.String()).To(BeElementOf(cfgDigest.String(), digest.String()))
 
-		pushedTags.Store(tag, struct{}{})
+		if !strings.HasPrefix(tag, "sha256:") {
+			pushedTags.Store(tag, struct{}{})
+		}
 
 		ghttp.RespondWith(http.StatusOK, "manifest updated")(w, r)
 	})
