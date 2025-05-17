@@ -321,7 +321,7 @@ func pushImages(repo name.Repository, images []*IndexOrImage, opts ...remote.Opt
 
 		taggable, err := image.Taggable()
 		if err != nil {
-			fmt.Errorf("error getting taggable: %w", err)
+			return fmt.Errorf("error getting taggable: %w", err)
 		}
 
 		digests[ref] = taggable
@@ -329,7 +329,7 @@ func pushImages(repo name.Repository, images []*IndexOrImage, opts ...remote.Opt
 
 	err := remote.MultiWrite(digests, opts...)
 	if err != nil {
-		fmt.Errorf("error pushing image layers: %w", err)
+		return fmt.Errorf("error pushing image layers: %w", err)
 	}
 
 	return nil
