@@ -212,14 +212,15 @@ func (ioi *IndexOrImage) Digest() (v1.Hash, error) {
 // return the object that should be tagged when pushing
 // to a repo
 func (ioi *IndexOrImage) Taggable() (remote.Taggable, error) {
-	if !ioi.isAncientImage() {
-		return ioi.ImageIndex, nil
+	if ioi.isAncientImage() {
+		rv, err := ioi.ImageIndex.Image(*ioi.originalImageDigest)
+		if err != nil {
+			return nil, fmt.Errorf("image: %w", err)
+		}
+		return rv, nil
 	}
-	rv, err := ioi.ImageIndex.Image(*ioi.originalImageDigest)
-	if err != nil {
-		return nil, fmt.Errorf("image: %w", err)
-	}
-	return rv, nil
+
+	return ioi.ImageIndex, nil
 }
 
 // iterate through each image inside of this IndexOrImage and call
