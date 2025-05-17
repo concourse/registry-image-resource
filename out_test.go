@@ -660,10 +660,28 @@ var _ = Describe("Out", func() {
 				})
 			}
 
+			registry.RouteToHandler("HEAD", regexp.MustCompile("/v2/fake-image/manifests/sha256:.*"), func(w http.ResponseWriter, r *http.Request) {
+				select {
+				case updateManifestRateLimits <- struct{}{}:
+					ghttp.RespondWith(http.StatusTooManyRequests, "update manifest limited")(w, r)
+				default:
+					ghttp.RespondWith(http.StatusNotFound, "needs upload")(w, r)
+				}
+			})
+
+			registry.RouteToHandler("PUT", regexp.MustCompile("/v2/fake-image/manifests/sha256:.*"), func(w http.ResponseWriter, r *http.Request) {
+				select {
+				case updateManifestRateLimits <- struct{}{}:
+					ghttp.RespondWith(http.StatusTooManyRequests, "update manifest limited")(w, r)
+				default:
+					ghttp.RespondWith(http.StatusOK, "manifest updated")(w, r)
+				}
+			})
+
 			registry.RouteToHandler("HEAD", "/v2/fake-image/manifests/some-tag", func(w http.ResponseWriter, r *http.Request) {
 				select {
-				case checkBlobRateLimits <- struct{}{}:
-					ghttp.RespondWith(http.StatusTooManyRequests, "check layer blob limited")(w, r)
+				case updateManifestRateLimits <- struct{}{}:
+					ghttp.RespondWith(http.StatusTooManyRequests, "update manifest limited")(w, r)
 				default:
 					ghttp.RespondWith(http.StatusNotFound, "needs upload")(w, r)
 				}
@@ -748,6 +766,14 @@ var _ = Describe("Out", func() {
 					ghttp.RespondWith(http.StatusNotFound, "needs upload")(w, r)
 				})
 			}
+
+			registry.RouteToHandler("HEAD", regexp.MustCompile("/v2/fake-image/manifests/sha256:.*"), func(w http.ResponseWriter, r *http.Request) {
+				ghttp.RespondWith(http.StatusNotFound, "needs upload")(w, r)
+			})
+
+			registry.RouteToHandler("PUT", regexp.MustCompile("/v2/fake-image/manifests/sha256:.*"), func(w http.ResponseWriter, r *http.Request) {
+				ghttp.RespondWith(http.StatusOK, "manifest updated")(w, r)
+			})
 
 			registry.RouteToHandler("HEAD", "/v2/fake-image/manifests/some-tag", func(w http.ResponseWriter, r *http.Request) {
 				ghttp.RespondWith(http.StatusNotFound, "needs upload")(w, r)
