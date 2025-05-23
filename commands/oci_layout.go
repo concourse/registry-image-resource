@@ -29,7 +29,7 @@ const (
 // wrapped by an otherwise empty ImageIndex
 type IndexOrImage struct {
 	// image index object, wraps all child images
-	imageIndex v1.ImageIndex
+	v1.ImageIndex
 
 	// if set, signifies this is legacy image, which can be
 	// found via this hash in the imageIndex
@@ -56,7 +56,7 @@ func NewIndexImageFromImage(img v1.Image) (*IndexOrImage, error) {
 	}
 
 	return &IndexOrImage{
-		imageIndex:          rv,
+		ImageIndex:          rv,
 		originalImageDigest: &digest,
 	}, nil
 }
@@ -110,7 +110,7 @@ func checkIfSingleImageDigest(imageIndex v1.ImageIndex, path string) (*IndexOrIm
 	if err != nil {
 		// if this file doesn't exist, then we are done!
 		if errors.Is(err, fs.ErrNotExist) {
-			return &IndexOrImage{imageIndex: imageIndex}, nil
+			return &IndexOrImage{ImageIndex: imageIndex}, nil
 		}
 		return nil, fmt.Errorf("read %s: %w", OciLayoutSingleImageDigestFileName, err)
 	}
@@ -148,7 +148,7 @@ func NewIndexImageFromRemote(imgOrIndex *remote.Descriptor) (*IndexOrImage, erro
 		}
 
 		return &IndexOrImage{
-			imageIndex: rv,
+			ImageIndex: rv,
 		}, nil
 
 	case imgOrIndex.MediaType.IsImage():
@@ -177,7 +177,7 @@ func NewIndexImageFromRemote(imgOrIndex *remote.Descriptor) (*IndexOrImage, erro
 // Layout specification permits additional files to be present.
 func (ioi *IndexOrImage) WriteToPath(dest string) error {
 	// save all the assets out
-	lp, err := layout.Write(dest, ioi.imageIndex)
+	lp, err := layout.Write(dest, ioi.ImageIndex)
 	if err != nil {
 		return fmt.Errorf("layout write: %w", err)
 	}
@@ -206,20 +206,20 @@ func (ioi *IndexOrImage) Digest() (v1.Hash, error) {
 	if ioi.isAncientImage() {
 		return *ioi.originalImageDigest, nil
 	}
-	return ioi.imageIndex.Digest()
+	return ioi.ImageIndex.Digest()
 }
 
 // return the object that should be tagged when pushing
 // to a repo
 func (ioi *IndexOrImage) Taggable() (remote.Taggable, error) {
-	if !ioi.isAncientImage() {
-		return ioi.imageIndex, nil
+	if ioi.isAncientImage() {
+		rv, err := ioi.ImageIndex.Image(*ioi.originalImageDigest)
+		if err != nil {
+			return nil, fmt.Errorf("image: %w", err)
+		}
+		return rv, nil
 	}
-	rv, err := ioi.imageIndex.Image(*ioi.originalImageDigest)
-	if err != nil {
-		return nil, fmt.Errorf("image: %w", err)
-	}
-	return rv, nil
+	return ioi.ImageIndex, nil
 }
 
 // iterate through each image inside of this IndexOrImage and call
@@ -227,7 +227,7 @@ func (ioi *IndexOrImage) Taggable() (remote.Taggable, error) {
 func (ioi *IndexOrImage) ForEachImage(f func(v1.Image) error) error {
 	// use queue because our main index may contain nested indexes
 	// per https://github.com/opencontainers/image-spec/blob/main/image-index.md
-	for queue := []v1.ImageIndex{ioi.imageIndex}; len(queue) != 0; {
+	for queue := []v1.ImageIndex{ioi.ImageIndex}; len(queue) != 0; {
 		// get image index from and of queue
 		var cii v1.ImageIndex
 		cii, queue = queue[len(queue)-1], queue[:len(queue)-1]

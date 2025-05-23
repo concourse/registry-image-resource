@@ -229,21 +229,21 @@ func loadImage(path string) (*IndexOrImage, error) {
 		return nil, err
 	}
 
-	if !stat.IsDir() {
-		img, err := tarball.ImageFromPath(path, nil)
+	if stat.IsDir() {
+		rv, err := NewIndexImageFromPath(path)
 		if err != nil {
-			return nil, fmt.Errorf("loading %s as tarball: %w", path, err)
-		}
-		rv, err := NewIndexImageFromImage(img)
-		if err != nil {
-			return nil, fmt.Errorf("new index image from image: %w", err)
+			return nil, fmt.Errorf("new index image from path: %w", err)
 		}
 		return rv, nil
 	}
 
-	rv, err := NewIndexImageFromPath(path)
+	img, err := tarball.ImageFromPath(path, nil)
 	if err != nil {
-		return nil, fmt.Errorf("new index image from path: %w", err)
+		return nil, fmt.Errorf("loading %s as tarball: %w", path, err)
+	}
+	rv, err := NewIndexImageFromImage(img)
+	if err != nil {
+		return nil, fmt.Errorf("new index image from image: %w", err)
 	}
 	return rv, nil
 }
