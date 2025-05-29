@@ -48,20 +48,30 @@ var _ = Describe("Source", func() {
 	})
 
 	Describe("platform", func() {
-		It("should set platform to default if not specified", func() {
+		It("should set platform when specified in source", func() {
 			source := resource.Source{
 				RawPlatform: &resource.PlatformField{OS: "some-os", Architecture: "some-arch"},
 			}
 
-			platform := source.Platform()
+			platform := source.Platform(nil)
 			Expect(platform.Architecture).To(Equal("some-arch"))
 			Expect(platform.OS).To(Equal("some-os"))
+		})
+
+		It("should set platform when specified with step override", func() {
+			source := resource.Source{
+				RawPlatform: &resource.PlatformField{OS: "some-os", Architecture: "some-arch"},
+			}
+
+			platform := source.Platform(&resource.PlatformField{OS: "step-os", Architecture: "step-arch"})
+			Expect(platform.Architecture).To(Equal("step-arch"))
+			Expect(platform.OS).To(Equal("step-os"))
 		})
 
 		It("should set platform to default if not specified", func() {
 			var source resource.Source
 
-			platform := source.Platform()
+			platform := source.Platform(nil)
 			Expect(platform.Architecture).To(Equal(runtime.GOARCH))
 			Expect(platform.OS).To(Equal(runtime.GOOS))
 		})
