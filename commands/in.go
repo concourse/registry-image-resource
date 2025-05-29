@@ -134,6 +134,12 @@ func downloadWithRetry(tag name.Tag, source resource.Source, params resource.Get
 			return err
 		}
 
+		platform := source.Platform(params.RawPlatform)
+		opts = append(opts, remote.WithPlatform(v1.Platform{
+			Architecture: platform.Architecture,
+			OS:           platform.OS,
+		}))
+
 		// In case anyone else wonders why we don't show a progress bar for
 		// downloads, it's because go-containerregistry doesn't expose anything
 		// for us to show the download progress:

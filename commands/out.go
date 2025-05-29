@@ -304,6 +304,12 @@ func aliasesToBump(req resource.OutRequest, repo name.Repository, ver *semver.Ve
 		return nil, err
 	}
 
+	platform := req.Source.Platform(nil)
+	opts = append(opts, remote.WithPlatform(v1.Platform{
+		Architecture: platform.Architecture,
+		OS:           platform.OS,
+	}))
+
 	versions, err := remote.List(repo, opts...)
 	if err != nil && !isNewImage(err) {
 		return nil, fmt.Errorf("list repository tags: %w", err)

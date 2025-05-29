@@ -22,7 +22,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/sts"
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
-	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/google/go-containerregistry/pkg/v1/remote/transport"
 	"github.com/sirupsen/logrus"
@@ -226,22 +225,20 @@ func (source Source) AuthOptions(repo name.Repository, scopeActions []string) ([
 		return nil, fmt.Errorf("initialize transport: %w", err)
 	}
 
-	plat := source.Platform()
-	v1plat := v1.Platform{
-		Architecture: plat.Architecture,
-		OS:           plat.OS,
-	}
-
-	return []remote.Option{remote.WithAuth(auth), remote.WithTransport(rt), remote.WithPlatform(v1plat)}, nil
+	return []remote.Option{remote.WithAuth(auth), remote.WithTransport(rt)}, nil
 }
 
-func (source *Source) Platform() PlatformField {
+func (source *Source) Platform(stepOverride *PlatformField) PlatformField {
 	DefaultArchitecture := runtime.GOARCH
 	DefaultOS := runtime.GOOS
 
 	p := source.RawPlatform
 	if p == nil {
 		p = &PlatformField{}
+	}
+
+	if stepOverride != nil {
+		p = stepOverride
 	}
 
 	if p.Architecture == "" {
@@ -493,8 +490,9 @@ type MetadataField struct {
 }
 
 type GetParams struct {
-	RawFormat    string `json:"format"`
-	SkipDownload bool   `json:"skip_download"`
+	RawFormat    string         `json:"format"`
+	RawPlatform  *PlatformField `json:"platform,omitempty"`
+	SkipDownload bool           `json:"skip_download"`
 }
 
 func (p GetParams) Format() string {

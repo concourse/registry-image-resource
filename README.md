@@ -203,7 +203,7 @@ differences:
     </td>
   </tr>
   <tr>
-    <td><code>platform</code> <em>(Optional)<br>(Experimental)</em></td>
+    <td><code>platform</code> <em>(Optional)</em></td>
     <td>
       <ul>
         <li>
@@ -472,6 +472,23 @@ Fetches an image at the exact digest specified by the version.
   <tr>
     <td><code>format</code> <em>(Optional)<br>Default: <code>rootfs</code></em></td>
     <td>The format to fetch the image as. Accepted values are: <code>rootfs</code>, <code>oci</code>, <code>oci-layout</code></td>
+  </tr>
+  <tr>
+    <td><code>platform</code> <em>(Optional)</em></td>
+    <td>
+        <ul>
+            <li>
+            <code>architecture</code> <em>(Optional)</em>:
+            Architecture the image is built for (e.g. `amd64`, `arm64/v8`). If not
+            specified, will default to https://pkg.go.dev/runtime#GOARCH.
+            </li>
+            <li>
+            <code>os</code> <em>(Optional)</em>:
+            OS the image is built for (e.g. `linux`, `darwin`, `windows`). If not
+            specified, will default to https://pkg.go.dev/runtime#GOOS.
+            </li>
+        </ul>
+    </td>
   </tr>
   <tr>
     <td><code>skip_download</code> <em>(Optional)<br>Default: false</em></td>

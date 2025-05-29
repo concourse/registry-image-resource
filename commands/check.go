@@ -99,6 +99,12 @@ func check(source resource.Source, from *resource.Version) (resource.CheckRespon
 		return resource.CheckResponse{}, err
 	}
 
+	platform := source.Platform(nil)
+	opts = append(opts, remote.WithPlatform(v1.Platform{
+		Architecture: platform.Architecture,
+		OS:           platform.OS,
+	}))
+
 	if source.Tag != "" {
 		return checkTag(repo.Tag(source.Tag.String()), from, opts...)
 	} else if source.Regex != "" {
