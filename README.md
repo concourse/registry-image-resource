@@ -1,6 +1,12 @@
 # Registry Image Resource
 
 Supports checking, fetching, and pushing of images to Docker registries.
+
+<a href="https://ci.concourse-ci.org/teams/main/pipelines/resource/jobs/build?vars.type=%22registry-image%22">
+  <img src="https://ci.concourse-ci.org/api/v1/teams/main/pipelines/resource/jobs/build/badge?vars.type=%22registry-image%22" alt="Build Status">
+</a>
+
+
 This resource can be used in three ways: [with `tag`
 specified](#check-step-check-script-with-tag-discover-new-digests-for-the-tag), [with `tag_regex` specified](#check-step-check-script-with-tag_regex-discover-tags-matching-regex), or [with neither
 `tag` nor `tag_regex` specified](#check-step-check-script-without-tag-or-tag_regex-discover-semver-tags).
