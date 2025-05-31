@@ -11,7 +11,7 @@ ENV GOARCH=$TARGETARCH
 
 COPY . /src
 WORKDIR /src
-ENV CGO_ENABLED 0
+ENV CGO_ENABLED=0
 RUN go mod download
 RUN go build -o /assets/in ./cmd/in
 RUN go build -o /assets/out ./cmd/out
