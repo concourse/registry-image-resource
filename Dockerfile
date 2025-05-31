@@ -9,13 +9,10 @@ ARG TARGETARCH
 ENV GOOS=$TARGETOS
 ENV GOARCH=$TARGETARCH
 
+COPY . /src
 WORKDIR /src
-COPY go.mod .
-COPY go.sum .
-RUN go mod download
-
-COPY . .
 ENV CGO_ENABLED 0
+RUN go mod download
 RUN go build -o /assets/in ./cmd/in
 RUN go build -o /assets/out ./cmd/out
 RUN go build -o /assets/check ./cmd/check
