@@ -1,3 +1,4 @@
 FROM alpine
-RUN apk --no-cache add git
-RUN rm /usr/bin/git
+COPY Dockerfile /hardlink-test/
+RUN ln /hardlink-test/Dockerfile /hardlink-test/hardlink-file
+RUN rm /hardlink-test/Dockerfile

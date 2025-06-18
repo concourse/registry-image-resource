@@ -40,11 +40,11 @@ var LATEST_FAKE_HEADERS = http.Header{
 const OLDER_LIBRARY_DIGEST = "sha256:2131f09e4044327fd101ca1fd4043e6f3ad921ae7ee901e9142e6e36b354a907"
 
 // see testdata/static/Dockerfile
-const OLDER_STATIC_DIGEST = "sha256:7dabedca9d367a71d1cd646bd8d79f14de7b07327e4417ab691f5f13be5647a9"
-const LATEST_STATIC_DIGEST = "sha256:6d89d782e9c924098af48daa6af692d14aba9f4a92338ea04603d99ef68395df"
+const OLDER_STATIC_DIGEST = "sha256:f5e9f512c851ddcd9f1ff7ec2a9fbd65f137acfbb77857405cae7c1611129949"
+const LATEST_STATIC_DIGEST = "sha256:edb343697363db104565340c17f23b15394ece1df3789c5b5eeeea9bdfbce697"
 
 // see testdata/static.tagged/Dockerfile
-const LATEST_TAGGED_STATIC_DIGEST = "sha256:ecfdc2527b0a5d7d134be55234590336209e7feafc2ec364a930adf4a9c722e2"
+const LATEST_TAGGED_STATIC_DIGEST = "sha256:f5e9f512c851ddcd9f1ff7ec2a9fbd65f137acfbb77857405cae7c1611129949"
 
 // a pre-configured, static private repo used for testing 'check' and 'in'
 var dockerPrivateRepo = os.Getenv("DOCKER_PRIVATE_REPO")

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 set -e -u
 set -o pipefail
@@ -20,7 +20,7 @@ function build_and_push() {
 
   echo ""
   echo "building $dir as $name"
-  docker build -t $name $dir
+  docker build --platform linux/amd64,linux/arm64 -t $name $dir
 
   echo ""
   echo "pushing $name"
@@ -55,7 +55,7 @@ for df in $(find . -maxdepth 2 -name Dockerfile | grep "$filter"); do
   fi
 done
 
-if [[ -v DOCKER_PRIVATE_REPO ]]; then
+if [[ -n "${DOCKER_PRIVATE_REPO:-}" ]]; then
   echo "$DOCKER_PRIVATE_PASSWORD" | docker login -u "$DOCKER_PRIVATE_USERNAME" --password-stdin
 
   dir=./static
