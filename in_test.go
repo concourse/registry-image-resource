@@ -762,6 +762,7 @@ var _ = Describe("In", func() {
 					}
 
 					req.Version.Digest = digest.String()
+					req.Version.Tag = "latest"
 				})
 
 				It("pulls the image from the library", func() {
