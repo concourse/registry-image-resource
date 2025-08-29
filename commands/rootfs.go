@@ -75,7 +75,7 @@ func unpackImage(dest string, img v1.Image, debug bool, out io.Writer) error {
 func extractLayer(dest string, layer v1.Layer, bar *mpb.Bar, chown bool) error {
 	defer bar.SetTotal(-1, true)
 
-	r, err := layer.Compressed()
+	lyr, err := layer.Compressed()
 	if err != nil {
 		return err
 	}
@@ -85,27 +85,10 @@ func extractLayer(dest string, layer v1.Layer, bar *mpb.Bar, chown bool) error {
 		return err
 	}
 
-	var cr io.Reader
-	var crc func() error
-	switch mediaType {
-	case types.OCILayerZStd:
-		reader, err := zstd.NewReader(bar.ProxyReader(r))
-		if err != nil {
-			return err
-		}
-		cr = reader
-		crc = func() error { reader.Close(); return nil }
-
-	default:
-		reader, err := gzip.NewReader(bar.ProxyReader(r))
-		if err != nil {
-			return err
-		}
-		cr = reader
-		crc = func() error { return reader.Close() }
+	tr, crc, err := compressionReader(lyr, mediaType, bar)
+	if err != nil {
+		return err
 	}
-
-	tr := tar.NewReader(cr)
 
 	for {
 		hdr, err := tr.Next()
@@ -202,10 +185,39 @@ func extractLayer(dest string, layer v1.Layer, bar *mpb.Bar, chown bool) error {
 		return err
 	}
 
-	err = r.Close()
+	err = lyr.Close()
 	if err != nil {
 		return err
 	}
 
 	return nil
+}
+
+type compressReaderClose func() error
+
+func compressionReader(layer io.ReadCloser, mediaType types.MediaType, bar *mpb.Bar) (*tar.Reader, compressReaderClose, error) {
+	var cr io.Reader
+	var crc func() error
+
+	switch mediaType {
+	case types.OCILayerZStd:
+		reader, err := zstd.NewReader(bar.ProxyReader(layer))
+		if err != nil {
+			return nil, nil, err
+		}
+		cr = reader
+		crc = func() error { reader.Close(); return nil }
+
+	default:
+		reader, err := gzip.NewReader(bar.ProxyReader(layer))
+		if err != nil {
+			return nil, nil, err
+		}
+		cr = reader
+		crc = func() error { return reader.Close() }
+	}
+
+	tr := tar.NewReader(cr)
+
+	return tr, crc, nil
 }
