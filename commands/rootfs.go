@@ -150,9 +150,8 @@ func extractLayer(dest string, layer v1.Layer, bar *mpb.Bar, chown bool) error {
 				}
 			}
 			continue
-		} else if strings.HasPrefix(base, whiteoutPrefix) {
+		} else if name, found := strings.CutPrefix(base, whiteoutPrefix); found {
 			// layer has marked a file as deleted
-			name := strings.TrimPrefix(base, whiteoutPrefix)
 			removedPath := filepath.Join(dir, name)
 
 			log.Debugf("removing %s", removedPath)
