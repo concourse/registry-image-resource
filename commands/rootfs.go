@@ -12,6 +12,7 @@ import (
 	"github.com/concourse/go-archive/tarfs"
 	"github.com/fatih/color"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
+	"github.com/google/go-containerregistry/pkg/v1/types"
 	"github.com/klauspost/compress/zstd"
 	"github.com/sirupsen/logrus"
 	"github.com/vbauerster/mpb/v8"
@@ -79,31 +80,29 @@ func extractLayer(dest string, layer v1.Layer, bar *mpb.Bar, chown bool) error {
 		return err
 	}
 
-	digest, err := layer.Digest()
+	mediaType, err := layer.MediaType()
 	if err != nil {
 		return err
 	}
 
-	log := logrus.WithFields(logrus.Fields{
-		"Layer": digest.Hex[0:12],
-	})
-
 	var cr io.Reader
 	var crc func() error
-
-	gr, err := gzip.NewReader(bar.ProxyReader(r))
-	crc = func() error { return gr.Close() }
-	cr = gr
-	if err != nil {
-		log.Debugf("failed to decompress layer with gzip, trying zstd instead")
-
-		zr, err := zstd.NewReader(bar.ProxyReader(r))
-		crc = func() error { zr.Close(); return nil }
-		cr = zr
+	switch mediaType {
+	case types.OCILayerZStd:
+		reader, err := zstd.NewReader(bar.ProxyReader(r))
 		if err != nil {
-			log.Errorf("failed to decompress layer with gzip / zstd")
 			return err
 		}
+		cr = reader
+		crc = func() error { reader.Close(); return nil }
+
+	default:
+		reader, err := gzip.NewReader(bar.ProxyReader(r))
+		if err != nil {
+			return err
+		}
+		cr = reader
+		crc = func() error { return reader.Close() }
 	}
 
 	tr := tar.NewReader(cr)
