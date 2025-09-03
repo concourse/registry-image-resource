@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sync"
+	"time"
 
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
@@ -83,6 +84,14 @@ var _ = Describe("Out", func() {
 			err = json.Unmarshal(outBuf.Bytes(), &res)
 			Expect(err).ToNot(HaveOccurred())
 		}
+
+		// Sept 2025: Docker Hub suddenly got slower. Our test setup here
+		// follows the pattern:
+		// 1. Push image
+		// 2. Pull and verify image
+		// But if we try and pull too soon after pushing, we get
+		// MANIFEST_UNKNOWN or recieve the digest from a previous test run.
+		time.Sleep(time.Second)
 	})
 
 	Context("pushing an OCI image tarball to dockerhub", func() {
@@ -666,7 +675,7 @@ var _ = Describe("Out", func() {
 })
 
 func parallelTag(tag string) string {
-	return fmt.Sprintf("%s-%d", tag, GinkgoParallelNode())
+	return fmt.Sprintf("%s-%d", tag, GinkgoParallelProcess())
 }
 
 var _ = DescribeTable("pushing semver tags",
