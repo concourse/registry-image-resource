@@ -180,7 +180,7 @@ func checkRepository(repo name.Repository, source resource.Source, from *resourc
 				}
 
 				preReleasePrefixes := []string{"alpha", "beta", "rc"}
-				if source.PreReleasePrefixes != nil && len(source.PreReleasePrefixes) > 0 {
+				if len(source.PreReleasePrefixes) > 0 {
 					preReleasePrefixes = append(preReleasePrefixes, source.PreReleasePrefixes...)
 				} else {
 					if strings.Contains(pre, "-") {

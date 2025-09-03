@@ -661,10 +661,8 @@ going to be re-used.
 
 ### Prerequisites
 
-* golang is *required* - version 1.11.x or above is required for go mod to work
-* docker is *required* - version 17.06.x is tested; earlier versions may also
-  work.
-* go mod is used for dependency management of the golang packages.
+* golang is *required* - version 1.16.x or above is required for go mod to work
+* docker is *required* - version 19.03.x and above (`buildx` is required)
 
 ### Running the tests
 

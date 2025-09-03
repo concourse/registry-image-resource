@@ -27,6 +27,26 @@ function build_and_push() {
   docker push $name | tee /tmp/registry-image-push-output
 }
 
+function build_and_push_zstd() {
+  local dir=$1
+  local name=$2
+
+  if ! echo "$name" | grep :; then
+    name="${name}:latest"
+  fi
+
+  echo ""
+  echo "building (OCI+zstd) $dir as $name"
+  docker buildx build \
+    --platform linux/amd64,linux/arm64 \
+    --output=type=image,name=$name,compression=zstd,force-compression=true \
+    $dir
+
+  echo ""
+  echo "pushing $name"
+  docker push $name | tee /tmp/registry-image-push-output
+}
+
 function latest_digest() {
   grep digest /tmp/registry-image-push-output | awk '{print $3}'
 }
@@ -34,7 +54,14 @@ function latest_digest() {
 consts=()
 for df in $(find . -maxdepth 2 -name Dockerfile | grep "$filter"); do
   dir=$(dirname $df)
-  name=concourse/test-image-$(basename $dir | tr . :)
+  base=$(basename $dir)
+  name=concourse/test-image-$(echo $base | tr . :)
+
+  if [ "$base" = "static.zstd" ]; then
+      build_and_push_zstd $dir $name
+      digest=$(latest_digest)
+      consts+=("const LATEST_ZSTD_STATIC_DIGEST = \"${digest}\"")
+  fi
 
   older_digest=""
   if [ -d $dir/older ]; then

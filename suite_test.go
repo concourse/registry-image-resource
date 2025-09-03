@@ -41,10 +41,13 @@ const OLDER_LIBRARY_DIGEST = "sha256:2131f09e4044327fd101ca1fd4043e6f3ad921ae7ee
 
 // see testdata/static/Dockerfile
 const OLDER_STATIC_DIGEST = "sha256:f5e9f512c851ddcd9f1ff7ec2a9fbd65f137acfbb77857405cae7c1611129949"
-const LATEST_STATIC_DIGEST = "sha256:edb343697363db104565340c17f23b15394ece1df3789c5b5eeeea9bdfbce697"
+const LATEST_STATIC_DIGEST = "sha256:f94899a29d502d939de76ddca23da4ce1d8223d201c86f02fcb684ed80a45b5e"
 
 // see testdata/static.tagged/Dockerfile
-const LATEST_TAGGED_STATIC_DIGEST = "sha256:f5e9f512c851ddcd9f1ff7ec2a9fbd65f137acfbb77857405cae7c1611129949"
+const LATEST_TAGGED_STATIC_DIGEST = "sha256:61c5cda5ebbd602c732fd74c73626b8a4bb015b95e144238d6f2c091deb187f8"
+
+// see testdata/static.oci-zstd/Dockerfile
+const LATEST_ZSTD_STATIC_DIGEST = "sha256:418a7983f3eb1c3781963f06d5ef9be9b208428c9bf84ad0de49e6ce93421e98"
 
 // a pre-configured, static private repo used for testing 'check' and 'in'
 var dockerPrivateRepo = os.Getenv("DOCKER_PRIVATE_REPO")

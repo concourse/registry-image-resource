@@ -15,6 +15,7 @@ require (
 	github.com/concourse/go-archive v1.0.1
 	github.com/fatih/color v1.18.0
 	github.com/google/go-containerregistry v0.20.6
+	github.com/klauspost/compress v1.18.0
 	github.com/onsi/ginkgo/v2 v2.23.0
 	github.com/onsi/gomega v1.36.2
 	github.com/simonshyu/notary-gcr v0.0.0-20220601090547-d99a631aa58b
@@ -46,7 +47,6 @@ require (
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/pprof v0.0.0-20241210010833-40e02aabc2ad // indirect
-	github.com/klauspost/compress v1.18.0 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-runewidth v0.0.16 // indirect

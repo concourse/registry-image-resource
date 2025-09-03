@@ -12,6 +12,8 @@ import (
 	"github.com/concourse/go-archive/tarfs"
 	"github.com/fatih/color"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
+	"github.com/google/go-containerregistry/pkg/v1/types"
+	"github.com/klauspost/compress/zstd"
 	"github.com/sirupsen/logrus"
 	"github.com/vbauerster/mpb/v8"
 	"github.com/vbauerster/mpb/v8/decor"
@@ -73,17 +75,20 @@ func unpackImage(dest string, img v1.Image, debug bool, out io.Writer) error {
 func extractLayer(dest string, layer v1.Layer, bar *mpb.Bar, chown bool) error {
 	defer bar.SetTotal(-1, true)
 
-	r, err := layer.Compressed()
+	lyr, err := layer.Compressed()
 	if err != nil {
 		return err
 	}
 
-	gr, err := gzip.NewReader(bar.ProxyReader(r))
+	mediaType, err := layer.MediaType()
 	if err != nil {
 		return err
 	}
 
-	tr := tar.NewReader(gr)
+	tr, crc, err := compressionReader(lyr, mediaType, bar)
+	if err != nil {
+		return err
+	}
 
 	for {
 		hdr, err := tr.Next()
@@ -128,9 +133,8 @@ func extractLayer(dest string, layer v1.Layer, bar *mpb.Bar, chown bool) error {
 				}
 			}
 			continue
-		} else if strings.HasPrefix(base, whiteoutPrefix) {
+		} else if name, found := strings.CutPrefix(base, whiteoutPrefix); found {
 			// layer has marked a file as deleted
-			name := strings.TrimPrefix(base, whiteoutPrefix)
 			removedPath := filepath.Join(dir, name)
 
 			log.Debugf("removing %s", removedPath)
@@ -176,15 +180,44 @@ func extractLayer(dest string, layer v1.Layer, bar *mpb.Bar, chown bool) error {
 		}
 	}
 
-	err = gr.Close()
+	err = crc()
 	if err != nil {
 		return err
 	}
 
-	err = r.Close()
+	err = lyr.Close()
 	if err != nil {
 		return err
 	}
 
 	return nil
+}
+
+type compressReaderClose func() error
+
+func compressionReader(layer io.ReadCloser, mediaType types.MediaType, bar *mpb.Bar) (*tar.Reader, compressReaderClose, error) {
+	var cr io.Reader
+	var crc func() error
+
+	switch mediaType {
+	case types.OCILayerZStd:
+		reader, err := zstd.NewReader(bar.ProxyReader(layer))
+		if err != nil {
+			return nil, nil, err
+		}
+		cr = reader
+		crc = func() error { reader.Close(); return nil }
+
+	default:
+		reader, err := gzip.NewReader(bar.ProxyReader(layer))
+		if err != nil {
+			return nil, nil, err
+		}
+		cr = reader
+		crc = func() error { return reader.Close() }
+	}
+
+	tr := tar.NewReader(cr)
+
+	return tr, crc, nil
 }
