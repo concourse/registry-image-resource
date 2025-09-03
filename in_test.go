@@ -312,6 +312,21 @@ var _ = Describe("In", func() {
 		})
 	})
 
+	Describe("zstd compressed image", func() {
+		BeforeEach(func() {
+			req.Source.Repository = "concourse/test-image-static"
+			req.Params.RawFormat = "rootfs"
+			req.Version = resource.Version{
+				Tag:    "zstd",
+				Digest: LATEST_ZSTD_STATIC_DIGEST,
+			}
+		})
+
+		It("decompresses zstd layers succesfully", func() {
+			Expect(actualErr).ToNot(HaveOccurred())
+		})
+	})
+
 	Describe("fetching in OCI format", func() {
 		var manifest *v1.Manifest
 
