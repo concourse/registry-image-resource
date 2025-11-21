@@ -2,6 +2,7 @@ package commands
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -123,7 +124,14 @@ func (o *Out) Execute() error {
 		return fmt.Errorf("could not parse additional tags: %w", err)
 	}
 
+	if len(additionalTags) == 0 && req.Params.TagPrefix != "" {
+		return errors.New("tag_prefix can only be used when additional_tags are specified")
+	}
+
 	for _, tagName := range additionalTags {
+		if req.Params.TagPrefix != "" {
+			tagName = req.Params.TagPrefix + tagName
+		}
 		tagsToPush = append(tagsToPush, repo.Tag(tagName))
 	}
 

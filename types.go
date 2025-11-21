@@ -525,6 +525,9 @@ type PutParams struct {
 
 	// Path to a file containing line-separated tags to push.
 	AdditionalTags string `json:"additional_tags"`
+
+	// String that will be prefixed to all tags from AdditionalTags
+	TagPrefix string `json:"tag_prefix"`
 }
 
 func (p *PutParams) ParseAdditionalTags(src string) ([]string, error) {

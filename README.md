@@ -631,6 +631,12 @@ Tags may be specified in multiple ways:
     but not the default `latest` tag if no tag is configured).
     </td>
   </tr>
+  <tr>
+    <td><code>tag_prefix</code> <em>(Optional)</em></td>
+    <td>
+    A string that will be prefixed to the tags from <code>additional_tags</code>.
+    </td>
+  </tr>
 </tbody>
 </table>
 
