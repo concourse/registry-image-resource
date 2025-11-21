@@ -294,6 +294,56 @@ var _ = Describe("Out", func() {
 				}
 			})
 		})
+
+		Context("with tag_prefix", func() {
+			Context("pushes the provided tags with the prefix", func() {
+				BeforeEach(func() {
+					req.Params.TagPrefix = "dev-"
+					req.Params.AdditionalTags = "tags"
+
+					err := os.WriteFile(
+						filepath.Join(srcDir, req.Params.AdditionalTags),
+						fmt.Appendf([]byte{}, "%s\n%s\n", parallelTag("additional"), parallelTag("tags")),
+						0644,
+					)
+					Expect(err).ToNot(HaveOccurred())
+				})
+
+				It("in addition to the tag in 'source'", func() {
+					randomDigest, err := randomImage.Digest()
+					Expect(err).ToNot(HaveOccurred())
+
+					for _, t := range []string{"latest", "dev-additional", "dev-tags"} {
+						tag := parallelTag(t)
+
+						name, err := name.ParseReference(req.Source.Repository + ":" + tag)
+						Expect(err).ToNot(HaveOccurred())
+
+						auth := &authn.Basic{
+							Username: req.Source.Username,
+							Password: req.Source.Password,
+						}
+
+						image, err := remote.Image(name, remote.WithAuth(auth))
+						Expect(err).ToNot(HaveOccurred())
+
+						pushedDigest, err := image.Digest()
+						Expect(err).ToNot(HaveOccurred())
+
+						Expect(pushedDigest).To(Equal(randomDigest))
+					}
+				})
+			})
+			Context("errors when additional_tags is not provided", func() {
+				BeforeEach(func() {
+					req.Params.TagPrefix = "dev-"
+				})
+
+				It("returns the correct error message", func() {
+					Expect(actualErrOutput).To(ContainSubstring("tag_prefix can only be used when additional_tags are specified"))
+				})
+			})
+		})
 	})
 
 	Context("pushing an OCI imageIndex (multi-arch) image to dockerhub", func() {
