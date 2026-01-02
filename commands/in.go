@@ -18,8 +18,10 @@ import (
 )
 
 type ImageMetadata struct {
-	Env  []string `json:"env"`
-	User string   `json:"user"`
+	Cmd        []string `json:"cmd"`
+	EntryPoint []string `json:"entrypoint"`
+	Env        []string `json:"env"`
+	User       string   `json:"user"`
 }
 
 type In struct {
@@ -255,13 +257,11 @@ func rootfsFormat(dest string, image v1.Image, debug bool, stderr io.Writer) err
 		return fmt.Errorf("create image metadata: %w", err)
 	}
 
-	env := cfg.Config.Env
-
-	user := cfg.Config.User
-
 	err = json.NewEncoder(meta).Encode(ImageMetadata{
-		Env:  env,
-		User: user,
+		Env:        cfg.Config.Env,
+		User:       cfg.Config.User,
+		EntryPoint: cfg.Config.Entrypoint,
+		Cmd:        cfg.Config.Cmd,
 	})
 	if err != nil {
 		return fmt.Errorf("write image metadata: %w", err)

@@ -114,6 +114,39 @@ var _ = Describe("In", func() {
 		})
 	})
 
+	Describe("image entrypoint and cmd", func() {
+		BeforeEach(func() {
+			req.Source.Repository = "concourse/test-image-entrypoint"
+			req.Version = resource.Version{
+				Tag:    "latest",
+				Digest: latestDigest(req.Source.Repository),
+			}
+		})
+
+		It("captures the entrypoint and cmd", func() {
+			Expect(actualErr).ToNot(HaveOccurred())
+
+			var meta struct {
+				Cmd        []string `json:"cmd"`
+				EntryPoint []string `json:"entrypoint"`
+			}
+
+			md, err := os.Open(filepath.Join(destDir, "metadata.json"))
+			Expect(err).ToNot(HaveOccurred())
+
+			defer md.Close()
+
+			json.NewDecoder(md).Decode(&meta)
+			Expect(meta.EntryPoint).To(Equal([]string{
+				"/bin/sh",
+			}))
+			Expect(meta.Cmd).To(Equal([]string{
+				"-c",
+				"echo hello world",
+			}))
+		})
+	})
+
 	Describe("response metadata", func() {
 		BeforeEach(func() {
 			req.Source.Repository = "concourse/test-image-metadata"
