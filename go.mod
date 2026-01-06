@@ -1,8 +1,6 @@
 module github.com/concourse/registry-image-resource
 
-go 1.24.0
-
-toolchain go1.24.1
+go 1.25
 
 require (
 	github.com/Masterminds/semver/v3 v3.4.0
@@ -16,8 +14,8 @@ require (
 	github.com/fatih/color v1.18.0
 	github.com/google/go-containerregistry v0.20.7
 	github.com/klauspost/compress v1.18.2
-	github.com/onsi/ginkgo/v2 v2.23.0
-	github.com/onsi/gomega v1.36.2
+	github.com/onsi/ginkgo/v2 v2.27.3
+	github.com/onsi/gomega v1.38.2
 	github.com/simonshyu/notary-gcr v0.0.0-20220601090547-d99a631aa58b
 	github.com/sirupsen/logrus v1.9.3
 	github.com/vbauerster/mpb/v8 v8.11.3
@@ -49,7 +47,7 @@ require (
 	github.com/go-task/slim-sprig/v3 v3.0.0 // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
-	github.com/google/pprof v0.0.0-20241210010833-40e02aabc2ad // indirect
+	github.com/google/pprof v0.0.0-20260106004452-d7df1bf2cac7 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-runewidth v0.0.19 // indirect
@@ -61,13 +59,14 @@ require (
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/theupdateframework/notary v0.7.0 // indirect
 	github.com/vbatts/tar-split v0.12.2 // indirect
+	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	golang.org/x/crypto v0.46.0 // indirect
-	golang.org/x/net v0.47.0 // indirect
+	golang.org/x/mod v0.31.0 // indirect
+	golang.org/x/net v0.48.0 // indirect
 	golang.org/x/sync v0.19.0 // indirect
 	golang.org/x/sys v0.39.0 // indirect
 	golang.org/x/term v0.38.0 // indirect
 	golang.org/x/text v0.32.0 // indirect
-	golang.org/x/tools v0.39.0 // indirect
-	google.golang.org/protobuf v1.36.3 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
+	golang.org/x/tools v0.40.0 // indirect
+	google.golang.org/protobuf v1.36.7 // indirect
 )
