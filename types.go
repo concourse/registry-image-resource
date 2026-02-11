@@ -7,13 +7,19 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/cloud"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
+	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
@@ -67,6 +73,13 @@ type AwsCredentials struct {
 	AwsAccountId     string   `json:"aws_account_id,omitempty"`
 }
 
+type AzureCredentials struct {
+	AzureACR         bool   `json:"azure_acr,omitempty"`
+	AzureClientId    string `json:"azure_client_id,omitempty"`
+	AzureEnvironment string `json:"azure_environment,omitempty"`
+	AzureAuthType    string `json:"azure_auth_type,omitempty"`
+}
+
 type BasicCredentials struct {
 	Username string `json:"username,omitempty"`
 	Password string `json:"password,omitempty"`
@@ -101,6 +114,7 @@ type Source struct {
 
 	BasicCredentials
 	AwsCredentials
+	AzureCredentials
 
 	RegistryMirror *RegistryMirror `json:"registry_mirror,omitempty"`
 
@@ -456,6 +470,271 @@ func (source *Source) AuthenticateToECR() bool {
 	}
 
 	return true
+}
+
+func (source *Source) AuthenticateToACR() bool {
+	repo, err := name.NewRepository(source.Repository, source.RepositoryOptions()...)
+	if err != nil {
+		logrus.Errorf("failed to parse repository for ACR auth: %s", err)
+		return false
+	}
+
+	registryHost := repo.RegistryStr()
+
+	// Determine Azure cloud configuration from explicit override or registry domain
+	azCloud, managementScope := resolveAzureCloud(registryHost, source.AzureEnvironment)
+	logrus.Debugf("ACR auth using cloud with authority %s, scope %s", azCloud.ActiveDirectoryAuthorityHost, managementScope)
+
+	// Step 1: Acquire Azure AD token via the configured credential type
+	var cred azcore.TokenCredential
+	authType := strings.ToLower(strings.TrimSpace(source.AzureAuthType))
+
+	switch authType {
+	case "workload_identity":
+		logrus.Debugf("using Workload Identity credential for ACR auth")
+		wiOpts := &azidentity.WorkloadIdentityCredentialOptions{}
+		wiOpts.ClientOptions.Cloud = azCloud
+		if source.AzureClientId != "" {
+			wiOpts.ClientID = source.AzureClientId
+		}
+		cred, err = azidentity.NewWorkloadIdentityCredential(wiOpts)
+		if err != nil {
+			logrus.Errorf("failed to create Workload Identity credential: %s", err)
+			return false
+		}
+
+	default:
+		// Default: Managed Identity (covers System-Assigned, User-Assigned, and AKS Kubelet Identity)
+		miOpts := &azidentity.ManagedIdentityCredentialOptions{}
+		miOpts.ClientOptions.Cloud = azCloud
+		if source.AzureClientId != "" {
+			logrus.Debugf("using User-Assigned Managed Identity for ACR auth")
+			miOpts.ID = azidentity.ClientID(source.AzureClientId)
+		} else {
+			logrus.Debugf("using System-Assigned Managed Identity for ACR auth")
+		}
+		cred, err = azidentity.NewManagedIdentityCredential(miOpts)
+		if err != nil {
+			logrus.Errorf("failed to create Managed Identity credential: %s", err)
+			return false
+		}
+	}
+
+	token, err := cred.GetToken(context.TODO(), policy.TokenRequestOptions{
+		Scopes: []string{managementScope},
+	})
+	if err != nil {
+		logrus.Errorf("failed to acquire Azure AD token: %s", err)
+		return false
+	}
+
+	// Build HTTP client for ACR token operations, honouring ca_certs
+	acrClient := newACRHTTPClient(source.DomainCerts, source.Insecure)
+
+	// Step 2: Get tenant from ACR challenge endpoint
+	tenant := acrChallengeTenant(registryHost, source.Insecure, acrClient)
+	logrus.Debugf("ACR challenge tenant: %s", tenant)
+
+	// Step 3: Exchange AAD token for ACR refresh token
+	logrus.Debugf("exchanging AAD token for ACR refresh token at %s (tenant=%s)", registryHost, tenant)
+	refreshToken, err := exchangeACRRefreshToken(registryHost, tenant, token.Token, source.Insecure, acrClient)
+	if err != nil {
+		logrus.Errorf("failed to exchange token for ACR refresh token: %s", err)
+		return false
+	}
+
+	if refreshToken == "" {
+		logrus.Errorf("received empty ACR refresh token")
+		return false
+	}
+
+	// Step 4: Set credentials on source
+	source.Username = "00000000-0000-0000-0000-000000000000"
+	source.Password = refreshToken
+
+	logrus.Debugf("successfully authenticated to ACR: %s", registryHost)
+	return true
+}
+
+// resolveAzureCloud determines the Azure cloud configuration and management token
+// scope from the registry hostname or an explicit environment override.
+//
+// Registry domain auto-detection:
+//   - *.azurecr.io  → AzurePublic  (Commercial)
+//   - *.azurecr.us  → AzureGovernment
+//   - *.azurecr.cn  → AzureChina
+//
+// Explicit azure_environment values: "AzurePublic", "AzureGovernment", "AzureChina"
+// The explicit value takes precedence over auto-detection.
+func resolveAzureCloud(registryHost, azureEnvironment string) (cloud.Configuration, string) {
+	type azureCloudInfo struct {
+		cloud cloud.Configuration
+		scope string
+	}
+
+	clouds := map[string]azureCloudInfo{
+		"AzurePublic": {
+			cloud: cloud.AzurePublic,
+			scope: "https://management.azure.com/.default",
+		},
+		"AzureGovernment": {
+			cloud: cloud.AzureGovernment,
+			scope: "https://management.usgovcloudapi.net/.default",
+		},
+		"AzureChina": {
+			cloud: cloud.AzureChina,
+			scope: "https://management.chinacloudapi.cn/.default",
+		},
+	}
+
+	// Explicit override takes precedence
+	if azureEnvironment != "" {
+		if info, ok := clouds[azureEnvironment]; ok {
+			return info.cloud, info.scope
+		}
+		logrus.Warnf("unknown azure_environment %q, falling back to auto-detection", azureEnvironment)
+	}
+
+	// Auto-detect from registry domain suffix
+	host := strings.ToLower(registryHost)
+	switch {
+	case strings.HasSuffix(host, ".azurecr.us"):
+		return clouds["AzureGovernment"].cloud, clouds["AzureGovernment"].scope
+	case strings.HasSuffix(host, ".azurecr.cn"):
+		return clouds["AzureChina"].cloud, clouds["AzureChina"].scope
+	default:
+		// *.azurecr.io or any other domain defaults to Commercial
+		return clouds["AzurePublic"].cloud, clouds["AzurePublic"].scope
+	}
+}
+
+// newACRHTTPClient builds an HTTP client for ACR token operations with a
+// 30-second timeout. When domainCerts are provided and insecure is false, the
+// client's TLS configuration trusts both the system certificate pool and the
+// supplied PEM certificates — matching the behaviour of AuthOptions() for
+// registry operations. This is required when Azure Firewall or a similar
+// TLS-inspecting proxy re-signs traffic with a custom root CA.
+func newACRHTTPClient(domainCerts []string, insecure bool) *http.Client {
+	client := &http.Client{Timeout: 30 * time.Second}
+
+	if !insecure && len(domainCerts) > 0 {
+		rootCAs, err := x509.SystemCertPool()
+		if err != nil {
+			logrus.Debugf("failed to load system cert pool, creating empty pool: %s", err)
+			rootCAs = x509.NewCertPool()
+		}
+		if rootCAs == nil {
+			rootCAs = x509.NewCertPool()
+		}
+
+		for _, cert := range domainCerts {
+			if ok := rootCAs.AppendCertsFromPEM([]byte(cert)); !ok {
+				logrus.Warnf("failed to append a CA certificate to ACR HTTP client pool")
+			}
+		}
+
+		client.Transport = &http.Transport{
+			TLSClientConfig: &tls.Config{
+				RootCAs: rootCAs,
+			},
+		}
+	}
+
+	return client
+}
+
+// acrChallengeTenant performs an unauthenticated request to the ACR /v2/
+// endpoint and parses the tenant from the Www-Authenticate challenge header.
+func acrChallengeTenant(registryHost string, insecure bool, client *http.Client) string {
+	scheme := "https"
+	if insecure {
+		scheme = "http"
+	}
+
+	resp, err := client.Get(fmt.Sprintf("%s://%s/v2/", scheme, registryHost))
+	if err != nil {
+		logrus.Debugf("ACR challenge request failed, using default tenant: %s", err)
+		return "common"
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusUnauthorized {
+		logrus.Debugf("ACR challenge returned status %d (expected 401), using default tenant", resp.StatusCode)
+		return "common"
+	}
+
+	return parseACRChallengeTenant(resp.Header.Get("Www-Authenticate"))
+}
+
+// parseACRChallengeTenant extracts the tenant from a Www-Authenticate header.
+// The header format is: Bearer realm="https://<host>/oauth2/exchange?tenant=<tid>",service="<host>"
+// Returns "common" if the tenant cannot be parsed.
+func parseACRChallengeTenant(wwwAuthenticate string) string {
+	if wwwAuthenticate == "" || !strings.HasPrefix(wwwAuthenticate, "Bearer ") {
+		return "common"
+	}
+
+	// Extract realm value from the header
+	const realmPrefix = `realm="`
+	idx := strings.Index(wwwAuthenticate, realmPrefix)
+	if idx < 0 {
+		return "common"
+	}
+
+	start := idx + len(realmPrefix)
+	end := strings.Index(wwwAuthenticate[start:], `"`)
+	if end < 0 {
+		return "common"
+	}
+
+	realmURL := wwwAuthenticate[start : start+end]
+
+	parsed, err := url.Parse(realmURL)
+	if err != nil {
+		return "common"
+	}
+
+	tenant := parsed.Query().Get("tenant")
+	if tenant == "" {
+		return "common"
+	}
+
+	return tenant
+}
+
+// exchangeACRRefreshToken exchanges an Azure AD access token for an ACR refresh token.
+func exchangeACRRefreshToken(registryHost, tenant, accessToken string, insecure bool, client *http.Client) (string, error) {
+	scheme := "https"
+	if insecure {
+		scheme = "http"
+	}
+
+	exchangeURL := fmt.Sprintf("%s://%s/oauth2/exchange", scheme, registryHost)
+
+	resp, err := client.PostForm(exchangeURL, url.Values{
+		"grant_type":   {"access_token"},
+		"service":      {registryHost},
+		"tenant":       {tenant},
+		"access_token": {accessToken},
+	})
+	if err != nil {
+		return "", fmt.Errorf("POST %s: %w", exchangeURL, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return "", fmt.Errorf("ACR token exchange returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	var result struct {
+		RefreshToken string `json:"refresh_token"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", fmt.Errorf("failed to decode ACR token exchange response: %w", err)
+	}
+
+	return result.RefreshToken, nil
 }
 
 // Tag refers to a tag for an image in the registry.

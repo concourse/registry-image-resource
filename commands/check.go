@@ -61,6 +61,12 @@ func (c *Check) Execute() error {
 		}
 	}
 
+	if req.Source.AzureACR {
+		if !req.Source.AuthenticateToACR() {
+			return fmt.Errorf("cannot authenticate with ACR")
+		}
+	}
+
 	mirrorSource, hasMirror, err := req.Source.Mirror()
 	if err != nil {
 		return fmt.Errorf("failed to resolve mirror: %w", err)

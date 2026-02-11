@@ -76,4 +76,91 @@ var _ = Describe("Source", func() {
 			Expect(platform.OS).To(Equal(runtime.GOOS))
 		})
 	})
+
+	Describe("Azure credentials unmarshaling", func() {
+		It("should unmarshal azure_acr and azure_client_id", func() {
+			var source resource.Source
+			raw := []byte(`{
+				"repository": "myregistry.azurecr.io/myimage",
+				"azure_acr": true,
+				"azure_client_id": "test-client-id"
+			}`)
+			err := json.Unmarshal(raw, &source)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(source.AzureACR).To(BeTrue())
+			Expect(source.AzureClientId).To(Equal("test-client-id"))
+		})
+
+		It("should unmarshal azure_acr without azure_client_id for system-assigned MI", func() {
+			var source resource.Source
+			raw := []byte(`{
+				"repository": "myregistry.azurecr.io/myimage",
+				"azure_acr": true
+			}`)
+			err := json.Unmarshal(raw, &source)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(source.AzureACR).To(BeTrue())
+			Expect(source.AzureClientId).To(BeEmpty())
+		})
+
+		It("should default azure_acr to false when not provided", func() {
+			var source resource.Source
+			raw := []byte(`{"repository": "alpine"}`)
+			err := json.Unmarshal(raw, &source)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(source.AzureACR).To(BeFalse())
+		})
+
+		It("should not conflict when both AWS and Azure fields are set", func() {
+			var source resource.Source
+			raw := []byte(`{
+				"repository": "test",
+				"aws_region": "us-east-1",
+				"azure_acr": true
+			}`)
+			err := json.Unmarshal(raw, &source)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(source.AwsRegion).To(Equal("us-east-1"))
+			Expect(source.AzureACR).To(BeTrue())
+		})
+
+		It("should unmarshal azure_environment for multi-cloud support", func() {
+			var source resource.Source
+			raw := []byte(`{
+				"repository": "myregistry.azurecr.us/myimage",
+				"azure_acr": true,
+				"azure_environment": "AzureGovernment"
+			}`)
+			err := json.Unmarshal(raw, &source)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(source.AzureACR).To(BeTrue())
+			Expect(source.AzureEnvironment).To(Equal("AzureGovernment"))
+		})
+
+		It("should unmarshal azure_auth_type for workload identity", func() {
+			var source resource.Source
+			raw := []byte(`{
+				"repository": "myregistry.azurecr.io/myimage",
+				"azure_acr": true,
+				"azure_auth_type": "workload_identity",
+				"azure_client_id": "wi-client-id"
+			}`)
+			err := json.Unmarshal(raw, &source)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(source.AzureACR).To(BeTrue())
+			Expect(source.AzureAuthType).To(Equal("workload_identity"))
+			Expect(source.AzureClientId).To(Equal("wi-client-id"))
+		})
+
+		It("should default azure_auth_type to empty when not provided", func() {
+			var source resource.Source
+			raw := []byte(`{
+				"repository": "myregistry.azurecr.io/myimage",
+				"azure_acr": true
+			}`)
+			err := json.Unmarshal(raw, &source)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(source.AzureAuthType).To(BeEmpty())
+		})
+	})
 })

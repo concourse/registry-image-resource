@@ -70,6 +70,12 @@ func (o *Out) Execute() error {
 		}
 	}
 
+	if req.Source.AzureACR {
+		if !req.Source.AuthenticateToACR() {
+			return fmt.Errorf("cannot authenticate with ACR")
+		}
+	}
+
 	tagsToPush := []name.Tag{}
 
 	repo, err := req.Source.NewRepository()

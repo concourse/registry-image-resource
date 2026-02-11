@@ -209,6 +209,54 @@ differences:
     </td>
   </tr>
   <tr>
+    <td><code>azure_acr</code> <em>(Optional)<br>Default: false</em></td>
+    <td>
+    Set to <code>true</code> to authenticate to Azure Container Registry (ACR)
+    using Azure Managed Identity. When enabled, the resource will acquire an
+    Azure AD token via Managed Identity and exchange it for ACR credentials
+    automatically. The <code>repository</code> must be the full ACR URL
+    (e.g. <code>myregistry.azurecr.io/myimage</code>).
+    </td>
+  </tr>
+  <tr>
+    <td><code>azure_client_id</code> <em>(Optional)</em></td>
+    <td>
+    The Client ID of a User-Assigned Managed Identity to use for ACR
+    authentication. Only applicable when <code>azure_acr</code> is
+    <code>true</code>. When omitted, System-Assigned Managed Identity is used.
+    For Workload Identity, this overrides the <code>AZURE_CLIENT_ID</code>
+    environment variable injected by the AKS webhook.
+    </td>
+  </tr>
+  <tr>
+    <td><code>azure_environment</code> <em>(Optional)</em></td>
+    <td>
+    The Azure cloud environment to authenticate against. Only applicable when
+    <code>azure_acr</code> is <code>true</code>. Accepted values:
+    <code>AzurePublic</code> (default), <code>AzureGovernment</code>,
+    <code>AzureChina</code>. When omitted, the environment is auto-detected
+    from the registry domain suffix (<code>.azurecr.io</code> → Commercial,
+    <code>.azurecr.us</code> → Government, <code>.azurecr.cn</code> → China).
+    </td>
+  </tr>
+  <tr>
+    <td><code>azure_auth_type</code> <em>(Optional)</em></td>
+    <td>
+    The Azure credential type to use for ACR authentication. Only applicable
+    when <code>azure_acr</code> is <code>true</code>. Accepted values:
+    <ul>
+      <li><em>(empty / omitted)</em> — Managed Identity (default). Works for
+      System-Assigned MI, User-Assigned MI, and AKS Kubelet Identity.</li>
+      <li><code>workload_identity</code> — Azure Workload Identity. Uses
+      federated service account tokens on AKS. Requires the AKS Workload
+      Identity webhook to inject <code>AZURE_TENANT_ID</code>,
+      <code>AZURE_CLIENT_ID</code>, and
+      <code>AZURE_FEDERATED_TOKEN_FILE</code> environment variables into the
+      pod.</li>
+    </ul>
+    </td>
+  </tr>
+  <tr>
     <td><code>platform</code> <em>(Optional)</em></td>
     <td>
       <ul>
@@ -363,6 +411,161 @@ registry_key: |
 ```
 
 **NOTE** This configuration only applies to the `out` action. `check` & `in` aren't impacted. Hence, it would be possible to `check` or use `in` to get unsigned images.
+
+### Azure Container Registry with Managed Identity
+
+To authenticate to Azure Container Registry using Azure Managed Identity,
+set `azure_acr: true` in your source configuration. The Concourse worker must
+be running on an Azure VM (or other compute) with a Managed Identity assigned
+that has the `AcrPull` (and optionally `AcrPush` for `put` steps) role on the
+target ACR.
+
+#### Supported Identity Types
+
+| Identity Type | `azure_auth_type` | Where It Works |
+|---|---|---|
+| System-Assigned Managed Identity | _(omit)_ | Azure VMs, VMSS, App Service, AKS nodes |
+| User-Assigned Managed Identity | _(omit)_ + `azure_client_id` | Azure VMs, VMSS, App Service, AKS nodes |
+| AKS Kubelet Identity | _(omit)_ + `azure_client_id` | AKS node pools (VMSS-based) |
+| AKS Workload Identity | `workload_identity` | AKS pods with Workload Identity webhook |
+
+#### Supported Azure Clouds
+
+The resource supports Azure Commercial, Azure Government, and Azure China
+clouds. The cloud environment is auto-detected from the registry domain suffix:
+
+| Domain Suffix | Cloud Environment |
+|---|---|
+| `.azurecr.io` | Azure Commercial (default) |
+| `.azurecr.us` | Azure Government |
+| `.azurecr.cn` | Azure China |
+
+You can also set `azure_environment` explicitly to override auto-detection.
+
+#### System-Assigned Managed Identity
+
+```yaml
+resources:
+- name: my-acr-image
+  type: registry-image
+  source:
+    repository: myregistry.azurecr.io/myimage
+    tag: latest
+    azure_acr: true
+```
+
+#### User-Assigned Managed Identity
+
+```yaml
+resources:
+- name: my-acr-image
+  type: registry-image
+  source:
+    repository: myregistry.azurecr.io/myimage
+    tag: latest
+    azure_acr: true
+    azure_client_id: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+```
+
+#### Azure Government
+
+```yaml
+resources:
+- name: my-gov-acr-image
+  type: registry-image
+  source:
+    repository: myregistry.azurecr.us/myimage
+    tag: latest
+    azure_acr: true
+```
+
+The cloud is auto-detected from the `.azurecr.us` domain. You can also set it
+explicitly:
+
+```yaml
+resources:
+- name: my-gov-acr-image
+  type: registry-image
+  source:
+    repository: myregistry.azurecr.us/myimage
+    tag: latest
+    azure_acr: true
+    azure_environment: AzureGovernment
+```
+
+#### Azure China
+
+```yaml
+resources:
+- name: my-china-acr-image
+  type: registry-image
+  source:
+    repository: myregistry.azurecr.cn/myimage
+    tag: latest
+    azure_acr: true
+```
+
+#### AKS Kubelet Identity
+
+When running Concourse workers on AKS, the node pool's Kubelet Identity is
+available via IMDS. Pass its Client ID:
+
+```yaml
+resources:
+- name: my-acr-image
+  type: registry-image
+  source:
+    repository: myregistry.azurecr.io/myimage
+    tag: latest
+    azure_acr: true
+    azure_client_id: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx  # kubelet MI client ID
+```
+
+#### AKS Workload Identity
+
+When using [AKS Workload Identity](https://learn.microsoft.com/azure/aks/workload-identity-overview),
+the webhook injects `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, and
+`AZURE_FEDERATED_TOKEN_FILE` into the pod. Set `azure_auth_type` to
+`workload_identity` so the resource uses federated token authentication instead
+of IMDS:
+
+```yaml
+resources:
+- name: my-acr-image
+  type: registry-image
+  source:
+    repository: myregistry.azurecr.io/myimage
+    tag: latest
+    azure_acr: true
+    azure_auth_type: workload_identity
+```
+
+If you need to override the Client ID injected by the webhook (e.g. the
+service account is federated to a different identity):
+
+```yaml
+resources:
+- name: my-acr-image
+  type: registry-image
+  source:
+    repository: myregistry.azurecr.io/myimage
+    tag: latest
+    azure_acr: true
+    azure_auth_type: workload_identity
+    azure_client_id: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+```
+
+**Note:** Unlike ECR, you must specify the full ACR repository URL including
+the registry hostname (e.g. `myregistry.azurecr.io/myimage`). The resource
+does not automatically construct the URL.
+
+**Note:** `username` and `password` should NOT be set when using `azure_acr`.
+The resource will acquire credentials automatically via Managed Identity.
+
+**Note:** If your Azure environment uses a TLS-inspecting proxy such as Azure
+Firewall, set [`ca_certs`](#source-configuration) with the proxy's root CA.
+The ACR token-exchange calls honour the same custom CA pool used for registry
+operations, so the resource will trust the re-signed certificates.
 
 ## Behavior
 
