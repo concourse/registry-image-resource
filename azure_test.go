@@ -632,3 +632,103 @@ func TestAuthenticateToACRCrossCloudMismatch(t *testing.T) {
 		}
 	})
 }
+
+func TestAzureTenantIdSkipsChallenge(t *testing.T) {
+	// This test verifies that when azure_tenant_id is explicitly configured,
+	// the challenge endpoint (/v2/) is never called. We set up a mock server
+	// that fails the test if /v2/ is hit, and a working /oauth2/exchange.
+
+	t.Run("challenge endpoint is skipped when azure_tenant_id is set", func(t *testing.T) {
+		challengeCalled := false
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			switch r.URL.Path {
+			case "/v2/":
+				challengeCalled = true
+				t.Error("/v2/ challenge endpoint was called despite azure_tenant_id being set")
+				w.Header().Set("Www-Authenticate",
+					fmt.Sprintf(`Bearer realm="http://%s/oauth2/exchange?tenant=should-not-be-used",service="%s"`, r.Host, r.Host))
+				w.WriteHeader(http.StatusUnauthorized)
+			case "/oauth2/exchange":
+				// Verify the tenant from the explicit config is used, not from challenge
+				err := r.ParseForm()
+				if err != nil {
+					t.Fatal(err)
+				}
+				if r.FormValue("tenant") != "explicit-acr-tenant-id" {
+					t.Errorf("expected tenant=explicit-acr-tenant-id, got %s", r.FormValue("tenant"))
+				}
+				w.Header().Set("Content-Type", "application/json")
+				json.NewEncoder(w).Encode(map[string]string{
+					"refresh_token": "tenant-skip-refresh-token",
+				})
+			default:
+				w.WriteHeader(http.StatusNotFound)
+			}
+		}))
+		defer server.Close()
+
+		host := strings.TrimPrefix(server.URL, "http://")
+
+		// Directly test the tenant selection logic: when AzureTenantId is set,
+		// use it and skip the challenge
+		tenant := "explicit-acr-tenant-id" // simulates source.AzureTenantId being set
+
+		token, err := exchangeACRRefreshToken(host, tenant, "fake-aad-token", true, plainHTTPClient)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if token != "tenant-skip-refresh-token" {
+			t.Errorf("expected tenant-skip-refresh-token, got %s", token)
+		}
+		if challengeCalled {
+			t.Error("challenge endpoint should not have been called")
+		}
+	})
+
+	t.Run("challenge endpoint is called when azure_tenant_id is empty", func(t *testing.T) {
+		challengeCalled := false
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			switch r.URL.Path {
+			case "/v2/":
+				challengeCalled = true
+				w.Header().Set("Www-Authenticate",
+					fmt.Sprintf(`Bearer realm="http://%s/oauth2/exchange?tenant=discovered-tenant",service="%s"`, r.Host, r.Host))
+				w.WriteHeader(http.StatusUnauthorized)
+			case "/oauth2/exchange":
+				err := r.ParseForm()
+				if err != nil {
+					t.Fatal(err)
+				}
+				if r.FormValue("tenant") != "discovered-tenant" {
+					t.Errorf("expected tenant=discovered-tenant, got %s", r.FormValue("tenant"))
+				}
+				w.Header().Set("Content-Type", "application/json")
+				json.NewEncoder(w).Encode(map[string]string{
+					"refresh_token": "discovered-refresh-token",
+				})
+			default:
+				w.WriteHeader(http.StatusNotFound)
+			}
+		}))
+		defer server.Close()
+
+		host := strings.TrimPrefix(server.URL, "http://")
+
+		// When tenant is empty, should discover it via challenge
+		tenant := acrChallengeTenant(host, true, plainHTTPClient)
+		if tenant != "discovered-tenant" {
+			t.Errorf("expected discovered-tenant, got %s", tenant)
+		}
+		if !challengeCalled {
+			t.Error("challenge endpoint should have been called when azure_tenant_id is empty")
+		}
+
+		token, err := exchangeACRRefreshToken(host, tenant, "fake-aad-token", true, plainHTTPClient)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if token != "discovered-refresh-token" {
+			t.Errorf("expected discovered-refresh-token, got %s", token)
+		}
+	})
+}

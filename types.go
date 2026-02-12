@@ -76,6 +76,7 @@ type AwsCredentials struct {
 type AzureCredentials struct {
 	AzureACR         bool   `json:"azure_acr,omitempty"`
 	AzureClientId    string `json:"azure_client_id,omitempty"`
+	AzureTenantId    string `json:"azure_tenant_id,omitempty"`
 	AzureEnvironment string `json:"azure_environment,omitempty"`
 	AzureAuthType    string `json:"azure_auth_type,omitempty"`
 }
@@ -531,15 +532,29 @@ func (source *Source) AuthenticateToACR() bool {
 	// Build HTTP client for ACR token operations, honouring ca_certs
 	acrClient := newACRHTTPClient(source.DomainCerts, source.Insecure)
 
-	// Step 2: Get tenant from ACR challenge endpoint
-	tenant := acrChallengeTenant(registryHost, source.Insecure, acrClient)
-	logrus.Debugf("ACR challenge tenant: %s", tenant)
+	// Step 2: Determine the ACR tenant.
+	// If azure_tenant_id is explicitly configured, use it directly and skip the
+	// challenge roundtrip to /v2/. This saves one HTTP request per check/get/put.
+	// Do NOT fall back to the AZURE_TENANT_ID env var — that is the cluster's
+	// tenant, which may differ from the ACR's tenant in cross-tenant scenarios.
+	var tenant string
+	if source.AzureTenantId != "" {
+		tenant = source.AzureTenantId
+		logrus.Debugf("using explicit azure_tenant_id for ACR auth: %s", tenant)
+	} else {
+		tenant = acrChallengeTenant(registryHost, source.Insecure, acrClient)
+		logrus.Debugf("ACR challenge tenant: %s", tenant)
+	}
 
 	// Step 3: Exchange AAD token for ACR refresh token
 	logrus.Debugf("exchanging AAD token for ACR refresh token at %s (tenant=%s)", registryHost, tenant)
 	refreshToken, err := exchangeACRRefreshToken(registryHost, tenant, token.Token, source.Insecure, acrClient)
 	if err != nil {
 		logrus.Errorf("failed to exchange token for ACR refresh token: %s", err)
+		if source.AzureTenantId != "" {
+			logrus.Errorf("hint: azure_tenant_id must be the ACR registry's tenant ID, not the VM or cluster tenant ID. " +
+				"Find it with: az acr show --name <registry> --query loginServer --output tsv or check the Azure Portal.")
+		}
 		return false
 	}
 

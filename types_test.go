@@ -162,5 +162,29 @@ var _ = Describe("Source", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(source.AzureAuthType).To(BeEmpty())
 		})
+
+		It("should unmarshal azure_tenant_id", func() {
+			var source resource.Source
+			raw := []byte(`{
+				"repository": "myregistry.azurecr.io/myimage",
+				"azure_acr": true,
+				"azure_tenant_id": "72f988bf-86f1-41af-91ab-2d7cd011db47"
+			}`)
+			err := json.Unmarshal(raw, &source)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(source.AzureACR).To(BeTrue())
+			Expect(source.AzureTenantId).To(Equal("72f988bf-86f1-41af-91ab-2d7cd011db47"))
+		})
+
+		It("should default azure_tenant_id to empty when not provided", func() {
+			var source resource.Source
+			raw := []byte(`{
+				"repository": "myregistry.azurecr.io/myimage",
+				"azure_acr": true
+			}`)
+			err := json.Unmarshal(raw, &source)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(source.AzureTenantId).To(BeEmpty())
+		})
 	})
 })

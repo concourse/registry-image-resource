@@ -6,7 +6,6 @@ Supports checking, fetching, and pushing of images to Docker registries.
   <img src="https://ci.concourse-ci.org/api/v1/teams/main/pipelines/resource/jobs/build/badge?vars.type=%22registry-image%22" alt="Build Status">
 </a>
 
-
 This resource can be used in three ways: [with `tag`
 specified](#check-step-check-script-with-tag-discover-new-digests-for-the-tag), [with `tag_regex` specified](#check-step-check-script-with-tag_regex-discover-tags-matching-regex), or [with neither
 `tag` nor `tag_regex` specified](#check-step-check-script-without-tag-or-tag_regex-discover-semver-tags).
@@ -51,7 +50,6 @@ differences:
   Docker Image resource grew way too large and complicated. There are simply
   too many ways to build and publish Docker images. It will be easier to
   support many smaller resources + tasks rather than one huge interface.
-
 
 ## Source Configuration
 
@@ -226,6 +224,24 @@ differences:
     <code>true</code>. When omitted, System-Assigned Managed Identity is used.
     For Workload Identity, this overrides the <code>AZURE_CLIENT_ID</code>
     environment variable injected by the AKS webhook.
+    </td>
+  </tr>
+  <tr>
+    <td><code>azure_tenant_id</code> <em>(Optional)</em></td>
+    <td>
+    The tenant ID of the <strong>ACR registry</strong> (not the VM or cluster
+    tenant). Only applicable when <code>azure_acr</code> is <code>true</code>.
+    When set, the resource skips the challenge roundtrip to the ACR
+    <code>/v2/</code> endpoint, saving one HTTP request per
+    <code>check</code>, <code>get</code>, and <code>put</code> invocation.
+    When omitted, the tenant is auto-discovered from the registry's
+    <code>Www-Authenticate</code> challenge header. Find the ACR tenant ID
+    with: <code>az acr show --name &lt;registry&gt; --query identity.tenantId -o tsv</code>
+    or from the Azure Portal under the registry's properties.
+    <br><br>
+    <strong>Note:</strong> Do not set this to the <code>AZURE_TENANT_ID</code>
+    environment variable from AKS Workload Identity — that is the cluster's
+    tenant, which may differ from the ACR's tenant in cross-tenant scenarios.
     </td>
   </tr>
   <tr>
@@ -589,7 +605,7 @@ Each unique digest will be returned only once, with the most specific version
 tag available. This is to handle "alias" tags like `1`, `1.2` pointing to
 `1.2.3`.
 
-Note: the initial `check` call will return *all valid versions*, which is
+Note: the initial `check` call will return _all valid versions_, which is
 unlike most resources which only return the latest version. This is an
 intentional choice which will become the normal behavior for resources in
 the future (per concourse/rfcs#38).
@@ -629,7 +645,7 @@ With a `variant` value specified, only semver tags with the matching variant
 will be detected. With `variant` omitted, tags which include a variant are
 ignored.
 
-Note: some image tags actually include *mutliple* variants, e.g.
+Note: some image tags actually include _mutliple_ variants, e.g.
 `1.2.3-php7.3-apache`. With a variant of only `apache` configured, these tags
 will be skipped to avoid accidentally using multiple variants. In order to
 use these tags, you must specify the full variant combination, e.g.
@@ -661,8 +677,6 @@ The above resource definition would detect the following versions:
   // ...
 ]
 ```
-
-
 
 ### `get` Step (`in` script): fetch an image
 
@@ -853,7 +867,6 @@ Anonymous resources can specify
 [a version](https://concourse-ci.org/tasks.html#schema.anonymous_resource.version),
 which is the image digest. For example:
 
-
 ```
 image_resource:
   type: docker-image
@@ -870,8 +883,8 @@ going to be re-used.
 
 ### Prerequisites
 
-* golang is *required* - version 1.16.x or above is required for go mod to work
-* docker is *required* - version 19.03.x and above (`buildx` is required)
+* golang is _required_ - version 1.16.x or above is required for go mod to work
+* docker is _required_ - version 19.03.x and above (`buildx` is required)
 
 ### Running the tests
 
