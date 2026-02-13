@@ -1,4 +1,4 @@
-package resource
+package resource_test
 
 import (
 	"encoding/json"
@@ -8,303 +8,232 @@ import (
 	"net/http/httptest"
 	"os"
 	"strings"
-	"testing"
 	"time"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+
+	resource "github.com/concourse/registry-image-resource"
 )
 
-// plainHTTPClient is a test helper client used for plain-HTTP test servers.
-var plainHTTPClient = &http.Client{Timeout: 5 * time.Second}
+var _ = Describe("Azure ACR Authentication", func() {
 
-func TestParseACRChallengeTenant(t *testing.T) {
-	tests := []struct {
-		name     string
-		header   string
-		expected string
-	}{
-		{
-			name:     "standard ACR challenge with tenant",
-			header:   `Bearer realm="https://myregistry.azurecr.io/oauth2/exchange?tenant=72f988bf-86f1-41af-91ab-2d7cd011db47",service="myregistry.azurecr.io"`,
-			expected: "72f988bf-86f1-41af-91ab-2d7cd011db47",
-		},
-		{
-			name:     "challenge without tenant param",
-			header:   `Bearer realm="https://myregistry.azurecr.io/oauth2/exchange",service="myregistry.azurecr.io"`,
-			expected: "common",
-		},
-		{
-			name:     "empty header",
-			header:   "",
-			expected: "common",
-		},
-		{
-			name:     "non-Bearer header",
-			header:   `Basic realm="something"`,
-			expected: "common",
-		},
-		{
-			name:     "realm with multiple query params including tenant",
-			header:   `Bearer realm="https://myregistry.azurecr.io/oauth2/exchange?foo=bar&tenant=abc-123&baz=qux",service="myregistry.azurecr.io"`,
-			expected: "abc-123",
-		},
-		{
-			name:     "Bearer with no realm",
-			header:   `Bearer service="myregistry.azurecr.io"`,
-			expected: "common",
-		},
-	}
+	Describe("parseACRChallengeTenant", func() {
+		DescribeTable("extracts tenant from Www-Authenticate header",
+			func(header string, expected string) {
+				Expect(resource.ParseACRChallengeTenant(header)).To(Equal(expected))
+			},
+			Entry("standard ACR challenge with tenant",
+				`Bearer realm="https://myregistry.azurecr.io/oauth2/exchange?tenant=72f988bf-86f1-41af-91ab-2d7cd011db47",service="myregistry.azurecr.io"`,
+				"72f988bf-86f1-41af-91ab-2d7cd011db47",
+			),
+			Entry("challenge without tenant param",
+				`Bearer realm="https://myregistry.azurecr.io/oauth2/exchange",service="myregistry.azurecr.io"`,
+				"common",
+			),
+			Entry("empty header",
+				"",
+				"common",
+			),
+			Entry("non-Bearer header",
+				`Basic realm="something"`,
+				"common",
+			),
+			Entry("realm with multiple query params including tenant",
+				`Bearer realm="https://myregistry.azurecr.io/oauth2/exchange?foo=bar&tenant=abc-123&baz=qux",service="myregistry.azurecr.io"`,
+				"abc-123",
+			),
+			Entry("Bearer with no realm",
+				`Bearer service="myregistry.azurecr.io"`,
+				"common",
+			),
+		)
+	})
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := parseACRChallengeTenant(tt.header)
-			if result != tt.expected {
-				t.Errorf("parseACRChallengeTenant(%q) = %q, want %q", tt.header, result, tt.expected)
-			}
+	Describe("exchangeACRRefreshToken", func() {
+		It("returns a refresh token on successful exchange", func() {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				Expect(r.URL.Path).To(Equal("/oauth2/exchange"))
+				Expect(r.Method).To(Equal(http.MethodPost))
+
+				err := r.ParseForm()
+				Expect(err).ToNot(HaveOccurred())
+
+				Expect(r.FormValue("grant_type")).To(Equal("access_token"))
+				Expect(r.FormValue("access_token")).To(Equal("fake-aad-token"))
+				Expect(r.FormValue("tenant")).To(Equal("test-tenant"))
+
+				w.Header().Set("Content-Type", "application/json")
+				json.NewEncoder(w).Encode(map[string]string{
+					"refresh_token": "fake-acr-refresh-token",
+				})
+			}))
+			defer server.Close()
+
+			host := strings.TrimPrefix(server.URL, "http://")
+
+			token, err := resource.ExchangeACRRefreshToken(host, "test-tenant", "fake-aad-token", true, resource.PlainHTTPClient)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(token).To(Equal("fake-acr-refresh-token"))
 		})
-	}
-}
 
-func TestExchangeACRRefreshToken(t *testing.T) {
-	t.Run("successful token exchange", func(t *testing.T) {
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.URL.Path != "/oauth2/exchange" {
-				t.Errorf("unexpected path: %s", r.URL.Path)
+		It("returns an error when the server returns an error status", func() {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusUnauthorized)
+				fmt.Fprint(w, "unauthorized")
+			}))
+			defer server.Close()
+
+			host := strings.TrimPrefix(server.URL, "http://")
+
+			_, err := resource.ExchangeACRRefreshToken(host, "test-tenant", "fake-token", true, resource.PlainHTTPClient)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("status 401"))
+		})
+
+		It("returns an error when the server returns invalid JSON", func() {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				fmt.Fprint(w, "not-json")
+			}))
+			defer server.Close()
+
+			host := strings.TrimPrefix(server.URL, "http://")
+
+			_, err := resource.ExchangeACRRefreshToken(host, "test-tenant", "fake-token", true, resource.PlainHTTPClient)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("decode"))
+		})
+	})
+
+	Describe("acrChallengeTenant", func() {
+		It("parses tenant from mock ACR v2 endpoint", func() {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == "/v2/" {
+					w.Header().Set("Www-Authenticate",
+						fmt.Sprintf(`Bearer realm="http://%s/oauth2/exchange?tenant=test-tenant-id",service="%s"`, r.Host, r.Host))
+					w.WriteHeader(http.StatusUnauthorized)
+					return
+				}
 				w.WriteHeader(http.StatusNotFound)
-				return
-			}
-			if r.Method != http.MethodPost {
-				t.Errorf("expected POST, got %s", r.Method)
-				w.WriteHeader(http.StatusMethodNotAllowed)
-				return
-			}
+			}))
+			defer server.Close()
 
-			err := r.ParseForm()
-			if err != nil {
-				t.Fatal(err)
-			}
+			host := strings.TrimPrefix(server.URL, "http://")
 
-			if r.FormValue("grant_type") != "access_token" {
-				t.Errorf("expected grant_type=access_token, got %s", r.FormValue("grant_type"))
-			}
-			if r.FormValue("access_token") != "fake-aad-token" {
-				t.Errorf("expected access_token=fake-aad-token, got %s", r.FormValue("access_token"))
-			}
-			if r.FormValue("tenant") != "test-tenant" {
-				t.Errorf("expected tenant=test-tenant, got %s", r.FormValue("tenant"))
-			}
+			Expect(resource.AcrChallengeTenant(host, true, resource.PlainHTTPClient)).To(Equal("test-tenant-id"))
+		})
 
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]string{
-				"refresh_token": "fake-acr-refresh-token",
-			})
-		}))
-		defer server.Close()
+		It("returns common when challenge has no tenant", func() {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == "/v2/" {
+					w.Header().Set("Www-Authenticate",
+						fmt.Sprintf(`Bearer realm="http://%s/oauth2/exchange",service="%s"`, r.Host, r.Host))
+					w.WriteHeader(http.StatusUnauthorized)
+					return
+				}
+				w.WriteHeader(http.StatusNotFound)
+			}))
+			defer server.Close()
 
-		// Extract host from test server URL (strip http://)
-		host := strings.TrimPrefix(server.URL, "http://")
+			host := strings.TrimPrefix(server.URL, "http://")
 
-		token, err := exchangeACRRefreshToken(host, "test-tenant", "fake-aad-token", true, plainHTTPClient)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if token != "fake-acr-refresh-token" {
-			t.Errorf("expected fake-acr-refresh-token, got %s", token)
-		}
+			Expect(resource.AcrChallengeTenant(host, true, resource.PlainHTTPClient)).To(Equal("common"))
+		})
+
+		It("returns common when server returns 200", func() {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusOK)
+			}))
+			defer server.Close()
+
+			host := strings.TrimPrefix(server.URL, "http://")
+
+			Expect(resource.AcrChallengeTenant(host, true, resource.PlainHTTPClient)).To(Equal("common"))
+		})
 	})
 
-	t.Run("server returns error status", func(t *testing.T) {
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusUnauthorized)
-			fmt.Fprint(w, "unauthorized")
-		}))
-		defer server.Close()
+	Describe("newACRHTTPClient", func() {
+		It("has a 30s timeout and nil transport when no ca_certs provided", func() {
+			client := resource.NewACRHTTPClient(nil, false)
+			Expect(client.Timeout).To(Equal(30 * time.Second))
+			Expect(client.Transport).To(BeNil())
+		})
 
-		host := strings.TrimPrefix(server.URL, "http://")
+		It("configures custom TLS when ca_certs are provided", func() {
+			server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusOK)
+			}))
+			defer server.Close()
 
-		_, err := exchangeACRRefreshToken(host, "test-tenant", "fake-token", true, plainHTTPClient)
-		if err == nil {
-			t.Fatal("expected error, got nil")
-		}
-		if !strings.Contains(err.Error(), "status 401") {
-			t.Errorf("expected error about status 401, got: %s", err)
-		}
+			cert := server.TLS.Certificates[0].Certificate[0]
+			pemCert := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: cert})
+
+			client := resource.NewACRHTTPClient([]string{string(pemCert)}, false)
+			Expect(client.Transport).ToNot(BeNil())
+
+			tr, ok := client.Transport.(*http.Transport)
+			Expect(ok).To(BeTrue())
+			Expect(tr.TLSClientConfig).ToNot(BeNil())
+			Expect(tr.TLSClientConfig.RootCAs).ToNot(BeNil())
+		})
+
+		It("ignores ca_certs when insecure is true", func() {
+			client := resource.NewACRHTTPClient([]string{"some-cert-pem"}, true)
+			Expect(client.Transport).To(BeNil())
+		})
 	})
 
-	t.Run("server returns invalid JSON", func(t *testing.T) {
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			fmt.Fprint(w, "not-json")
-		}))
-		defer server.Close()
+	Describe("ACR token exchange with custom CA", func() {
+		var (
+			server *httptest.Server
+			host   string
+			pemCA  string
+		)
 
-		host := strings.TrimPrefix(server.URL, "http://")
+		BeforeEach(func() {
+			server = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch r.URL.Path {
+				case "/v2/":
+					w.Header().Set("Www-Authenticate",
+						fmt.Sprintf(`Bearer realm="https://%s/oauth2/exchange?tenant=firewall-tenant",service="%s"`, r.Host, r.Host))
+					w.WriteHeader(http.StatusUnauthorized)
+				case "/oauth2/exchange":
+					w.Header().Set("Content-Type", "application/json")
+					json.NewEncoder(w).Encode(map[string]string{
+						"refresh_token": "firewall-ca-refresh-token",
+					})
+				default:
+					w.WriteHeader(http.StatusNotFound)
+				}
+			}))
 
-		_, err := exchangeACRRefreshToken(host, "test-tenant", "fake-token", true, plainHTTPClient)
-		if err == nil {
-			t.Fatal("expected error, got nil")
-		}
-		if !strings.Contains(err.Error(), "decode") {
-			t.Errorf("expected decode error, got: %s", err)
-		}
-	})
-}
+			serverCert := server.TLS.Certificates[0].Certificate[0]
+			pemCA = string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: serverCert}))
+			host = strings.TrimPrefix(server.URL, "https://")
+		})
 
-func TestACRChallengeTenantIntegration(t *testing.T) {
-	t.Run("parses tenant from mock ACR v2 endpoint", func(t *testing.T) {
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.URL.Path == "/v2/" {
-				w.Header().Set("Www-Authenticate",
-					fmt.Sprintf(`Bearer realm="http://%s/oauth2/exchange?tenant=test-tenant-id",service="%s"`, r.Host, r.Host))
-				w.WriteHeader(http.StatusUnauthorized)
-				return
-			}
-			w.WriteHeader(http.StatusNotFound)
-		}))
-		defer server.Close()
+		AfterEach(func() {
+			server.Close()
+		})
 
-		host := strings.TrimPrefix(server.URL, "http://")
+		It("fails TLS verification without the custom CA", func() {
+			client := resource.NewACRHTTPClient(nil, false)
+			Expect(resource.AcrChallengeTenant(host, false, client)).To(Equal("common"))
+		})
 
-		tenant := acrChallengeTenant(host, true, plainHTTPClient)
-		if tenant != "test-tenant-id" {
-			t.Errorf("expected test-tenant-id, got %s", tenant)
-		}
-	})
+		It("succeeds with the correct custom CA", func() {
+			client := resource.NewACRHTTPClient([]string{pemCA}, false)
 
-	t.Run("returns common when challenge has no tenant", func(t *testing.T) {
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.URL.Path == "/v2/" {
-				w.Header().Set("Www-Authenticate",
-					fmt.Sprintf(`Bearer realm="http://%s/oauth2/exchange",service="%s"`, r.Host, r.Host))
-				w.WriteHeader(http.StatusUnauthorized)
-				return
-			}
-			w.WriteHeader(http.StatusNotFound)
-		}))
-		defer server.Close()
+			Expect(resource.AcrChallengeTenant(host, false, client)).To(Equal("firewall-tenant"))
 
-		host := strings.TrimPrefix(server.URL, "http://")
+			token, err := resource.ExchangeACRRefreshToken(host, "firewall-tenant", "fake-aad-token", false, client)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(token).To(Equal("firewall-ca-refresh-token"))
+		})
 
-		tenant := acrChallengeTenant(host, true, plainHTTPClient)
-		if tenant != "common" {
-			t.Errorf("expected common, got %s", tenant)
-		}
-	})
-
-	t.Run("returns common when server returns 200", func(t *testing.T) {
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusOK)
-		}))
-		defer server.Close()
-
-		host := strings.TrimPrefix(server.URL, "http://")
-
-		tenant := acrChallengeTenant(host, true, plainHTTPClient)
-		if tenant != "common" {
-			t.Errorf("expected common, got %s", tenant)
-		}
-	})
-}
-
-func TestNewACRHTTPClient(t *testing.T) {
-	t.Run("client without ca_certs uses default transport", func(t *testing.T) {
-		client := newACRHTTPClient(nil, false)
-		if client.Timeout != 30*time.Second {
-			t.Errorf("expected 30s timeout, got %s", client.Timeout)
-		}
-		if client.Transport != nil {
-			t.Error("expected nil transport (default) when no ca_certs provided")
-		}
-	})
-
-	t.Run("client with ca_certs configures custom TLS", func(t *testing.T) {
-		// Use the test server's certificate as a custom CA
-		server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusOK)
-		}))
-		defer server.Close()
-
-		// Extract the PEM-encoded certificate from the test server
-		cert := server.TLS.Certificates[0].Certificate[0]
-		pemCert := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: cert})
-
-		client := newACRHTTPClient([]string{string(pemCert)}, false)
-		if client.Transport == nil {
-			t.Fatal("expected custom transport when ca_certs provided")
-		}
-		tr, ok := client.Transport.(*http.Transport)
-		if !ok {
-			t.Fatal("expected *http.Transport")
-		}
-		if tr.TLSClientConfig == nil || tr.TLSClientConfig.RootCAs == nil {
-			t.Fatal("expected custom RootCAs in TLS config")
-		}
-	})
-
-	t.Run("client with insecure ignores ca_certs", func(t *testing.T) {
-		client := newACRHTTPClient([]string{"some-cert-pem"}, true)
-		if client.Transport != nil {
-			t.Error("expected nil transport when insecure is true, ca_certs should be ignored")
-		}
-	})
-}
-
-func TestACRTokenExchangeWithCustomCA(t *testing.T) {
-	// This test verifies that the ACR HTTP client correctly uses custom CA
-	// certificates, as required when Azure Firewall performs TLS inspection
-	// and re-signs traffic with a corporate root CA.
-
-	// Start a TLS test server (self-signed cert — not in system trust store)
-	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/v2/":
-			w.Header().Set("Www-Authenticate",
-				fmt.Sprintf(`Bearer realm="https://%s/oauth2/exchange?tenant=firewall-tenant",service="%s"`, r.Host, r.Host))
-			w.WriteHeader(http.StatusUnauthorized)
-		case "/oauth2/exchange":
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]string{
-				"refresh_token": "firewall-ca-refresh-token",
-			})
-		default:
-			w.WriteHeader(http.StatusNotFound)
-		}
-	}))
-	defer server.Close()
-
-	// Extract the PEM-encoded CA certificate from the test server
-	serverCert := server.TLS.Certificates[0].Certificate[0]
-	pemCA := string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: serverCert}))
-
-	host := strings.TrimPrefix(server.URL, "https://")
-
-	t.Run("without custom CA, HTTPS to self-signed server fails", func(t *testing.T) {
-		client := newACRHTTPClient(nil, false)
-		// acrChallengeTenant should fail TLS verification and fall back to "common"
-		tenant := acrChallengeTenant(host, false, client)
-		if tenant != "common" {
-			t.Errorf("expected common (TLS failure fallback), got %s", tenant)
-		}
-	})
-
-	t.Run("with custom CA, HTTPS to self-signed server succeeds", func(t *testing.T) {
-		client := newACRHTTPClient([]string{pemCA}, false)
-
-		tenant := acrChallengeTenant(host, false, client)
-		if tenant != "firewall-tenant" {
-			t.Errorf("expected firewall-tenant, got %s", tenant)
-		}
-
-		token, err := exchangeACRRefreshToken(host, "firewall-tenant", "fake-aad-token", false, client)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if token != "firewall-ca-refresh-token" {
-			t.Errorf("expected firewall-ca-refresh-token, got %s", token)
-		}
-	})
-
-	t.Run("wrong CA cert still fails", func(t *testing.T) {
-		// A bogus PEM that won't match the server's cert
-		wrongCA := `-----BEGIN CERTIFICATE-----
+		It("fails TLS verification with the wrong CA", func() {
+			wrongCA := `-----BEGIN CERTIFICATE-----
 MIIBkTCB+wIJALRiMLAh0IRAMA0GCSqGSIb3DQEBCwUAMBExDzANBgNVBAMMBnRl
 c3RjYTAeFw0yNTAxMDEwMDAwMDBaFw0yNjAxMDEwMDAwMDBaMBExDzANBgNVBAMM
 BnRlc3RjYTBcMA0GCSqGSIb3DQEBAQUAA0sAMEgCQQC7o96b0RmOMBin+VlT3VYj
@@ -314,421 +243,236 @@ FoAUmyMx0bRkCIclxRAvfANmOAbKiRowDAYDVR0TBAUwAwEB/zANBgkqhkiG9w0B
 AQsFAANBAAtKnMpg0SN+cseqKYAcxM1Y7g/0kPDG8YVowvOmH2+1oQERB0R/mL/y
 AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
 -----END CERTIFICATE-----`
-		client := newACRHTTPClient([]string{wrongCA}, false)
-		tenant := acrChallengeTenant(host, false, client)
-		if tenant != "common" {
-			t.Errorf("expected common (wrong CA should fail TLS), got %s", tenant)
-		}
+			client := resource.NewACRHTTPClient([]string{wrongCA}, false)
+			Expect(resource.AcrChallengeTenant(host, false, client)).To(Equal("common"))
+		})
 	})
-}
 
-func TestResolveAzureCloud(t *testing.T) {
-	tests := []struct {
-		name             string
-		registryHost     string
-		azureEnvironment string
-		expectedScope    string
-		expectedAuthHost string
-	}{
-		{
-			name:             "commercial registry auto-detect",
-			registryHost:     "myregistry.azurecr.io",
-			azureEnvironment: "",
-			expectedScope:    "https://management.azure.com/.default",
-			expectedAuthHost: "https://login.microsoftonline.com/",
-		},
-		{
-			name:             "government registry auto-detect",
-			registryHost:     "myregistry.azurecr.us",
-			azureEnvironment: "",
-			expectedScope:    "https://management.usgovcloudapi.net/.default",
-			expectedAuthHost: "https://login.microsoftonline.us/",
-		},
-		{
-			name:             "china registry auto-detect",
-			registryHost:     "myregistry.azurecr.cn",
-			azureEnvironment: "",
-			expectedScope:    "https://management.chinacloudapi.cn/.default",
-			expectedAuthHost: "https://login.chinacloudapi.cn/",
-		},
-		{
-			name:             "explicit override takes precedence over domain",
-			registryHost:     "myregistry.azurecr.io",
-			azureEnvironment: "AzureGovernment",
-			expectedScope:    "https://management.usgovcloudapi.net/.default",
-			expectedAuthHost: "https://login.microsoftonline.us/",
-		},
-		{
-			name:             "explicit AzureChina override",
-			registryHost:     "myregistry.azurecr.io",
-			azureEnvironment: "AzureChina",
-			expectedScope:    "https://management.chinacloudapi.cn/.default",
-			expectedAuthHost: "https://login.chinacloudapi.cn/",
-		},
-		{
-			name:             "unknown environment falls back to domain detection",
-			registryHost:     "myregistry.azurecr.us",
-			azureEnvironment: "InvalidCloud",
-			expectedScope:    "https://management.usgovcloudapi.net/.default",
-			expectedAuthHost: "https://login.microsoftonline.us/",
-		},
-		{
-			name:             "unknown domain defaults to commercial",
-			registryHost:     "myregistry.example.com",
-			azureEnvironment: "",
-			expectedScope:    "https://management.azure.com/.default",
-			expectedAuthHost: "https://login.microsoftonline.com/",
-		},
-		{
-			name:             "case-insensitive domain detection",
-			registryHost:     "MyRegistry.AzureCR.US",
-			azureEnvironment: "",
-			expectedScope:    "https://management.usgovcloudapi.net/.default",
-			expectedAuthHost: "https://login.microsoftonline.us/",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cloudConfig, scope := resolveAzureCloud(tt.registryHost, tt.azureEnvironment)
-			if scope != tt.expectedScope {
-				t.Errorf("scope = %q, want %q", scope, tt.expectedScope)
-			}
-			if cloudConfig.ActiveDirectoryAuthorityHost != tt.expectedAuthHost {
-				t.Errorf("authority host = %q, want %q", cloudConfig.ActiveDirectoryAuthorityHost, tt.expectedAuthHost)
-			}
-		})
-	}
-}
-
-func TestResolveAzureCloudCrossCloudMismatch(t *testing.T) {
-	// These tests verify the explicit behavior when a user configures a cloud
-	// that doesn't match the registry domain. The resolver returns the
-	// explicitly-requested cloud regardless of domain — the real error will
-	// surface when Azure AD rejects the token from the wrong cloud.
-	tests := []struct {
-		name             string
-		registryHost     string
-		azureEnvironment string
-		expectedScope    string
-		expectedAuthHost string
-	}{
-		{
-			name:             "gov registry with commercial override",
-			registryHost:     "myregistry.azurecr.us",
-			azureEnvironment: "AzurePublic",
-			expectedScope:    "https://management.azure.com/.default",
-			expectedAuthHost: "https://login.microsoftonline.com/",
-		},
-		{
-			name:             "commercial registry with gov override",
-			registryHost:     "myregistry.azurecr.io",
-			azureEnvironment: "AzureGovernment",
-			expectedScope:    "https://management.usgovcloudapi.net/.default",
-			expectedAuthHost: "https://login.microsoftonline.us/",
-		},
-		{
-			name:             "china registry with commercial override",
-			registryHost:     "myregistry.azurecr.cn",
-			azureEnvironment: "AzurePublic",
-			expectedScope:    "https://management.azure.com/.default",
-			expectedAuthHost: "https://login.microsoftonline.com/",
-		},
-		{
-			name:             "commercial registry with china override",
-			registryHost:     "myregistry.azurecr.io",
-			azureEnvironment: "AzureChina",
-			expectedScope:    "https://management.chinacloudapi.cn/.default",
-			expectedAuthHost: "https://login.chinacloudapi.cn/",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cloudConfig, scope := resolveAzureCloud(tt.registryHost, tt.azureEnvironment)
-			if scope != tt.expectedScope {
-				t.Errorf("scope = %q, want %q", scope, tt.expectedScope)
-			}
-			if cloudConfig.ActiveDirectoryAuthorityHost != tt.expectedAuthHost {
-				t.Errorf("authority host = %q, want %q", cloudConfig.ActiveDirectoryAuthorityHost, tt.expectedAuthHost)
-			}
-		})
-	}
-}
-
-func TestAuthenticateToACRWorkloadIdentity(t *testing.T) {
-	// These tests verify the Workload Identity code path in AuthenticateToACR.
-	// Since we cannot mock the Azure SDK credential easily, we test that:
-	// 1) The correct credential type is attempted based on azure_auth_type
-	// 2) Failure is clean and returns false with appropriate errors
-
-	t.Run("workload_identity fails gracefully when env vars not set", func(t *testing.T) {
-		// Ensure WI-related env vars are not set
-		orig := map[string]string{}
-		for _, key := range []string{"AZURE_FEDERATED_TOKEN_FILE", "AZURE_TENANT_ID", "AZURE_CLIENT_ID"} {
-			orig[key] = os.Getenv(key)
-			os.Unsetenv(key)
-		}
-		defer func() {
-			for k, v := range orig {
-				if v != "" {
-					os.Setenv(k, v)
-				}
-			}
-		}()
-
-		source := &Source{
-			Repository: "myregistry.azurecr.io/myimage",
-			AzureCredentials: AzureCredentials{
-				AzureACR:      true,
-				AzureAuthType: "workload_identity",
+	Describe("resolveAzureCloud", func() {
+		DescribeTable("resolves cloud configuration and scope",
+			func(registryHost, azureEnvironment, expectedScope, expectedAuthHost string) {
+				cloudConfig, scope := resource.ResolveAzureCloud(registryHost, azureEnvironment)
+				Expect(scope).To(Equal(expectedScope))
+				Expect(cloudConfig.ActiveDirectoryAuthorityHost).To(Equal(expectedAuthHost))
 			},
-		}
-		result := source.AuthenticateToACR()
-		if result {
-			t.Error("expected AuthenticateToACR to return false when WI env vars are missing")
-		}
-		// Username/Password should remain unset
-		if source.Username != "" {
-			t.Errorf("expected empty username, got %q", source.Username)
-		}
-		if source.Password != "" {
-			t.Errorf("expected empty password, got %q", source.Password)
-		}
+			Entry("commercial registry auto-detect",
+				"myregistry.azurecr.io", "",
+				"https://management.azure.com/.default", "https://login.microsoftonline.com/",
+			),
+			Entry("government registry auto-detect",
+				"myregistry.azurecr.us", "",
+				"https://management.usgovcloudapi.net/.default", "https://login.microsoftonline.us/",
+			),
+			Entry("china registry auto-detect",
+				"myregistry.azurecr.cn", "",
+				"https://management.chinacloudapi.cn/.default", "https://login.chinacloudapi.cn/",
+			),
+			Entry("explicit override takes precedence over domain",
+				"myregistry.azurecr.io", "AzureGovernment",
+				"https://management.usgovcloudapi.net/.default", "https://login.microsoftonline.us/",
+			),
+			Entry("explicit AzureChina override",
+				"myregistry.azurecr.io", "AzureChina",
+				"https://management.chinacloudapi.cn/.default", "https://login.chinacloudapi.cn/",
+			),
+			Entry("unknown environment falls back to domain detection",
+				"myregistry.azurecr.us", "InvalidCloud",
+				"https://management.usgovcloudapi.net/.default", "https://login.microsoftonline.us/",
+			),
+			Entry("unknown domain defaults to commercial",
+				"myregistry.example.com", "",
+				"https://management.azure.com/.default", "https://login.microsoftonline.com/",
+			),
+			Entry("case-insensitive domain detection",
+				"MyRegistry.AzureCR.US", "",
+				"https://management.usgovcloudapi.net/.default", "https://login.microsoftonline.us/",
+			),
+		)
+
+		DescribeTable("cross-cloud mismatch returns the explicitly-requested cloud",
+			func(registryHost, azureEnvironment, expectedScope, expectedAuthHost string) {
+				cloudConfig, scope := resource.ResolveAzureCloud(registryHost, azureEnvironment)
+				Expect(scope).To(Equal(expectedScope))
+				Expect(cloudConfig.ActiveDirectoryAuthorityHost).To(Equal(expectedAuthHost))
+			},
+			Entry("gov registry with commercial override",
+				"myregistry.azurecr.us", "AzurePublic",
+				"https://management.azure.com/.default", "https://login.microsoftonline.com/",
+			),
+			Entry("commercial registry with gov override",
+				"myregistry.azurecr.io", "AzureGovernment",
+				"https://management.usgovcloudapi.net/.default", "https://login.microsoftonline.us/",
+			),
+			Entry("china registry with commercial override",
+				"myregistry.azurecr.cn", "AzurePublic",
+				"https://management.azure.com/.default", "https://login.microsoftonline.com/",
+			),
+			Entry("commercial registry with china override",
+				"myregistry.azurecr.io", "AzureChina",
+				"https://management.chinacloudapi.cn/.default", "https://login.chinacloudapi.cn/",
+			),
+		)
 	})
 
-	t.Run("workload_identity with azure_client_id fails gracefully when token file missing", func(t *testing.T) {
-		orig := map[string]string{}
-		for _, key := range []string{"AZURE_FEDERATED_TOKEN_FILE", "AZURE_TENANT_ID", "AZURE_CLIENT_ID"} {
-			orig[key] = os.Getenv(key)
+	Describe("AuthenticateToACR with Workload Identity", func() {
+		var savedEnv map[string]string
+		wiEnvKeys := []string{"AZURE_FEDERATED_TOKEN_FILE", "AZURE_TENANT_ID", "AZURE_CLIENT_ID"}
+
+		saveAndClearEnv := func() {
+			savedEnv = map[string]string{}
+			for _, key := range wiEnvKeys {
+				savedEnv[key] = os.Getenv(key)
+				os.Unsetenv(key)
+			}
 		}
-		// Set only tenant and client, but NO token file
-		os.Setenv("AZURE_TENANT_ID", "fake-tenant")
-		os.Unsetenv("AZURE_FEDERATED_TOKEN_FILE")
-		defer func() {
-			for k, v := range orig {
+
+		restoreEnv := func() {
+			for k, v := range savedEnv {
 				if v != "" {
 					os.Setenv(k, v)
 				} else {
 					os.Unsetenv(k)
 				}
 			}
-		}()
+		}
 
-		source := &Source{
-			Repository: "myregistry.azurecr.io/myimage",
-			AzureCredentials: AzureCredentials{
-				AzureACR:      true,
-				AzureAuthType: "workload_identity",
-				AzureClientId: "explicit-client-id",
-			},
-		}
-		result := source.AuthenticateToACR()
-		if result {
-			t.Error("expected AuthenticateToACR to return false when token file env var is missing")
-		}
-	})
+		It("fails gracefully when env vars are not set", func() {
+			saveAndClearEnv()
+			defer restoreEnv()
 
-	t.Run("workload_identity with all env vars set creates credential but fails on token acquisition", func(t *testing.T) {
-		// Create a temporary token file
-		tmpFile, err := os.CreateTemp("", "wi-token-*")
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer os.Remove(tmpFile.Name())
-		tmpFile.WriteString("fake-sa-token")
-		tmpFile.Close()
-
-		orig := map[string]string{}
-		for _, key := range []string{"AZURE_FEDERATED_TOKEN_FILE", "AZURE_TENANT_ID", "AZURE_CLIENT_ID"} {
-			orig[key] = os.Getenv(key)
-		}
-		os.Setenv("AZURE_FEDERATED_TOKEN_FILE", tmpFile.Name())
-		os.Setenv("AZURE_TENANT_ID", "fake-tenant-id")
-		os.Setenv("AZURE_CLIENT_ID", "fake-client-id")
-		defer func() {
-			for k, v := range orig {
-				if v != "" {
-					os.Setenv(k, v)
-				} else {
-					os.Unsetenv(k)
-				}
+			source := &resource.Source{
+				Repository: "myregistry.azurecr.io/myimage",
+				AzureCredentials: resource.AzureCredentials{
+					AzureACR:      true,
+					AzureAuthType: "workload_identity",
+				},
 			}
-		}()
+			Expect(source.AuthenticateToACR()).To(BeFalse())
+			Expect(source.Username).To(BeEmpty())
+			Expect(source.Password).To(BeEmpty())
+		})
 
-		source := &Source{
-			Repository: "myregistry.azurecr.io/myimage",
-			AzureCredentials: AzureCredentials{
-				AzureACR:      true,
-				AzureAuthType: "workload_identity",
-			},
-		}
-		// Credential creation should succeed (env vars present), but token
-		// acquisition will fail because there is no real AAD endpoint serving
-		// this tenant. AuthenticateToACR should return false.
-		result := source.AuthenticateToACR()
-		if result {
-			t.Error("expected AuthenticateToACR to return false with fake WI env vars")
-		}
-	})
+		It("fails gracefully when the token file env var is missing", func() {
+			saveAndClearEnv()
+			defer restoreEnv()
 
-	t.Run("workload_identity case insensitive and trimmed", func(t *testing.T) {
-		orig := map[string]string{}
-		for _, key := range []string{"AZURE_FEDERATED_TOKEN_FILE", "AZURE_TENANT_ID", "AZURE_CLIENT_ID"} {
-			orig[key] = os.Getenv(key)
-			os.Unsetenv(key)
-		}
-		defer func() {
-			for k, v := range orig {
-				if v != "" {
-					os.Setenv(k, v)
-				}
+			os.Setenv("AZURE_TENANT_ID", "fake-tenant")
+
+			source := &resource.Source{
+				Repository: "myregistry.azurecr.io/myimage",
+				AzureCredentials: resource.AzureCredentials{
+					AzureACR:      true,
+					AzureAuthType: "workload_identity",
+					AzureClientId: "explicit-client-id",
+				},
 			}
-		}()
+			Expect(source.AuthenticateToACR()).To(BeFalse())
+		})
 
-		// "Workload_Identity" should be normalized to "workload_identity"
-		// and still take the WI code path (which fails because env vars are missing)
-		source := &Source{
-			Repository: "myregistry.azurecr.io/myimage",
-			AzureCredentials: AzureCredentials{
-				AzureACR:      true,
-				AzureAuthType: "  Workload_Identity  ",
-			},
-		}
-		result := source.AuthenticateToACR()
-		if result {
-			t.Error("expected AuthenticateToACR to return false")
-		}
-	})
+		It("fails on token acquisition with fake env vars", func() {
+			saveAndClearEnv()
+			defer restoreEnv()
 
-	// NOTE: Tests for the default Managed Identity path (empty/unknown azure_auth_type)
-	// are not included here because ManagedIdentityCredential.GetToken() contacts the
-	// IMDS endpoint at 169.254.169.254, which hangs on non-Azure machines. The MI path
-	// is validated via the live QA tests on an Azure VM. The struct parsing for
-	// azure_auth_type is tested in types_test.go.
-}
+			tmpFile, err := os.CreateTemp("", "wi-token-*")
+			Expect(err).ToNot(HaveOccurred())
+			defer os.Remove(tmpFile.Name())
+			tmpFile.WriteString("fake-sa-token")
+			tmpFile.Close()
 
-func TestAuthenticateToACRCrossCloudMismatch(t *testing.T) {
-	// The resolveAzureCloud function is tested above (TestResolveAzureCloudCrossCloudMismatch)
-	// to verify it returns the explicitly-requested cloud configuration regardless of domain.
-	//
-	// Full AuthenticateToACR cross-cloud tests are not included here because they require
-	// ManagedIdentityCredential which contacts IMDS (169.254.169.254) and hangs on
-	// non-Azure machines. Cross-cloud mismatch is validated via:
-	//   1. TestResolveAzureCloudCrossCloudMismatch (pure function, no network)
-	//   2. Live QA tests on an Azure Gov VM (see prompt8.md)
+			os.Setenv("AZURE_FEDERATED_TOKEN_FILE", tmpFile.Name())
+			os.Setenv("AZURE_TENANT_ID", "fake-tenant-id")
+			os.Setenv("AZURE_CLIENT_ID", "fake-client-id")
 
-	t.Run("resolveAzureCloud applies explicit override regardless of domain", func(t *testing.T) {
-		// Gov registry + Commercial override → should return Commercial scope
-		_, scope := resolveAzureCloud("govregistry.azurecr.us", "AzurePublic")
-		if scope != "https://management.azure.com/.default" {
-			t.Errorf("expected Commercial scope, got %s", scope)
-		}
-
-		// Commercial registry + Gov override → should return Gov scope
-		_, scope = resolveAzureCloud("myregistry.azurecr.io", "AzureGovernment")
-		if scope != "https://management.usgovcloudapi.net/.default" {
-			t.Errorf("expected Government scope, got %s", scope)
-		}
-	})
-}
-
-func TestAzureTenantIdSkipsChallenge(t *testing.T) {
-	// This test verifies that when azure_tenant_id is explicitly configured,
-	// the challenge endpoint (/v2/) is never called. We set up a mock server
-	// that fails the test if /v2/ is hit, and a working /oauth2/exchange.
-
-	t.Run("challenge endpoint is skipped when azure_tenant_id is set", func(t *testing.T) {
-		challengeCalled := false
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			switch r.URL.Path {
-			case "/v2/":
-				challengeCalled = true
-				t.Error("/v2/ challenge endpoint was called despite azure_tenant_id being set")
-				w.Header().Set("Www-Authenticate",
-					fmt.Sprintf(`Bearer realm="http://%s/oauth2/exchange?tenant=should-not-be-used",service="%s"`, r.Host, r.Host))
-				w.WriteHeader(http.StatusUnauthorized)
-			case "/oauth2/exchange":
-				// Verify the tenant from the explicit config is used, not from challenge
-				err := r.ParseForm()
-				if err != nil {
-					t.Fatal(err)
-				}
-				if r.FormValue("tenant") != "explicit-acr-tenant-id" {
-					t.Errorf("expected tenant=explicit-acr-tenant-id, got %s", r.FormValue("tenant"))
-				}
-				w.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(w).Encode(map[string]string{
-					"refresh_token": "tenant-skip-refresh-token",
-				})
-			default:
-				w.WriteHeader(http.StatusNotFound)
+			source := &resource.Source{
+				Repository: "myregistry.azurecr.io/myimage",
+				AzureCredentials: resource.AzureCredentials{
+					AzureACR:      true,
+					AzureAuthType: "workload_identity",
+				},
 			}
-		}))
-		defer server.Close()
+			Expect(source.AuthenticateToACR()).To(BeFalse())
+		})
 
-		host := strings.TrimPrefix(server.URL, "http://")
+		It("normalizes azure_auth_type case and whitespace", func() {
+			saveAndClearEnv()
+			defer restoreEnv()
 
-		// Directly test the tenant selection logic: when AzureTenantId is set,
-		// use it and skip the challenge
-		tenant := "explicit-acr-tenant-id" // simulates source.AzureTenantId being set
-
-		token, err := exchangeACRRefreshToken(host, tenant, "fake-aad-token", true, plainHTTPClient)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if token != "tenant-skip-refresh-token" {
-			t.Errorf("expected tenant-skip-refresh-token, got %s", token)
-		}
-		if challengeCalled {
-			t.Error("challenge endpoint should not have been called")
-		}
-	})
-
-	t.Run("challenge endpoint is called when azure_tenant_id is empty", func(t *testing.T) {
-		challengeCalled := false
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			switch r.URL.Path {
-			case "/v2/":
-				challengeCalled = true
-				w.Header().Set("Www-Authenticate",
-					fmt.Sprintf(`Bearer realm="http://%s/oauth2/exchange?tenant=discovered-tenant",service="%s"`, r.Host, r.Host))
-				w.WriteHeader(http.StatusUnauthorized)
-			case "/oauth2/exchange":
-				err := r.ParseForm()
-				if err != nil {
-					t.Fatal(err)
-				}
-				if r.FormValue("tenant") != "discovered-tenant" {
-					t.Errorf("expected tenant=discovered-tenant, got %s", r.FormValue("tenant"))
-				}
-				w.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(w).Encode(map[string]string{
-					"refresh_token": "discovered-refresh-token",
-				})
-			default:
-				w.WriteHeader(http.StatusNotFound)
+			source := &resource.Source{
+				Repository: "myregistry.azurecr.io/myimage",
+				AzureCredentials: resource.AzureCredentials{
+					AzureACR:      true,
+					AzureAuthType: "  Workload_Identity  ",
+				},
 			}
-		}))
-		defer server.Close()
-
-		host := strings.TrimPrefix(server.URL, "http://")
-
-		// When tenant is empty, should discover it via challenge
-		tenant := acrChallengeTenant(host, true, plainHTTPClient)
-		if tenant != "discovered-tenant" {
-			t.Errorf("expected discovered-tenant, got %s", tenant)
-		}
-		if !challengeCalled {
-			t.Error("challenge endpoint should have been called when azure_tenant_id is empty")
-		}
-
-		token, err := exchangeACRRefreshToken(host, tenant, "fake-aad-token", true, plainHTTPClient)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if token != "discovered-refresh-token" {
-			t.Errorf("expected discovered-refresh-token, got %s", token)
-		}
+			Expect(source.AuthenticateToACR()).To(BeFalse())
+		})
 	})
-}
+
+	Describe("azure_tenant_id skips challenge", func() {
+		It("does not call /v2/ when azure_tenant_id is set", func() {
+			challengeCalled := false
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch r.URL.Path {
+				case "/v2/":
+					challengeCalled = true
+					Fail("/v2/ challenge endpoint was called despite azure_tenant_id being set")
+				case "/oauth2/exchange":
+					err := r.ParseForm()
+					Expect(err).ToNot(HaveOccurred())
+					Expect(r.FormValue("tenant")).To(Equal("explicit-acr-tenant-id"))
+
+					w.Header().Set("Content-Type", "application/json")
+					json.NewEncoder(w).Encode(map[string]string{
+						"refresh_token": "tenant-skip-refresh-token",
+					})
+				default:
+					w.WriteHeader(http.StatusNotFound)
+				}
+			}))
+			defer server.Close()
+
+			host := strings.TrimPrefix(server.URL, "http://")
+			tenant := "explicit-acr-tenant-id"
+
+			token, err := resource.ExchangeACRRefreshToken(host, tenant, "fake-aad-token", true, resource.PlainHTTPClient)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(token).To(Equal("tenant-skip-refresh-token"))
+			Expect(challengeCalled).To(BeFalse())
+		})
+
+		It("calls /v2/ to discover tenant when azure_tenant_id is empty", func() {
+			challengeCalled := false
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch r.URL.Path {
+				case "/v2/":
+					challengeCalled = true
+					w.Header().Set("Www-Authenticate",
+						fmt.Sprintf(`Bearer realm="http://%s/oauth2/exchange?tenant=discovered-tenant",service="%s"`, r.Host, r.Host))
+					w.WriteHeader(http.StatusUnauthorized)
+				case "/oauth2/exchange":
+					err := r.ParseForm()
+					Expect(err).ToNot(HaveOccurred())
+					Expect(r.FormValue("tenant")).To(Equal("discovered-tenant"))
+
+					w.Header().Set("Content-Type", "application/json")
+					json.NewEncoder(w).Encode(map[string]string{
+						"refresh_token": "discovered-refresh-token",
+					})
+				default:
+					w.WriteHeader(http.StatusNotFound)
+				}
+			}))
+			defer server.Close()
+
+			host := strings.TrimPrefix(server.URL, "http://")
+
+			tenant := resource.AcrChallengeTenant(host, true, resource.PlainHTTPClient)
+			Expect(tenant).To(Equal("discovered-tenant"))
+			Expect(challengeCalled).To(BeTrue())
+
+			token, err := resource.ExchangeACRRefreshToken(host, tenant, "fake-aad-token", true, resource.PlainHTTPClient)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(token).To(Equal("discovered-refresh-token"))
+		})
+	})
+})
