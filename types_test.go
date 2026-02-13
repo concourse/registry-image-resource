@@ -137,32 +137,6 @@ var _ = Describe("Source", func() {
 			Expect(source.AzureEnvironment).To(Equal("AzureGovernment"))
 		})
 
-		It("should unmarshal azure_auth_type for workload identity", func() {
-			var source resource.Source
-			raw := []byte(`{
-				"repository": "myregistry.azurecr.io/myimage",
-				"azure_acr": true,
-				"azure_auth_type": "workload_identity",
-				"azure_client_id": "wi-client-id"
-			}`)
-			err := json.Unmarshal(raw, &source)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(source.AzureACR).To(BeTrue())
-			Expect(source.AzureAuthType).To(Equal("workload_identity"))
-			Expect(source.AzureClientId).To(Equal("wi-client-id"))
-		})
-
-		It("should default azure_auth_type to empty when not provided", func() {
-			var source resource.Source
-			raw := []byte(`{
-				"repository": "myregistry.azurecr.io/myimage",
-				"azure_acr": true
-			}`)
-			err := json.Unmarshal(raw, &source)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(source.AzureAuthType).To(BeEmpty())
-		})
-
 		It("should unmarshal azure_tenant_id", func() {
 			var source resource.Source
 			raw := []byte(`{

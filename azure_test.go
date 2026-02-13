@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"time"
 
@@ -312,100 +311,6 @@ AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
 				"https://management.chinacloudapi.cn/.default", "https://login.chinacloudapi.cn/",
 			),
 		)
-	})
-
-	Describe("AuthenticateToACR with Workload Identity", func() {
-		var savedEnv map[string]string
-		wiEnvKeys := []string{"AZURE_FEDERATED_TOKEN_FILE", "AZURE_TENANT_ID", "AZURE_CLIENT_ID"}
-
-		saveAndClearEnv := func() {
-			savedEnv = map[string]string{}
-			for _, key := range wiEnvKeys {
-				savedEnv[key] = os.Getenv(key)
-				os.Unsetenv(key)
-			}
-		}
-
-		restoreEnv := func() {
-			for k, v := range savedEnv {
-				if v != "" {
-					os.Setenv(k, v)
-				} else {
-					os.Unsetenv(k)
-				}
-			}
-		}
-
-		It("fails gracefully when env vars are not set", func() {
-			saveAndClearEnv()
-			defer restoreEnv()
-
-			source := &resource.Source{
-				Repository: "myregistry.azurecr.io/myimage",
-				AzureCredentials: resource.AzureCredentials{
-					AzureACR:      true,
-					AzureAuthType: "workload_identity",
-				},
-			}
-			Expect(source.AuthenticateToACR()).To(BeFalse())
-			Expect(source.Username).To(BeEmpty())
-			Expect(source.Password).To(BeEmpty())
-		})
-
-		It("fails gracefully when the token file env var is missing", func() {
-			saveAndClearEnv()
-			defer restoreEnv()
-
-			os.Setenv("AZURE_TENANT_ID", "fake-tenant")
-
-			source := &resource.Source{
-				Repository: "myregistry.azurecr.io/myimage",
-				AzureCredentials: resource.AzureCredentials{
-					AzureACR:      true,
-					AzureAuthType: "workload_identity",
-					AzureClientId: "explicit-client-id",
-				},
-			}
-			Expect(source.AuthenticateToACR()).To(BeFalse())
-		})
-
-		It("fails on token acquisition with fake env vars", func() {
-			saveAndClearEnv()
-			defer restoreEnv()
-
-			tmpFile, err := os.CreateTemp("", "wi-token-*")
-			Expect(err).ToNot(HaveOccurred())
-			defer os.Remove(tmpFile.Name())
-			tmpFile.WriteString("fake-sa-token")
-			tmpFile.Close()
-
-			os.Setenv("AZURE_FEDERATED_TOKEN_FILE", tmpFile.Name())
-			os.Setenv("AZURE_TENANT_ID", "fake-tenant-id")
-			os.Setenv("AZURE_CLIENT_ID", "fake-client-id")
-
-			source := &resource.Source{
-				Repository: "myregistry.azurecr.io/myimage",
-				AzureCredentials: resource.AzureCredentials{
-					AzureACR:      true,
-					AzureAuthType: "workload_identity",
-				},
-			}
-			Expect(source.AuthenticateToACR()).To(BeFalse())
-		})
-
-		It("normalizes azure_auth_type case and whitespace", func() {
-			saveAndClearEnv()
-			defer restoreEnv()
-
-			source := &resource.Source{
-				Repository: "myregistry.azurecr.io/myimage",
-				AzureCredentials: resource.AzureCredentials{
-					AzureACR:      true,
-					AzureAuthType: "  Workload_Identity  ",
-				},
-			}
-			Expect(source.AuthenticateToACR()).To(BeFalse())
-		})
 	})
 
 	Describe("azure_tenant_id skips challenge", func() {

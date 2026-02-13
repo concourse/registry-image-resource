@@ -222,8 +222,6 @@ differences:
     The Client ID of a User-Assigned Managed Identity to use for ACR
     authentication. Only applicable when <code>azure_acr</code> is
     <code>true</code>. When omitted, System-Assigned Managed Identity is used.
-    For Workload Identity, this overrides the <code>AZURE_CLIENT_ID</code>
-    environment variable injected by the AKS webhook.
     </td>
   </tr>
   <tr>
@@ -239,9 +237,8 @@ differences:
     with: <code>az acr show --name &lt;registry&gt; --query identity.tenantId -o tsv</code>
     or from the Azure Portal under the registry's properties.
     <br><br>
-    <strong>Note:</strong> Do not set this to the <code>AZURE_TENANT_ID</code>
-    environment variable from AKS Workload Identity — that is the cluster's
-    tenant, which may differ from the ACR's tenant in cross-tenant scenarios.
+    <strong>Note:</strong> In cross-tenant scenarios, this must be the ACR
+    registry's tenant, not the VM or cluster tenant.
     </td>
   </tr>
   <tr>
@@ -253,23 +250,6 @@ differences:
     <code>AzureChina</code>. When omitted, the environment is auto-detected
     from the registry domain suffix (<code>.azurecr.io</code> → Commercial,
     <code>.azurecr.us</code> → Government, <code>.azurecr.cn</code> → China).
-    </td>
-  </tr>
-  <tr>
-    <td><code>azure_auth_type</code> <em>(Optional)</em></td>
-    <td>
-    The Azure credential type to use for ACR authentication. Only applicable
-    when <code>azure_acr</code> is <code>true</code>. Accepted values:
-    <ul>
-      <li><em>(empty / omitted)</em> — Managed Identity (default). Works for
-      System-Assigned MI, User-Assigned MI, and AKS Kubelet Identity.</li>
-      <li><code>workload_identity</code> — Azure Workload Identity. Uses
-      federated service account tokens on AKS. Requires the AKS Workload
-      Identity webhook to inject <code>AZURE_TENANT_ID</code>,
-      <code>AZURE_CLIENT_ID</code>, and
-      <code>AZURE_FEDERATED_TOKEN_FILE</code> environment variables into the
-      container.</li>
-    </ul>
     </td>
   </tr>
   <tr>
@@ -438,12 +418,11 @@ target ACR.
 
 #### Supported Identity Types
 
-| Identity Type | `azure_auth_type` | Where It Works |
+| Identity Type | `azure_client_id` | Where It Works |
 |---|---|---|
 | System-Assigned Managed Identity | _(omit)_ | Azure VMs, VMSS, App Service, AKS nodes |
-| User-Assigned Managed Identity | _(omit)_ + `azure_client_id` | Azure VMs, VMSS, App Service, AKS nodes |
-| AKS Kubelet Identity | _(omit)_ + `azure_client_id` | AKS node pools (VMSS-based) |
-| AKS Workload Identity | `workload_identity` | AKS pods with Workload Identity webhook |
+| User-Assigned Managed Identity | set to MI client ID | Azure VMs, VMSS, App Service, AKS nodes |
+| AKS Kubelet Identity | set to kubelet MI client ID | AKS node pools (VMSS-based) |
 
 #### Supported Azure Clouds
 
@@ -535,40 +514,6 @@ resources:
     tag: latest
     azure_acr: true
     azure_client_id: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx  # kubelet MI client ID
-```
-
-#### AKS Workload Identity
-
-When using [AKS Workload Identity](https://learn.microsoft.com/azure/aks/workload-identity-overview),
-the webhook injects `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, and
-`AZURE_FEDERATED_TOKEN_FILE` into the pod. Set `azure_auth_type` to
-`workload_identity` so the resource uses federated token authentication instead
-of IMDS:
-
-```yaml
-resources:
-- name: my-acr-image
-  type: registry-image
-  source:
-    repository: myregistry.azurecr.io/myimage
-    tag: latest
-    azure_acr: true
-    azure_auth_type: workload_identity
-```
-
-If you need to override the Client ID injected by the webhook (e.g. the
-service account is federated to a different identity):
-
-```yaml
-resources:
-- name: my-acr-image
-  type: registry-image
-  source:
-    repository: myregistry.azurecr.io/myimage
-    tag: latest
-    azure_acr: true
-    azure_auth_type: workload_identity
-    azure_client_id: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 ```
 
 **Note:** Unlike ECR, you must specify the full ACR repository URL including

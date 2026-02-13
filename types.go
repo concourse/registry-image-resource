@@ -79,7 +79,6 @@ type AzureCredentials struct {
 	AzureClientId    string `json:"azure_client_id,omitempty"`
 	AzureTenantId    string `json:"azure_tenant_id,omitempty"`
 	AzureEnvironment string `json:"azure_environment,omitempty"`
-	AzureAuthType    string `json:"azure_auth_type,omitempty"`
 }
 
 type BasicCredentials struct {
@@ -487,39 +486,20 @@ func (source *Source) AuthenticateToACR() bool {
 	azCloud, managementScope := resolveAzureCloud(registryHost, source.AzureEnvironment)
 	logrus.Debugf("ACR auth using cloud with authority %s, scope %s", azCloud.ActiveDirectoryAuthorityHost, managementScope)
 
-	// Step 1: Acquire Azure AD token via the configured credential type
+	// Step 1: Acquire Azure AD token via Managed Identity
 	var cred azcore.TokenCredential
-	authType := strings.ToLower(strings.TrimSpace(source.AzureAuthType))
-
-	switch authType {
-	case "workload_identity":
-		logrus.Debugf("using Workload Identity credential for ACR auth")
-		wiOpts := &azidentity.WorkloadIdentityCredentialOptions{}
-		wiOpts.ClientOptions.Cloud = azCloud
-		if source.AzureClientId != "" {
-			wiOpts.ClientID = source.AzureClientId
-		}
-		cred, err = azidentity.NewWorkloadIdentityCredential(wiOpts)
-		if err != nil {
-			logrus.Errorf("failed to create Workload Identity credential: %s", err)
-			return false
-		}
-
-	default:
-		// Default: Managed Identity (covers System-Assigned, User-Assigned, and AKS Kubelet Identity)
-		miOpts := &azidentity.ManagedIdentityCredentialOptions{}
-		miOpts.ClientOptions.Cloud = azCloud
-		if source.AzureClientId != "" {
-			logrus.Debugf("using User-Assigned Managed Identity for ACR auth")
-			miOpts.ID = azidentity.ClientID(source.AzureClientId)
-		} else {
-			logrus.Debugf("using System-Assigned Managed Identity for ACR auth")
-		}
-		cred, err = azidentity.NewManagedIdentityCredential(miOpts)
-		if err != nil {
-			logrus.Errorf("failed to create Managed Identity credential: %s", err)
-			return false
-		}
+	miOpts := &azidentity.ManagedIdentityCredentialOptions{}
+	miOpts.ClientOptions.Cloud = azCloud
+	if source.AzureClientId != "" {
+		logrus.Debugf("using User-Assigned Managed Identity for ACR auth")
+		miOpts.ID = azidentity.ClientID(source.AzureClientId)
+	} else {
+		logrus.Debugf("using System-Assigned Managed Identity for ACR auth")
+	}
+	cred, err = azidentity.NewManagedIdentityCredential(miOpts)
+	if err != nil {
+		logrus.Errorf("failed to create Managed Identity credential: %s", err)
+		return false
 	}
 
 	token, err := cred.GetToken(context.TODO(), policy.TokenRequestOptions{
