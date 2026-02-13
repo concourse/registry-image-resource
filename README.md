@@ -268,7 +268,7 @@ differences:
       Identity webhook to inject <code>AZURE_TENANT_ID</code>,
       <code>AZURE_CLIENT_ID</code>, and
       <code>AZURE_FEDERATED_TOKEN_FILE</code> environment variables into the
-      pod.</li>
+      container.</li>
     </ul>
     </td>
   </tr>
