@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"time"
@@ -681,6 +682,9 @@ func acrChallengeTenant(registryHost string, insecure bool, client *http.Client)
 	return parseACRChallengeTenant(resp.Header.Get("Www-Authenticate"))
 }
 
+// acrTenantRegexp extracts the tenant parameter from an ACR Www-Authenticate header.
+var acrTenantRegexp = regexp.MustCompile(`tenant=([^"&]+)`)
+
 // parseACRChallengeTenant extracts the tenant from a Www-Authenticate header.
 // The header format is: Bearer realm="https://<host>/oauth2/exchange?tenant=<tid>",service="<host>"
 // Returns "common" if the tenant cannot be parsed.
@@ -689,32 +693,12 @@ func parseACRChallengeTenant(wwwAuthenticate string) string {
 		return "common"
 	}
 
-	// Extract realm value from the header
-	const realmPrefix = `realm="`
-	idx := strings.Index(wwwAuthenticate, realmPrefix)
-	if idx < 0 {
+	match := acrTenantRegexp.FindStringSubmatch(wwwAuthenticate)
+	if len(match) < 2 || match[1] == "" {
 		return "common"
 	}
 
-	start := idx + len(realmPrefix)
-	end := strings.Index(wwwAuthenticate[start:], `"`)
-	if end < 0 {
-		return "common"
-	}
-
-	realmURL := wwwAuthenticate[start : start+end]
-
-	parsed, err := url.Parse(realmURL)
-	if err != nil {
-		return "common"
-	}
-
-	tenant := parsed.Query().Get("tenant")
-	if tenant == "" {
-		return "common"
-	}
-
-	return tenant
+	return match[1]
 }
 
 // exchangeACRRefreshToken exchanges an Azure AD access token for an ACR refresh token.
