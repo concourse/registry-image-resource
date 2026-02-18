@@ -51,9 +51,19 @@ func (c *Check) Execute() error {
 		return fmt.Errorf("invalid payload: %s", err)
 	}
 
+	if req.Source.Debug {
+		logrus.SetLevel(logrus.DebugLevel)
+	}
+
 	if req.Source.AwsRegion != "" {
 		if !req.Source.AuthenticateToECR() {
 			return fmt.Errorf("cannot authenticate with ECR")
+		}
+	}
+
+	if req.Source.AzureACR {
+		if !req.Source.AuthenticateToACR() {
+			return fmt.Errorf("cannot authenticate with ACR")
 		}
 	}
 

@@ -72,6 +72,12 @@ func (i *In) Execute() error {
 		}
 	}
 
+	if req.Source.AzureACR {
+		if !req.Source.AuthenticateToACR() {
+			return fmt.Errorf("cannot authenticate with ACR")
+		}
+	}
+
 	repo, err := req.Source.NewRepository()
 	if err != nil {
 		return fmt.Errorf("failed to resolve repository: %w", err)

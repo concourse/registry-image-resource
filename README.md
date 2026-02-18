@@ -6,7 +6,6 @@ Supports checking, fetching, and pushing of images to Docker registries.
   <img src="https://ci.concourse-ci.org/api/v1/teams/main/pipelines/resource/jobs/build/badge?vars.type=%22registry-image%22" alt="Build Status">
 </a>
 
-
 This resource can be used in three ways: [with `tag`
 specified](#check-step-check-script-with-tag-discover-new-digests-for-the-tag), [with `tag_regex` specified](#check-step-check-script-with-tag_regex-discover-tags-matching-regex), or [with neither
 `tag` nor `tag_regex` specified](#check-step-check-script-without-tag-or-tag_regex-discover-semver-tags).
@@ -51,7 +50,6 @@ differences:
   Docker Image resource grew way too large and complicated. There are simply
   too many ways to build and publish Docker images. It will be easier to
   support many smaller resources + tasks rather than one huge interface.
-
 
 ## Source Configuration
 
@@ -206,6 +204,52 @@ differences:
     images in another account. If omitted then the current AWS account ID will
     be used. Be sure to wrap the account ID in quotes so it is parsed as a
     string instead of a number.
+    </td>
+  </tr>
+  <tr>
+    <td><code>azure_acr</code> <em>(Optional)<br>Default: false</em></td>
+    <td>
+    Set to <code>true</code> to authenticate to Azure Container Registry (ACR)
+    using Azure Managed Identity. When enabled, the resource will acquire an
+    Azure AD token via Managed Identity and exchange it for ACR credentials
+    automatically. The <code>repository</code> must be the full ACR URL
+    (e.g. <code>myregistry.azurecr.io/myimage</code>).
+    </td>
+  </tr>
+  <tr>
+    <td><code>azure_client_id</code> <em>(Optional)</em></td>
+    <td>
+    The Client ID of a User-Assigned Managed Identity to use for ACR
+    authentication. Only applicable when <code>azure_acr</code> is
+    <code>true</code>. When omitted, System-Assigned Managed Identity is used.
+    </td>
+  </tr>
+  <tr>
+    <td><code>azure_tenant_id</code> <em>(Optional)</em></td>
+    <td>
+    The tenant ID of the <strong>ACR registry</strong> (not the VM or cluster
+    tenant). Only applicable when <code>azure_acr</code> is <code>true</code>.
+    When set, the resource skips the challenge roundtrip to the ACR
+    <code>/v2/</code> endpoint, saving one HTTP request per
+    <code>check</code>, <code>get</code>, and <code>put</code> invocation.
+    When omitted, the tenant is auto-discovered from the registry's
+    <code>Www-Authenticate</code> challenge header. Find the ACR tenant ID
+    with: <code>az acr show --name &lt;registry&gt; --query identity.tenantId -o tsv</code>
+    or from the Azure Portal under the registry's properties.
+    <br><br>
+    <strong>Note:</strong> In cross-tenant scenarios, this must be the ACR
+    registry's tenant, not the VM or cluster tenant.
+    </td>
+  </tr>
+  <tr>
+    <td><code>azure_environment</code> <em>(Optional)</em></td>
+    <td>
+    The Azure cloud environment to authenticate against. Only applicable when
+    <code>azure_acr</code> is <code>true</code>. Accepted values:
+    <code>AzurePublic</code> (default), <code>AzureGovernment</code>,
+    <code>AzureChina</code>. When omitted, the environment is auto-detected
+    from the registry domain suffix (<code>.azurecr.io</code> → Commercial,
+    <code>.azurecr.us</code> → Government, <code>.azurecr.cn</code> → China).
     </td>
   </tr>
   <tr>
@@ -364,6 +408,126 @@ registry_key: |
 
 **NOTE** This configuration only applies to the `out` action. `check` & `in` aren't impacted. Hence, it would be possible to `check` or use `in` to get unsigned images.
 
+### Azure Container Registry with Managed Identity
+
+To authenticate to Azure Container Registry using Azure Managed Identity,
+set `azure_acr: true` in your source configuration. The Concourse worker must
+be running on an Azure VM (or other compute) with a Managed Identity assigned
+that has the `AcrPull` (and optionally `AcrPush` for `put` steps) role on the
+target ACR.
+
+#### Supported Identity Types
+
+| Identity Type | `azure_client_id` | Where It Works |
+|---|---|---|
+| System-Assigned Managed Identity | _(omit)_ | Azure VMs, VMSS, App Service, AKS nodes |
+| User-Assigned Managed Identity | set to MI client ID | Azure VMs, VMSS, App Service, AKS nodes |
+| AKS Kubelet Identity | set to kubelet MI client ID | AKS node pools (VMSS-based) |
+
+#### Supported Azure Clouds
+
+The resource supports Azure Commercial, Azure Government, and Azure China
+clouds. The cloud environment is auto-detected from the registry domain suffix:
+
+| Domain Suffix | Cloud Environment |
+|---|---|
+| `.azurecr.io` | Azure Commercial (default) |
+| `.azurecr.us` | Azure Government |
+| `.azurecr.cn` | Azure China |
+
+You can also set `azure_environment` explicitly to override auto-detection.
+
+#### System-Assigned Managed Identity
+
+```yaml
+resources:
+- name: my-acr-image
+  type: registry-image
+  source:
+    repository: myregistry.azurecr.io/myimage
+    tag: latest
+    azure_acr: true
+```
+
+#### User-Assigned Managed Identity
+
+```yaml
+resources:
+- name: my-acr-image
+  type: registry-image
+  source:
+    repository: myregistry.azurecr.io/myimage
+    tag: latest
+    azure_acr: true
+    azure_client_id: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+```
+
+#### Azure Government
+
+```yaml
+resources:
+- name: my-gov-acr-image
+  type: registry-image
+  source:
+    repository: myregistry.azurecr.us/myimage
+    tag: latest
+    azure_acr: true
+```
+
+The cloud is auto-detected from the `.azurecr.us` domain. You can also set it
+explicitly:
+
+```yaml
+resources:
+- name: my-gov-acr-image
+  type: registry-image
+  source:
+    repository: myregistry.azurecr.us/myimage
+    tag: latest
+    azure_acr: true
+    azure_environment: AzureGovernment
+```
+
+#### Azure China
+
+```yaml
+resources:
+- name: my-china-acr-image
+  type: registry-image
+  source:
+    repository: myregistry.azurecr.cn/myimage
+    tag: latest
+    azure_acr: true
+```
+
+#### AKS Kubelet Identity
+
+When running Concourse workers on AKS, the node pool's Kubelet Identity is
+available via IMDS. Pass its Client ID:
+
+```yaml
+resources:
+- name: my-acr-image
+  type: registry-image
+  source:
+    repository: myregistry.azurecr.io/myimage
+    tag: latest
+    azure_acr: true
+    azure_client_id: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx  # kubelet MI client ID
+```
+
+**Note:** Unlike ECR, you must specify the full ACR repository URL including
+the registry hostname (e.g. `myregistry.azurecr.io/myimage`). The resource
+does not automatically construct the URL.
+
+**Note:** `username` and `password` should NOT be set when using `azure_acr`.
+The resource will acquire credentials automatically via Managed Identity.
+
+**Note:** If your Azure environment uses a TLS-inspecting proxy such as Azure
+Firewall, set [`ca_certs`](#source-configuration) with the proxy's root CA.
+The ACR token-exchange calls honour the same custom CA pool used for registry
+operations, so the resource will trust the re-signed certificates.
+
 ## Behavior
 
 ### `check` Step (`check` script) with `tag`: discover new digests for the tag
@@ -386,7 +550,7 @@ Each unique digest will be returned only once, with the most specific version
 tag available. This is to handle "alias" tags like `1`, `1.2` pointing to
 `1.2.3`.
 
-Note: the initial `check` call will return *all valid versions*, which is
+Note: the initial `check` call will return _all valid versions_, which is
 unlike most resources which only return the latest version. This is an
 intentional choice which will become the normal behavior for resources in
 the future (per concourse/rfcs#38).
@@ -426,7 +590,7 @@ With a `variant` value specified, only semver tags with the matching variant
 will be detected. With `variant` omitted, tags which include a variant are
 ignored.
 
-Note: some image tags actually include *mutliple* variants, e.g.
+Note: some image tags actually include _mutliple_ variants, e.g.
 `1.2.3-php7.3-apache`. With a variant of only `apache` configured, these tags
 will be skipped to avoid accidentally using multiple variants. In order to
 use these tags, you must specify the full variant combination, e.g.
@@ -458,8 +622,6 @@ The above resource definition would detect the following versions:
   // ...
 ]
 ```
-
-
 
 ### `get` Step (`in` script): fetch an image
 
@@ -650,7 +812,6 @@ Anonymous resources can specify
 [a version](https://concourse-ci.org/tasks.html#schema.anonymous_resource.version),
 which is the image digest. For example:
 
-
 ```
 image_resource:
   type: docker-image
@@ -667,8 +828,8 @@ going to be re-used.
 
 ### Prerequisites
 
-* golang is *required* - version 1.16.x or above is required for go mod to work
-* docker is *required* - version 19.03.x and above (`buildx` is required)
+* golang is _required_ - version 1.16.x or above is required for go mod to work
+* docker is _required_ - version 19.03.x and above (`buildx` is required)
 
 ### Running the tests
 
