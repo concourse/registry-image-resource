@@ -21,7 +21,7 @@ require (
 	github.com/simonshyu/notary-gcr v0.0.0-20220601090547-d99a631aa58b
 	github.com/sirupsen/logrus v1.9.4
 	github.com/vbauerster/mpb/v8 v8.12.0
-	golang.org/x/net v0.54.0
+	golang.org/x/net v0.55.0
 )
 
 require (
