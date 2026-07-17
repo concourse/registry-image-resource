@@ -247,22 +247,27 @@ func (source Source) AuthOptions(repo name.Repository, scopeActions []string) ([
 }
 
 func (source *Source) Platform(stepOverride *PlatformField) PlatformField {
-	var p PlatformField
+	DefaultArchitecture := runtime.GOARCH
+	DefaultOS := runtime.GOOS
+
+	p := source.RawPlatform
+	if p == nil {
+		p = &PlatformField{}
+	}
+
 	if stepOverride != nil {
-		p = *stepOverride
-	} else if source.RawPlatform != nil {
-		p = *source.RawPlatform
+		p = stepOverride
 	}
 
 	if p.Architecture == "" {
-		p.Architecture = runtime.GOARCH
+		p.Architecture = DefaultArchitecture
 	}
 
 	if p.OS == "" {
-		p.OS = runtime.GOOS
+		p.OS = DefaultOS
 	}
 
-	return p
+	return *p
 }
 
 func (source Source) NewRepository() (name.Repository, error) {

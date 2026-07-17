@@ -114,23 +114,7 @@ func (i *In) Execute() error {
 		return fmt.Errorf("saving version info failed: %w", err)
 	}
 
-	opts, err := req.Source.AuthOptions(repo, []string{transport.PullScope})
-	if err != nil {
-		return err
-	}
-
-	platform := req.Source.Platform(req.Params.RawPlatform)
-	opts = append(opts, remote.WithPlatform(v1.Platform{
-		Architecture: platform.Architecture,
-		OS:           platform.OS,
-	}))
-
-	image, err := remote.Image(repo.Digest(req.Version.Digest), opts...)
-	if err != nil {
-		return fmt.Errorf("get image: %w", err)
-	}
-
-	metadata, err := buildImageMetadata(req.Source, req.Version, image)
+	metadata, err := buildImageMetadata(req.Source, req.Version, repo, req.Params)
 	if err != nil {
 		return err
 	}

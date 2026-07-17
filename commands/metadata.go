@@ -6,14 +6,37 @@ import (
 	"sort"
 
 	resource "github.com/concourse/registry-image-resource"
+	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
+	"github.com/google/go-containerregistry/pkg/v1/remote"
+	"github.com/google/go-containerregistry/pkg/v1/remote/transport"
 )
 
-func buildImageMetadata(source resource.Source, version resource.Version, image v1.Image) ([]resource.MetadataField, error) {
+func buildImageMetadata(source resource.Source, version resource.Version, repo name.Repository, params resource.GetParams) ([]resource.MetadataField, error) {
 	metadata := append(source.Metadata(), resource.MetadataField{
 		Name:  "tag",
 		Value: version.Tag,
 	})
+
+	if source.LabelRegex == "" && source.AnnotationRegex == "" {
+		return metadata, nil
+	}
+
+	opts, err := source.AuthOptions(repo, []string{transport.PullScope})
+	if err != nil {
+		return nil, err
+	}
+
+	platform := source.Platform(params.RawPlatform)
+	opts = append(opts, remote.WithPlatform(v1.Platform{
+		Architecture: platform.Architecture,
+		OS:           platform.OS,
+	}))
+
+	image, err := remote.Image(repo.Digest(version.Digest), opts...)
+	if err != nil {
+		return nil, fmt.Errorf("get image: %w", err)
+	}
 
 	fields, err := collectMetadataFields(source, image)
 	if err != nil {
