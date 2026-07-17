@@ -113,6 +113,9 @@ type Source struct {
 	Regex         string `json:"tag_regex,omitempty"`
 	CreatedAtSort bool   `json:"created_at_sort,omitempty"`
 
+	AnnotationRegex string `json:"annotation_regex,omitempty"`
+	LabelRegex      string `json:"label_regex,omitempty"`
+
 	BasicCredentials
 	AwsCredentials
 	AzureCredentials
@@ -244,27 +247,22 @@ func (source Source) AuthOptions(repo name.Repository, scopeActions []string) ([
 }
 
 func (source *Source) Platform(stepOverride *PlatformField) PlatformField {
-	DefaultArchitecture := runtime.GOARCH
-	DefaultOS := runtime.GOOS
-
-	p := source.RawPlatform
-	if p == nil {
-		p = &PlatformField{}
-	}
-
+	var p PlatformField
 	if stepOverride != nil {
-		p = stepOverride
+		p = *stepOverride
+	} else if source.RawPlatform != nil {
+		p = *source.RawPlatform
 	}
 
 	if p.Architecture == "" {
-		p.Architecture = DefaultArchitecture
+		p.Architecture = runtime.GOARCH
 	}
 
 	if p.OS == "" {
-		p.OS = DefaultOS
+		p.OS = runtime.GOOS
 	}
 
-	return *p
+	return p
 }
 
 func (source Source) NewRepository() (name.Repository, error) {
