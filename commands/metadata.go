@@ -8,120 +8,63 @@ import (
 	resource "github.com/concourse/registry-image-resource"
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
-	"github.com/google/go-containerregistry/pkg/v1/remote"
-	"github.com/google/go-containerregistry/pkg/v1/remote/transport"
 )
 
-func buildImageMetadata(source resource.Source, version resource.Version, repo name.Repository, params resource.GetParams) ([]resource.MetadataField, error) {
-	metadata := append(source.Metadata(), resource.MetadataField{
+func buildBaseMetadata(source resource.Source, tag name.Tag) []resource.MetadataField {
+	return append(source.Metadata(), resource.MetadataField{
 		Name:  "tag",
-		Value: version.Tag,
+		Value: tag.TagStr(),
 	})
-
-	if source.LabelRegex == "" && source.AnnotationRegex == "" {
-		return metadata, nil
-	}
-
-	opts, err := source.AuthOptions(repo, []string{transport.PullScope})
-	if err != nil {
-		return nil, err
-	}
-
-	platform := source.Platform(params.RawPlatform)
-	opts = append(opts, remote.WithPlatform(v1.Platform{
-		Architecture: platform.Architecture,
-		OS:           platform.OS,
-	}))
-
-	image, err := remote.Image(repo.Digest(version.Digest), opts...)
-	if err != nil {
-		return nil, fmt.Errorf("get image: %w", err)
-	}
-
-	fields, err := collectMetadataFields(source, image)
-	if err != nil {
-		return nil, err
-	}
-
-	return append(metadata, fields...), nil
 }
 
-func collectMetadataFields(
-	source resource.Source,
-	image v1.Image,
-) ([]resource.MetadataField, error) {
-	var fields []resource.MetadataField
-
-	if regex := source.AnnotationRegex; regex != "" {
-		annotations, err := fetchImageAnnotations(regex, image)
+func enrichMetadataFromImage(metadata []resource.MetadataField, source resource.Source, image v1.Image) ([]resource.MetadataField, error) {
+	if source.LabelRegex != "" {
+		re, err := regexp.Compile(source.LabelRegex)
 		if err != nil {
-			return nil, fmt.Errorf("fetch annotations: %w", err)
+			return nil, fmt.Errorf("invalid label_regex: %w", err)
 		}
-
-		fields = append(fields, metadataFieldsFromMap(annotations)...)
-	}
-
-	if regex := source.LabelRegex; regex != "" {
-		labels, err := fetchImageLabels(regex, image)
+		cfg, err := image.ConfigFile()
 		if err != nil {
-			return nil, fmt.Errorf("fetch labels: %w", err)
+			return nil, fmt.Errorf("get config file: %w", err)
 		}
-
-		fields = append(fields, metadataFieldsFromMap(labels)...)
+		metadata = append(metadata, metadataFieldsFromMap(filterMap(re, cfg.Config.Labels))...)
 	}
 
-	return fields, nil
+	if source.AnnotationRegex != "" {
+		re, err := regexp.Compile(source.AnnotationRegex)
+		if err != nil {
+			return nil, fmt.Errorf("invalid annotation_regex: %w", err)
+		}
+		manifest, err := image.Manifest()
+		if err != nil {
+			return nil, fmt.Errorf("get manifest: %w", err)
+		}
+		metadata = append(metadata, metadataFieldsFromMap(filterMap(re, manifest.Annotations))...)
+	}
+
+	return metadata, nil
 }
 
-func fetchImageAnnotations(regex string, img v1.Image) (map[string]string, error) {
-	manifest, err := img.Manifest()
-	if err != nil {
-		return nil, fmt.Errorf("get manifest: %w", err)
-	}
-
-	return filterMap(regex, manifest.Annotations, "annotation")
-}
-
-func fetchImageLabels(regex string, img v1.Image) (map[string]string, error) {
-	cfg, err := img.ConfigFile()
-	if err != nil {
-		return nil, fmt.Errorf("get config file: %w", err)
-	}
-
-	return filterMap(regex, cfg.Config.Labels, "label")
-}
-
-func filterMap(regex string, values map[string]string, kind string) (map[string]string, error) {
-	re, err := regexp.Compile(regex)
-	if err != nil {
-		return nil, fmt.Errorf("invalid %s regex: %w", kind, err)
-	}
-
-	result := make(map[string]string)
+func filterMap(re *regexp.Regexp, values map[string]string) map[string]string {
+	result := make(map[string]string, len(values))
 	for k, v := range values {
 		if re.MatchString(k) {
 			result[k] = v
 		}
 	}
-
-	return result, nil
+	return result
 }
 
 func metadataFieldsFromMap(values map[string]string) []resource.MetadataField {
-	fields := make([]resource.MetadataField, 0, len(values))
-
 	keys := make([]string, 0, len(values))
-	for key := range values {
-		keys = append(keys, key)
+	for k := range values {
+		keys = append(keys, k)
 	}
 	sort.Strings(keys)
 
-	for _, key := range keys {
-		fields = append(fields, resource.MetadataField{
-			Name:  key,
-			Value: values[key],
-		})
+	fields := make([]resource.MetadataField, len(keys))
+	for i, k := range keys {
+		fields[i] = resource.MetadataField{Name: k, Value: values[k]}
 	}
-
 	return fields
 }
