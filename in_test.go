@@ -940,7 +940,6 @@ var _ = Describe("In", func() {
 			req.Source = resource.Source{
 				Repository: registry.Addr() + "/fake-image",
 			}
-			req.Params.SkipDownload = true
 			req.Version.Tag = "latest"
 			req.Version.Digest = digest.String()
 		}
