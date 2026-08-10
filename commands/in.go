@@ -25,8 +25,26 @@ type ImageMetadata struct {
 }
 
 type RemoteImage struct {
-	Image      v1.Image
+	image      v1.Image
 	Descriptor *remote.Descriptor
+}
+
+func (r *RemoteImage) Image() (v1.Image, error) {
+	if r.image != nil {
+		return r.image, nil
+	}
+
+	if r.Descriptor == nil {
+		return nil, fmt.Errorf("can't load image, no image descriptor set")
+	}
+
+	image, err := r.Descriptor.Image()
+	if err != nil {
+		return nil, fmt.Errorf("fetching image: %w", err)
+	}
+	r.image = image
+
+	return image, nil
 }
 
 type In struct {
@@ -90,7 +108,7 @@ func (i *In) Execute() error {
 
 	tag := repo.Tag(req.Version.Tag)
 
-	var remoteImage RemoteImage
+	remoteImage := &RemoteImage{}
 
 	if !req.Params.SkipDownload {
 		mirrorSource, hasMirror, err := req.Source.Mirror()
@@ -122,8 +140,8 @@ func (i *In) Execute() error {
 	}
 
 	metadata := buildBaseMetadata(req.Source, tag)
-	if remoteImage.Image != nil {
-		metadata, err = enrichMetadataFromImage(metadata, req.Source, remoteImage.Image)
+	if remoteImage.Descriptor != nil {
+		metadata, err = enrichMetadataFromImage(metadata, req.Source, remoteImage)
 		if err != nil {
 			return fmt.Errorf("enriching metadata failed: %w", err)
 		}
@@ -140,15 +158,15 @@ func (i *In) Execute() error {
 	return nil
 }
 
-func fetchImage(source resource.Source, version resource.Version, params resource.GetParams) (RemoteImage, error) {
+func fetchImgDescriptor(source resource.Source, version resource.Version, params resource.GetParams) (*remote.Descriptor, error) {
 	repo, err := source.NewRepository()
 	if err != nil {
-		return RemoteImage{}, fmt.Errorf("resolve repository name: %w", err)
+		return nil, fmt.Errorf("resolve repository name: %w", err)
 	}
 
 	opts, err := source.AuthOptions(repo, []string{transport.PullScope})
 	if err != nil {
-		return RemoteImage{}, err
+		return nil, err
 	}
 
 	platform := source.Platform(params.RawPlatform)
@@ -157,38 +175,24 @@ func fetchImage(source resource.Source, version resource.Version, params resourc
 		OS:           platform.OS,
 	}))
 
-	if params.Format() == "oci-layout" {
-		remoteDesc, err := remote.Get(repo.Digest(version.Digest), opts...)
-		if err != nil {
-			return RemoteImage{}, fmt.Errorf("fetch descriptor: %w", err)
-		}
-
-		image, err := remoteDesc.Image()
-		if err != nil {
-			return RemoteImage{}, fmt.Errorf("fetch image: %w", err)
-		}
-
-		return RemoteImage{Descriptor: remoteDesc, Image: image}, nil
-	}
-
-	image, err := remote.Image(repo.Digest(version.Digest), opts...)
+	remoteDesc, err := remote.Get(repo.Digest(version.Digest), opts...)
 	if err != nil {
-		return RemoteImage{}, fmt.Errorf("fetch image: %w", err)
+		return nil, fmt.Errorf("fetch descriptor: %w", err)
 	}
 
-	return RemoteImage{Image: image}, nil
+	return remoteDesc, nil
 }
 
-func downloadWithRetry(tag name.Tag, source resource.Source, params resource.GetParams, version resource.Version, dest string, stderr io.Writer) (RemoteImage, error) {
+func downloadWithRetry(tag name.Tag, source resource.Source, params resource.GetParams, version resource.Version, dest string, stderr io.Writer) (*RemoteImage, error) {
 	fmt.Fprintf(stderr, "fetching %s@%s\n", color.GreenString(source.Repository), color.YellowString(version.Digest))
 
-	var image RemoteImage
+	image := &RemoteImage{}
 	err := resource.RetryOnTransientError(func() error {
-		var err error
-		image, err = fetchImage(source, version, params)
+		desc, err := fetchImgDescriptor(source, version, params)
 		if err != nil {
 			return err
 		}
+		image.Descriptor = desc
 
 		// In case anyone else wonders why we don't show a progress bar for
 		// downloads, it's because go-containerregistry doesn't expose anything
@@ -197,11 +201,11 @@ func downloadWithRetry(tag name.Tag, source resource.Source, params resource.Get
 		// Maybe we should switch to using oras-go?
 		switch params.Format() {
 		case "oci-layout":
-			return saveOciLayout(image.Descriptor, dest)
+			return saveOciLayout(image, dest)
 		case "oci":
-			return saveOci(image.Image, tag, dest)
+			return saveOci(image, tag, dest)
 		case "rootfs":
-			return saveRootfs(image.Image, dest, source.Debug, stderr)
+			return saveRootfs(image, dest, source.Debug, stderr)
 		default:
 			return fmt.Errorf("unknown format provided, must be one of 'rootfs', 'oci', 'oci-layout: %s", params.Format())
 		}
@@ -209,8 +213,8 @@ func downloadWithRetry(tag name.Tag, source resource.Source, params resource.Get
 	return image, err
 }
 
-func saveOciLayout(remoteDesc *remote.Descriptor, dest string) error {
-	ioi, err := NewIndexImageFromRemote(remoteDesc)
+func saveOciLayout(remoteImg *RemoteImage, dest string) error {
+	ioi, err := NewIndexImageFromRemote(remoteImg.Descriptor)
 	if err != nil {
 		return fmt.Errorf("remote index or image: %w", err)
 	}
@@ -223,16 +227,26 @@ func saveOciLayout(remoteDesc *remote.Descriptor, dest string) error {
 	return nil
 }
 
-func saveOci(image v1.Image, tag name.Tag, dest string) error {
-	err := ociFormat(dest, tag, image)
+func saveOci(remoteImg *RemoteImage, tag name.Tag, dest string) error {
+	image, err := remoteImg.Image()
+	if err != nil {
+		return err
+	}
+
+	err = ociFormat(dest, tag, image)
 	if err != nil {
 		return fmt.Errorf("write oci image: %w", err)
 	}
 	return nil
 }
 
-func saveRootfs(image v1.Image, dest string, debug bool, stderr io.Writer) error {
-	err := rootfsFormat(dest, image, debug, stderr)
+func saveRootfs(remoteImg *RemoteImage, dest string, debug bool, stderr io.Writer) error {
+	image, err := remoteImg.Image()
+	if err != nil {
+		return err
+	}
+
+	err = rootfsFormat(dest, image, debug, stderr)
 	if err != nil {
 		return fmt.Errorf("write rootfs: %w", err)
 	}

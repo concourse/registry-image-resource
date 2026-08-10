@@ -7,7 +7,6 @@ import (
 
 	resource "github.com/concourse/registry-image-resource"
 	"github.com/google/go-containerregistry/pkg/name"
-	v1 "github.com/google/go-containerregistry/pkg/v1"
 )
 
 func buildBaseMetadata(source resource.Source, tag name.Tag) []resource.MetadataField {
@@ -17,7 +16,16 @@ func buildBaseMetadata(source resource.Source, tag name.Tag) []resource.Metadata
 	})
 }
 
-func enrichMetadataFromImage(metadata []resource.MetadataField, source resource.Source, image v1.Image) ([]resource.MetadataField, error) {
+func enrichMetadataFromImage(metadata []resource.MetadataField, source resource.Source, remoteImg *RemoteImage) ([]resource.MetadataField, error) {
+	if source.LabelRegex == "" && source.AnnotationRegex == "" {
+		return metadata, nil
+	}
+
+	image, err := remoteImg.Image()
+	if err != nil {
+		return nil, err
+	}
+
 	if source.LabelRegex != "" {
 		re, err := regexp.Compile(source.LabelRegex)
 		if err != nil {
