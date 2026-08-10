@@ -692,14 +692,9 @@ Fetches an image at the exact digest specified by the version.
   <tr>
     <td><code>skip_download</code> <em>(Optional)<br>Default: false</em></td>
     <td>
-      Skip downloading the image. Useful if you want to trigger a job without
-      using the object or when running after a <code>put</code> step and not
-      needing to download the image you just uploaded.
-      <br><br>
-      <em><strong>Note:</strong> When set to <code>true</code>, only the base
-      <code>repository</code> and <code>tag</code> metadata fields are emitted.
-      <code>label_regex</code> and <code>annotation_regex</code> enrichment
-      requires the image to be downloaded and will produce no additional fields.</em>
+      Skip downloading the image blobs. Useful if you want to trigger a job
+      without using the image or when running after a <code>put</code> step and
+      not needing to download the image you just uploaded.
     </td>
   </tr>
 </tbody>

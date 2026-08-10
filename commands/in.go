@@ -110,27 +110,25 @@ func (i *In) Execute() error {
 
 	remoteImage := &RemoteImage{}
 
-	if !req.Params.SkipDownload {
-		mirrorSource, hasMirror, err := req.Source.Mirror()
+	mirrorSource, hasMirror, err := req.Source.Mirror()
+	if err != nil {
+		return fmt.Errorf("failed to resolve mirror: %w", err)
+	}
+
+	usedMirror := false
+	if hasMirror {
+		remoteImage, err = downloadWithRetry(tag, mirrorSource, req.Params, req.Version, dest, i.stderr)
 		if err != nil {
-			return fmt.Errorf("failed to resolve mirror: %w", err)
+			logrus.Warnf("download from mirror %s failed: %s", mirrorSource.Repository, err)
+		} else {
+			usedMirror = true
 		}
+	}
 
-		usedMirror := false
-		if hasMirror {
-			remoteImage, err = downloadWithRetry(tag, mirrorSource, req.Params, req.Version, dest, i.stderr)
-			if err != nil {
-				logrus.Warnf("download from mirror %s failed: %s", mirrorSource.Repository, err)
-			} else {
-				usedMirror = true
-			}
-		}
-
-		if !usedMirror {
-			remoteImage, err = downloadWithRetry(tag, req.Source, req.Params, req.Version, dest, i.stderr)
-			if err != nil {
-				return fmt.Errorf("download failed: %w", err)
-			}
+	if !usedMirror {
+		remoteImage, err = downloadWithRetry(tag, req.Source, req.Params, req.Version, dest, i.stderr)
+		if err != nil {
+			return fmt.Errorf("download failed: %w", err)
 		}
 	}
 
@@ -140,11 +138,9 @@ func (i *In) Execute() error {
 	}
 
 	metadata := buildBaseMetadata(req.Source, tag)
-	if remoteImage.Descriptor != nil {
-		metadata, err = enrichMetadataFromImage(metadata, req.Source, remoteImage)
-		if err != nil {
-			return fmt.Errorf("enriching metadata failed: %w", err)
-		}
+	metadata, err = enrichMetadataFromImage(metadata, req.Source, remoteImage)
+	if err != nil {
+		return fmt.Errorf("enriching metadata failed: %w", err)
 	}
 
 	err = json.NewEncoder(i.stdout).Encode(resource.InResponse{
@@ -193,6 +189,10 @@ func downloadWithRetry(tag name.Tag, source resource.Source, params resource.Get
 			return err
 		}
 		image.Descriptor = desc
+
+		if params.SkipDownload {
+			return nil
+		}
 
 		// In case anyone else wonders why we don't show a progress bar for
 		// downloads, it's because go-containerregistry doesn't expose anything
