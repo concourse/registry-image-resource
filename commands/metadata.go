@@ -46,7 +46,7 @@ func enrichMetadataFromImage(metadata []resource.MetadataField, source resource.
 }
 
 func filterMap(re *regexp.Regexp, values map[string]string) map[string]string {
-	result := make(map[string]string, len(values))
+	result := make(map[string]string)
 	for k, v := range values {
 		if re.MatchString(k) {
 			result[k] = v
