@@ -98,14 +98,17 @@ func (i *In) Execute() error {
 			return fmt.Errorf("failed to resolve mirror: %w", err)
 		}
 
+		usedMirror := false
 		if hasMirror {
 			remoteImage, err = downloadWithRetry(tag, mirrorSource, req.Params, req.Version, dest, i.stderr)
 			if err != nil {
 				logrus.Warnf("download from mirror %s failed: %s", mirrorSource.Repository, err)
+			} else {
+				usedMirror = true
 			}
 		}
 
-		if remoteImage.Image == nil {
+		if !usedMirror {
 			remoteImage, err = downloadWithRetry(tag, req.Source, req.Params, req.Version, dest, i.stderr)
 			if err != nil {
 				return fmt.Errorf("download failed: %w", err)
