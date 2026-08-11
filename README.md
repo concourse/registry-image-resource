@@ -273,6 +273,34 @@ differences:
     </td>
   </tr>
   <tr>
+    <td><code>label_regex</code> <em>(Optional)</em></td>
+    <td>
+    A regular expression to filter which image labels are included in the
+    <code>get</code> step metadata. Only labels whose <strong>key</strong>
+    matches the regex will be surfaced. If omitted, no labels are included in
+    the metadata.
+    <br>
+    Uses RE2 syntax: https://golang.org/s/re2syntax
+    <br>
+    Example: <code>"^org\\.opencontainers\\.image\\."</code> to capture all
+    OCI standard image labels.
+    </td>
+  </tr>
+  <tr>
+    <td><code>annotation_regex</code> <em>(Optional)</em></td>
+    <td>
+    A regular expression to filter which OCI manifest annotations are included
+    in the <code>get</code> step metadata. Only annotations whose
+    <strong>key</strong> matches the regex will be surfaced. If omitted, no
+    annotations are included in the metadata.
+    <br>
+    Uses RE2 syntax: https://golang.org/s/re2syntax
+    <br>
+    Example: <code>"^org\\.opencontainers\\.image\\."</code> to capture all
+    OCI standard annotations.
+    </td>
+  </tr>
+  <tr>
     <td><code>debug</code> <em>(Optional)<br>Default: false</em></td>
     <td>
     If set, progress bars will be disabled and debugging output will be printed
@@ -664,13 +692,53 @@ Fetches an image at the exact digest specified by the version.
   <tr>
     <td><code>skip_download</code> <em>(Optional)<br>Default: false</em></td>
     <td>
-      Skip downloading the image. Useful if you want to trigger a job without
-      using the object or when running after a <code>put</code> step and not
-      needing to download the image you just uploaded.
+      Skip downloading the image blobs. Useful if you want to trigger a job
+      without using the image or when running after a <code>put</code> step and
+      not needing to download the image you just uploaded.
     </td>
   </tr>
 </tbody>
 </table>
+
+#### `get` Step Metadata
+
+The `get` step emits metadata fields visible in the Concourse UI and accessible
+via `((.:version-name.metadata))` expressions. The following fields are always
+included:
+
+| Field        | Value                                                   |
+|--------------|---------------------------------------------------------|
+| `repository` | The full repository name, e.g. `concourse/concourse`.  |
+| `tag`        | The tag from the version.                               |
+
+Additional fields are emitted when the corresponding source params are set:
+
+- **`label_regex`** — each matching image label is emitted as a separate
+  metadata field, with the label key as the field name and the label value as
+  the field value. Fields are sorted alphabetically by key.
+
+- **`annotation_regex`** — each matching OCI manifest annotation is emitted as
+  a separate metadata field in the same way.
+
+**Example source configuration:**
+
+```yaml
+resources:
+- name: my-image
+  type: registry-image
+  source:
+    repository: my-org/my-app
+    label_regex: "^org\\.opencontainers\\.image\\."
+    annotation_regex: "^com\\.example\\."
+```
+
+This would surface labels such as `org.opencontainers.image.version` and
+annotations such as `com.example.git-sha` as individual metadata fields in
+the Concourse UI.
+
+> **Note:** A large number of matching keys can make the build metadata panel
+> difficult to read. Use a specific regex to select only the fields your
+> pipeline needs.
 
 #### Files created by the `get` step
 

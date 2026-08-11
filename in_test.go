@@ -16,6 +16,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/empty"
+	"github.com/google/go-containerregistry/pkg/v1/mutate"
 	"github.com/google/go-containerregistry/pkg/v1/tarball"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -901,6 +902,155 @@ var _ = Describe("In", func() {
 
 					Expect(res.Version).To(Equal(req.Version))
 				})
+			})
+		})
+	})
+
+	Describe("label_regex and annotation_regex", func() {
+		var registry *ghttp.Server
+
+		setupRegistry := func(img v1.Image) {
+			digest, err := img.Digest()
+			Expect(err).ToNot(HaveOccurred())
+
+			manifest, err := img.RawManifest()
+			Expect(err).ToNot(HaveOccurred())
+
+			configDigest, err := img.ConfigName()
+			Expect(err).ToNot(HaveOccurred())
+
+			config, err := img.RawConfigFile()
+			Expect(err).ToNot(HaveOccurred())
+
+			registry.AppendHandlers(
+				ghttp.CombineHandlers(
+					ghttp.VerifyRequest("GET", "/v2/"),
+					ghttp.RespondWith(http.StatusOK, `welcome`),
+				),
+				ghttp.CombineHandlers(
+					ghttp.VerifyRequest("GET", "/v2/fake-image/manifests/"+digest.String()),
+					ghttp.RespondWith(http.StatusOK, manifest),
+				),
+				ghttp.CombineHandlers(
+					ghttp.VerifyRequest("GET", "/v2/fake-image/blobs/"+configDigest.String()),
+					ghttp.RespondWith(http.StatusOK, config),
+				),
+			)
+
+			req.Source = resource.Source{
+				Repository: registry.Addr() + "/fake-image",
+			}
+			req.Version.Tag = "latest"
+			req.Version.Digest = digest.String()
+		}
+
+		BeforeEach(func() {
+			registry = ghttp.NewServer()
+		})
+
+		AfterEach(func() {
+			registry.Close()
+		})
+
+		When("no regex is configured", func() {
+			BeforeEach(func() {
+				setupRegistry(empty.Image)
+			})
+
+			It("returns repository and tag in metadata", func() {
+				Expect(actualErr).ToNot(HaveOccurred())
+				Expect(res.Metadata).To(Equal([]resource.MetadataField{
+					{Name: "repository", Value: registry.Addr() + "/fake-image"},
+					{Name: "tag", Value: "latest"},
+				}))
+			})
+		})
+
+		When("label_regex is configured", func() {
+			BeforeEach(func() {
+				img, err := mutate.Config(empty.Image, v1.Config{
+					Labels: map[string]string{
+						"com.example.foo": "bar",
+						"org.other.baz":   "skip",
+					},
+				})
+				Expect(err).ToNot(HaveOccurred())
+				setupRegistry(img)
+
+				req.Source.LabelRegex = `^com\.example\.`
+			})
+
+			It("includes matching labels", func() {
+				Expect(actualErr).ToNot(HaveOccurred())
+				Expect(res.Metadata).To(ContainElement(
+					resource.MetadataField{Name: "com.example.foo", Value: "bar"},
+				))
+			})
+
+			It("does not include non-matching labels", func() {
+				Expect(actualErr).ToNot(HaveOccurred())
+				Expect(res.Metadata).ToNot(ContainElement(
+					resource.MetadataField{Name: "org.other.baz", Value: "skip"},
+				))
+			})
+		})
+
+		When("annotation_regex is configured", func() {
+			BeforeEach(func() {
+				annotated := mutate.Annotations(empty.Image, map[string]string{
+					"com.example.build": "123",
+					"org.internal":      "skip",
+				})
+				img, ok := annotated.(v1.Image)
+				Expect(ok).To(BeTrue())
+				setupRegistry(img)
+
+				req.Source.AnnotationRegex = `^com\.example\.`
+			})
+
+			It("includes matching annotations", func() {
+				Expect(actualErr).ToNot(HaveOccurred())
+				Expect(res.Metadata).To(ContainElement(
+					resource.MetadataField{Name: "com.example.build", Value: "123"},
+				))
+			})
+
+			It("does not include non-matching annotations", func() {
+				Expect(actualErr).ToNot(HaveOccurred())
+				Expect(res.Metadata).ToNot(ContainElement(
+					resource.MetadataField{Name: "org.internal", Value: "skip"},
+				))
+			})
+		})
+
+		When("label_regex matches multiple labels", func() {
+			BeforeEach(func() {
+				img, err := mutate.Config(empty.Image, v1.Config{
+					Labels: map[string]string{
+						"z-label": "last",
+						"a-label": "first",
+						"m-label": "mid",
+					},
+				})
+				Expect(err).ToNot(HaveOccurred())
+				setupRegistry(img)
+
+				req.Source.LabelRegex = ".*"
+			})
+
+			It("returns labels sorted alphabetically", func() {
+				Expect(actualErr).ToNot(HaveOccurred())
+				labelFields := []resource.MetadataField{}
+				for _, f := range res.Metadata {
+					if f.Name == "a-label" || f.Name == "m-label" || f.Name == "z-label" {
+						labelFields = append(labelFields, f)
+					}
+				}
+				Expect(labelFields).To(Equal([]resource.MetadataField{
+					{Name: "a-label", Value: "first"},
+					{Name: "m-label", Value: "mid"},
+					{Name: "z-label", Value: "last"},
+				}))
 			})
 		})
 	})
