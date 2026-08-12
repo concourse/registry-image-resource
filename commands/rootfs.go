@@ -2,6 +2,8 @@ package commands
 
 import (
 	"archive/tar"
+	"bufio"
+	"bytes"
 	"compress/gzip"
 	"io"
 	"os"
@@ -12,7 +14,6 @@ import (
 	"github.com/concourse/go-archive/tarfs"
 	"github.com/fatih/color"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
-	"github.com/google/go-containerregistry/pkg/v1/types"
 	"github.com/klauspost/compress/zstd"
 	"github.com/sirupsen/logrus"
 	"github.com/vbauerster/mpb/v8"
@@ -80,12 +81,7 @@ func extractLayer(dest string, layer v1.Layer, bar *mpb.Bar, chown bool) error {
 		return err
 	}
 
-	mediaType, err := layer.MediaType()
-	if err != nil {
-		return err
-	}
-
-	tr, crc, err := compressionReader(lyr, mediaType, bar)
+	tr, crc, err := compressionReader(lyr, bar)
 	if err != nil {
 		return err
 	}
@@ -195,26 +191,53 @@ func extractLayer(dest string, layer v1.Layer, bar *mpb.Bar, chown bool) error {
 
 type compressReaderClose func() error
 
-func compressionReader(layer io.ReadCloser, mediaType types.MediaType, bar *mpb.Bar) (*tar.Reader, compressReaderClose, error) {
+// Layer compression magic numbers.
+// https://en.wikipedia.org/wiki/List_of_file_signatures
+var (
+	zstdMagic = []byte{0x28, 0xb5, 0x2f, 0xfd}
+	gzipMagic = []byte{0x1f, 0x8b}
+)
+
+// compressionReader returns a tar.Reader over the (possibly compressed) layer.
+//
+// It detects the compression from the layer's own leading bytes rather than
+// trusting the declared media type. Builders and registries don't always label
+// zstd layers with the OCI media type (types.OCILayerZStd); BuildKit pushing
+// with Docker schema2 emits application/vnd.docker.image.rootfs.diff.tar.zstd,
+// which a media-type switch mis-routes to gzip and fails with
+// "gzip: invalid header". Sniffing the magic bytes handles gzip, zstd, and
+// uncompressed tar regardless of how the layer is labeled.
+func compressionReader(layer io.ReadCloser, bar *mpb.Bar) (*tar.Reader, compressReaderClose, error) {
 	var cr io.Reader
 	var crc func() error
 
-	switch mediaType {
-	case types.OCILayerZStd:
-		reader, err := zstd.NewReader(bar.ProxyReader(layer))
+	br := bufio.NewReader(bar.ProxyReader(layer))
+	leadingBytes, err := br.Peek(4)
+	if err != nil && err != io.EOF {
+		return nil, nil, err
+	}
+
+	switch {
+	case bytes.HasPrefix(leadingBytes, zstdMagic):
+		reader, err := zstd.NewReader(br)
 		if err != nil {
 			return nil, nil, err
 		}
 		cr = reader
 		crc = func() error { reader.Close(); return nil }
 
-	default:
-		reader, err := gzip.NewReader(bar.ProxyReader(layer))
+	case bytes.HasPrefix(leadingBytes, gzipMagic):
+		reader, err := gzip.NewReader(br)
 		if err != nil {
 			return nil, nil, err
 		}
 		cr = reader
 		crc = func() error { return reader.Close() }
+
+	default:
+		// Uncompressed tar (or unknown) — read the stream as-is.
+		cr = br
+		crc = func() error { return nil }
 	}
 
 	tr := tar.NewReader(cr)
