@@ -34,7 +34,7 @@ func unpackImage(dest string, img v1.Image, debug bool, out io.Writer) error {
 		out = io.Discard
 	}
 
-	progress := mpb.New(mpb.WithOutput(out), mpb.WithAutoRefresh())
+	progress := mpb.New(mpb.WithOutput(out), mpb.WithAutoRefresh(), mpb.ForceTTY())
 
 	bars := make([]*mpb.Bar, len(layers))
 
