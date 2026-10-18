@@ -760,7 +760,12 @@ This the default for the sake of brevity in pipelines and task configs.
 
 In this format, the resource will produce the following files:
 
-* `./rootfs/...`: the unpacked rootfs produced by the image.
+* `./rootfs/...`: the unpacked rootfs produced by the image. For a Windows
+  image, `./rootfs` is an [OCI image layout](https://github.com/opencontainers/image-spec/blob/main/image-layout.md)
+  holding the image instead. Windows layers keep NTFS security descriptors
+  and file attributes in their tar headers and carry registry hive deltas per
+  layer, so they cannot be extracted into one directory. Windows workers
+  running the containerd runtime import the layers from it.
 * `./metadata.json`: the runtime information to propagate to Concourse.
 * `./labels.json`: A file containing a JSON map of image labels, e.g. `{ "commit": "4e5c4ea" }`
 
