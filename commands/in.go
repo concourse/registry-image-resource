@@ -11,6 +11,8 @@ import (
 	"github.com/fatih/color"
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
+	"github.com/google/go-containerregistry/pkg/v1/empty"
+	"github.com/google/go-containerregistry/pkg/v1/layout"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/google/go-containerregistry/pkg/v1/remote/transport"
 	"github.com/google/go-containerregistry/pkg/v1/tarball"
@@ -292,14 +294,21 @@ func ociFormat(dest string, tag name.Tag, image v1.Image) error {
 }
 
 func rootfsFormat(dest string, image v1.Image, debug bool, stderr io.Writer) error {
-	err := unpackImage(filepath.Join(dest, "rootfs"), image, debug, stderr)
-	if err != nil {
-		return fmt.Errorf("extract image: %w", err)
-	}
-
 	cfg, err := image.ConfigFile()
 	if err != nil {
 		return fmt.Errorf("inspect image config: %w", err)
+	}
+
+	if cfg.OS == "windows" {
+		err = writeWindowsRootfs(filepath.Join(dest, "rootfs"), image)
+		if err != nil {
+			return fmt.Errorf("write image layout: %w", err)
+		}
+	} else {
+		err = unpackImage(filepath.Join(dest, "rootfs"), image, debug, stderr)
+		if err != nil {
+			return fmt.Errorf("extract image: %w", err)
+		}
 	}
 
 	meta, err := os.Create(filepath.Join(dest, "metadata.json"))
@@ -328,6 +337,20 @@ func rootfsFormat(dest string, image v1.Image, debug bool, stderr io.Writer) err
 	}
 
 	return nil
+}
+
+// Windows layers keep NTFS security descriptors and file attributes in their
+// tar headers, and each layer carries its own registry hive deltas. Neither
+// survives extracting the layers into one directory, so the rootfs of a
+// Windows image is an OCI image layout that Windows workers import layer by
+// layer.
+func writeWindowsRootfs(dest string, image v1.Image) error {
+	imageLayout, err := layout.Write(dest, empty.Index)
+	if err != nil {
+		return err
+	}
+
+	return imageLayout.AppendImage(image)
 }
 
 func writeLabels(dest string, labelData map[string]string) error {

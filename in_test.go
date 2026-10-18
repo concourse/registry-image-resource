@@ -1,22 +1,31 @@
 package resource_test
 
 import (
+	"archive/tar"
 	"bytes"
+	"compress/gzip"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
+	"io"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/google/go-containerregistry/pkg/name"
+	ggcrregistry "github.com/google/go-containerregistry/pkg/registry"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/empty"
+	"github.com/google/go-containerregistry/pkg/v1/layout"
 	"github.com/google/go-containerregistry/pkg/v1/mutate"
+	"github.com/google/go-containerregistry/pkg/v1/random"
+	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/google/go-containerregistry/pkg/v1/tarball"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -430,6 +439,158 @@ var _ = Describe("In", func() {
 
 			indexHash := sha256.Sum256(indexJson)
 			Expect("sha256:" + hex.EncodeToString(indexHash[:])).To(Equal(req.Version.Digest))
+		})
+	})
+
+	Describe("fetching a Windows image", func() {
+		const windowsSecurityDescriptor = "AQAEgBQAAAAkAAAAAAAAADQAAAABAgAAAAAABSAAAAAgAgAAAQIAAAAAAAUgAAAAIAIAAAIAHAABAAAAAAMUAP8BHwABAQAAAAAABRIAAAA="
+
+		var (
+			registry     *httptest.Server
+			windowsImage v1.Image
+			windowsLayer v1.Layer
+		)
+
+		BeforeEach(func() {
+			registry = httptest.NewServer(ggcrregistry.New())
+
+			var layerTar bytes.Buffer
+			tw := tar.NewWriter(&layerTar)
+			Expect(tw.WriteHeader(&tar.Header{
+				Typeflag: tar.TypeDir,
+				Name:     "Files/",
+				Mode:     0755,
+				Format:   tar.FormatPAX,
+			})).To(Succeed())
+			system := []byte("registry hive")
+			Expect(tw.WriteHeader(&tar.Header{
+				Typeflag: tar.TypeReg,
+				Name:     "Files/Windows/System32/config/SYSTEM",
+				Mode:     0644,
+				Size:     int64(len(system)),
+				Format:   tar.FormatPAX,
+				PAXRecords: map[string]string{
+					"MSWINDOWS.rawsd":    windowsSecurityDescriptor,
+					"MSWINDOWS.fileattr": "32",
+				},
+			})).To(Succeed())
+			_, err := tw.Write(system)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(tw.Close()).To(Succeed())
+
+			windowsLayer, err = tarball.LayerFromOpener(func() (io.ReadCloser, error) {
+				return io.NopCloser(bytes.NewReader(layerTar.Bytes())), nil
+			})
+			Expect(err).ToNot(HaveOccurred())
+
+			windowsImage, err = mutate.ConfigFile(empty.Image, &v1.ConfigFile{
+				OS:           "windows",
+				Architecture: "amd64",
+				OSVersion:    "10.0.20348.1",
+				Config: v1.Config{
+					User: "ContainerUser",
+					Env:  []string{`PATH=C:\Windows\system32;C:\Windows`},
+				},
+			})
+			Expect(err).ToNot(HaveOccurred())
+
+			windowsImage, err = mutate.AppendLayers(windowsImage, windowsLayer)
+			Expect(err).ToNot(HaveOccurred())
+
+			linuxImage, err := random.Image(1024, 1)
+			Expect(err).ToNot(HaveOccurred())
+
+			index := mutate.AppendManifests(empty.Index,
+				mutate.IndexAddendum{
+					Add:        linuxImage,
+					Descriptor: v1.Descriptor{Platform: &v1.Platform{OS: "linux", Architecture: "amd64"}},
+				},
+				mutate.IndexAddendum{
+					Add:        windowsImage,
+					Descriptor: v1.Descriptor{Platform: &v1.Platform{OS: "windows", Architecture: "amd64", OSVersion: "10.0.20348.1"}},
+				},
+			)
+
+			repository := strings.TrimPrefix(registry.URL, "http://") + "/windows/nanoserver"
+			tag, err := name.NewTag(repository + ":ltsc2022")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(remote.WriteIndex(tag, index)).To(Succeed())
+
+			indexDigest, err := index.Digest()
+			Expect(err).ToNot(HaveOccurred())
+
+			req.Source.Repository = repository
+			req.Source.RawPlatform = &resource.PlatformField{OS: "windows", Architecture: "amd64"}
+			req.Version = resource.Version{Tag: "ltsc2022", Digest: indexDigest.String()}
+		})
+
+		AfterEach(func() {
+			registry.Close()
+		})
+
+		It("saves the Windows image as an OCI image layout in rootfs/ instead of extracting it", func() {
+			Expect(actualErr).ToNot(HaveOccurred())
+
+			index, err := layout.ImageIndexFromPath(rootfsPath())
+			Expect(err).ToNot(HaveOccurred())
+
+			indexManifest, err := index.IndexManifest()
+			Expect(err).ToNot(HaveOccurred())
+
+			windowsDigest, err := windowsImage.Digest()
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(indexManifest.Manifests).To(HaveLen(1))
+			Expect(indexManifest.Manifests[0].Digest).To(Equal(windowsDigest))
+
+			_, err = os.Stat(rootfsPath("Files"))
+			Expect(os.IsNotExist(err)).To(BeTrue())
+		})
+
+		It("keeps the Windows file metadata in the layer's tar headers", func() {
+			Expect(actualErr).ToNot(HaveOccurred())
+
+			layerDigest, err := windowsLayer.Digest()
+			Expect(err).ToNot(HaveOccurred())
+
+			blob, err := os.Open(rootfsPath("blobs", layerDigest.Algorithm, layerDigest.Hex))
+			Expect(err).ToNot(HaveOccurred())
+			defer blob.Close()
+
+			gz, err := gzip.NewReader(blob)
+			Expect(err).ToNot(HaveOccurred())
+
+			tr := tar.NewReader(gz)
+			paxRecords := map[string]map[string]string{}
+			for {
+				hdr, err := tr.Next()
+				if err == io.EOF {
+					break
+				}
+				Expect(err).ToNot(HaveOccurred())
+				paxRecords[hdr.Name] = hdr.PAXRecords
+			}
+
+			Expect(paxRecords).To(HaveKeyWithValue("Files/Windows/System32/config/SYSTEM", map[string]string{
+				"MSWINDOWS.rawsd":    windowsSecurityDescriptor,
+				"MSWINDOWS.fileattr": "32",
+			}))
+		})
+
+		It("captures the env and user", func() {
+			Expect(actualErr).ToNot(HaveOccurred())
+
+			var meta struct {
+				User string   `json:"user"`
+				Env  []string `json:"env"`
+			}
+
+			md, err := os.ReadFile(filepath.Join(destDir, "metadata.json"))
+			Expect(err).ToNot(HaveOccurred())
+			Expect(json.Unmarshal(md, &meta)).To(Succeed())
+
+			Expect(meta.User).To(Equal("ContainerUser"))
+			Expect(meta.Env).To(Equal([]string{`PATH=C:\Windows\system32;C:\Windows`}))
 		})
 	})
 
