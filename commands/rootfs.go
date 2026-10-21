@@ -5,6 +5,7 @@ import (
 	"bufio"
 	"bytes"
 	"compress/gzip"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -211,7 +212,12 @@ func compressionReader(layer io.ReadCloser, bar *mpb.Bar) (*tar.Reader, compress
 	var cr io.Reader
 	var crc func() error
 
-	br := bufio.NewReader(bar.ProxyReader(layer))
+	pr, err := bar.ProxyReader(layer)
+	if err != nil {
+		return nil, nil, fmt.Errorf("creating progress bar's proxy reader: %w:", err)
+	}
+
+	br := bufio.NewReader(pr)
 	leadingBytes, err := br.Peek(4)
 	if err != nil && err != io.EOF {
 		return nil, nil, err
