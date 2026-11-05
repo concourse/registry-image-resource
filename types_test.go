@@ -162,3 +162,30 @@ var _ = Describe("Source", func() {
 		})
 	})
 })
+
+var _ = Describe("AuthenticateToECR", func() {
+	It("requires a role when aws_web_identity_token is set", func() {
+		source := resource.Source{
+			Repository: "test",
+			AwsCredentials: resource.AwsCredentials{
+				AwsRegion:           "us-east-1",
+				AwsWebIdentityToken: "token",
+			},
+		}
+		Expect(source.AuthenticateToECR()).To(BeFalse())
+	})
+
+	It("rejects aws_web_identity_token together with static keys", func() {
+		source := resource.Source{
+			Repository: "test",
+			AwsCredentials: resource.AwsCredentials{
+				AwsRegion:           "us-east-1",
+				AwsAccessKeyId:      "id",
+				AwsSecretAccessKey:  "secret",
+				AwsRoleArn:          "arn:aws:iam::123456789012:role/test",
+				AwsWebIdentityToken: "token",
+			},
+		}
+		Expect(source.AuthenticateToECR()).To(BeFalse())
+	})
+})
