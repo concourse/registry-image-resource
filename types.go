@@ -66,7 +66,10 @@ type AwsCredentials struct {
 	AwsAccessKeyId     string `json:"aws_access_key_id,omitempty"`
 	AwsSecretAccessKey string `json:"aws_secret_access_key,omitempty"`
 	AwsSessionToken    string `json:"aws_session_token,omitempty"`
-	AwsRegion          string `json:"aws_region,omitempty"`
+	// An OpenID Connect token, e.g. from Concourse's idtoken var source, exchanged for
+	// the first role in aws_role_arn(s) with AssumeRoleWithWebIdentity
+	AwsWebIdentityToken string `json:"aws_web_identity_token,omitempty"`
+	AwsRegion           string `json:"aws_region,omitempty"`
 	// Deprecated: No longer required for cross-account ECR access
 	AWSECRRegistryId string   `json:"aws_ecr_registry_id,omitempty"`
 	AwsRoleArn       string   `json:"aws_role_arn,omitempty"`
@@ -388,10 +391,37 @@ func (source *Source) Metadata() []MetadataField {
 	}
 }
 
+// identityToken passes a token from the source to stscreds, which otherwise
+// expects to read it from a file.
+type identityToken string
+
+func (t identityToken) GetIdentityToken() ([]byte, error) {
+	return []byte(t), nil
+}
+
 func (source *Source) AuthenticateToECR() bool {
 	if source.AwsRoleArn != "" && len(source.AwsRoleArns) != 0 {
 		logrus.Errorf("`aws_role_arn` cannot be set at the same time as `aws_role_arns`")
 		return false
+	}
+
+	// Note: This implementation gives precedence to `aws_role_arn` since it
+	// assumes that we've errored if both `aws_role_arn` and `aws_role_arns`
+	// are set
+	awsRoleArns := source.AwsRoleArns
+	if source.AwsRoleArn != "" {
+		awsRoleArns = []string{source.AwsRoleArn}
+	}
+
+	if source.AwsWebIdentityToken != "" {
+		if source.AwsAccessKeyId != "" || source.AwsSecretAccessKey != "" {
+			logrus.Errorf("`aws_web_identity_token` cannot be set at the same time as `aws_access_key_id` or `aws_secret_access_key`")
+			return false
+		}
+		if len(awsRoleArns) == 0 {
+			logrus.Errorf("`aws_web_identity_token` requires `aws_role_arn` or `aws_role_arns`")
+			return false
+		}
 	}
 
 	awsConfig, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion(source.AwsRegion))
@@ -411,17 +441,15 @@ func (source *Source) AuthenticateToECR() bool {
 		awsConfig.Credentials = appCreds
 	}
 
-	// Note: This implementation gives precedence to `aws_role_arn` since it
-	// assumes that we've errored if both `aws_role_arn` and `aws_role_arns`
-	// are set
-	awsRoleArns := source.AwsRoleArns
-	if source.AwsRoleArn != "" {
-		awsRoleArns = []string{source.AwsRoleArn}
-	}
-	for _, roleArn := range awsRoleArns {
+	for i, roleArn := range awsRoleArns {
 		logrus.Debugf("assuming role: %s", roleArn)
 		stsClient := sts.NewFromConfig(awsConfig)
-		roleCreds := stscreds.NewAssumeRoleProvider(stsClient, roleArn)
+		var roleCreds aws.CredentialsProvider
+		if i == 0 && source.AwsWebIdentityToken != "" {
+			roleCreds = stscreds.NewWebIdentityRoleProvider(stsClient, roleArn, identityToken(source.AwsWebIdentityToken))
+		} else {
+			roleCreds = stscreds.NewAssumeRoleProvider(stsClient, roleArn)
+		}
 		creds, err := roleCreds.Retrieve(context.Background())
 		if err != nil {
 			logrus.Errorf("error assuming role '%s': %s", roleArn, err.Error())

@@ -161,4 +161,31 @@ var _ = Describe("Source", func() {
 			Expect(source.AzureTenantId).To(BeEmpty())
 		})
 	})
+
+	Describe("AuthenticateToECR", func() {
+		It("should fail when aws_web_identity_token is set without a role", func() {
+			source := resource.Source{
+				Repository: "test",
+				AwsCredentials: resource.AwsCredentials{
+					AwsRegion:           "us-east-1",
+					AwsWebIdentityToken: "token",
+				},
+			}
+			Expect(source.AuthenticateToECR()).To(BeFalse())
+		})
+
+		It("should fail when aws_web_identity_token is set with static keys", func() {
+			source := resource.Source{
+				Repository: "test",
+				AwsCredentials: resource.AwsCredentials{
+					AwsRegion:           "us-east-1",
+					AwsAccessKeyId:      "id",
+					AwsSecretAccessKey:  "secret",
+					AwsRoleArn:          "arn:aws:iam::123456789012:role/test",
+					AwsWebIdentityToken: "token",
+				},
+			}
+			Expect(source.AuthenticateToECR()).To(BeFalse())
+		})
+	})
 })

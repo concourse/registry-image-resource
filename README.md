@@ -177,6 +177,19 @@ differences:
     </td>
   </tr>
   <tr>
+    <td><code>aws_web_identity_token</code> <em>(Optional)</em></td>
+    <td>
+    An OpenID Connect token, such as one from Concourse's
+    <a href="https://concourse-ci.org/docs/operation/creds/id-token/"><code>idtoken</code> var source</a>,
+    to exchange for the first role in <code>aws_role_arn</code> or
+    <code>aws_role_arns</code> using <code>AssumeRoleWithWebIdentity</code>, so
+    no long-lived keys are needed. Requires <code>aws_role_arn</code> or
+    <code>aws_role_arns</code>; an error will occur if
+    <code>aws_access_key_id</code> or <code>aws_secret_access_key</code> is also
+    specified.
+    </td>
+  </tr>
+  <tr>
     <td><code>aws_region</code> <em>(Optional)</em></td>
     <td>
     The region to use for accessing ECR. This is required if you are using ECR.
@@ -438,6 +451,36 @@ registry_key: |
 ```
 
 **NOTE** This configuration only applies to the `out` action. `check` & `in` aren't impacted. Hence, it would be possible to `check` or use `in` to get unsigned images.
+
+### Amazon ECR with an `idtoken`
+
+To pull from ECR without long-lived keys, pass a token from Concourse's
+`idtoken` var source and the role it may assume. The role's trust policy must
+allow `sts:AssumeRoleWithWebIdentity` from your Concourse's OIDC provider.
+Match the token's `aud` claim to the var source's `audience` and its `sub`
+claim to the pipeline, which at the default `subject_scope` is
+`<team>/<pipeline>`, for example `main/my-pipeline`. AWS compares `sub`
+exactly, so use `StringLike` with `main/*` to allow a whole team.
+
+```yaml
+var_sources:
+- name: idtoken
+  type: idtoken
+  config:
+    audience: ["sts.amazonaws.com"]
+
+resources:
+- name: my-image
+  type: registry-image
+  source:
+    repository: my-image
+    aws_region: us-east-1
+    aws_role_arn: arn:aws:iam::123456789012:role/ecr-pull
+    aws_web_identity_token: ((idtoken:token))
+```
+
+Further roles in `aws_role_arns` are assumed in order, as usual, starting from
+the credentials for the first.
 
 ### Azure Container Registry with Managed Identity
 
