@@ -457,6 +457,10 @@ registry_key: |
 To pull from ECR without long-lived keys, pass a token from Concourse's
 `idtoken` var source and the role it may assume. The role's trust policy must
 allow `sts:AssumeRoleWithWebIdentity` from your Concourse's OIDC provider.
+Match the token's `aud` claim to the var source's `audience` and its `sub`
+claim to the pipeline, which at the default `subject_scope` is
+`<team>/<pipeline>`, for example `main/my-pipeline`. AWS compares `sub`
+exactly, so use `StringLike` with `main/*` to allow a whole team.
 
 ```yaml
 var_sources:
