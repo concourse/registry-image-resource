@@ -180,7 +180,7 @@ differences:
     <td><code>aws_web_identity_token</code> <em>(Optional)</em></td>
     <td>
     An OpenID Connect token, such as one from Concourse's
-    <a href="https://concourse-ci.org/idtoken-credential-manager.html"><code>idtoken</code> var source</a>,
+    <a href="https://concourse-ci.org/docs/operation/creds/id-token/"><code>idtoken</code> var source</a>,
     to exchange for the first role in <code>aws_role_arn</code> or
     <code>aws_role_arns</code> using <code>AssumeRoleWithWebIdentity</code>, so
     no long-lived keys are needed. Requires <code>aws_role_arn</code> or
