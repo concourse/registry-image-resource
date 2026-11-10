@@ -392,7 +392,7 @@ func (source *Source) Metadata() []MetadataField {
 }
 
 // identityToken passes a token from the source to stscreds, which otherwise
-// expects to read it from a file
+// expects to read it from a file.
 type identityToken string
 
 func (t identityToken) GetIdentityToken() ([]byte, error) {
